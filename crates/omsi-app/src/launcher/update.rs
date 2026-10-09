@@ -114,7 +114,7 @@ impl Launcher {
         match status {
             Status::Available(rel) => {
                 self.ui.icon("system_update", icon_at, 26.0, ACCENT);
-                self.ui.text_in(&format!("openOMSI {} is available", rel.version), title_r, 18.0, Weight::Bold, TEXT, Align::Left);
+                self.ui.text_in(&format!("K-OMSI {} is available", rel.version), title_r, 18.0, Weight::Bold, TEXT, Align::Left);
                 let text = if cfg!(target_os = "android") {
                     format!("You have {current}. Update now? The launcher downloads the new version ({}) from GitHub and Android installs it; openOMSI then starts again - your mods and settings stay as they are.", mb(rel.size))
                 } else {
@@ -138,20 +138,20 @@ impl Launcher {
             }
             Status::Downloading { release, done, total } => {
                 self.ui.icon("download", icon_at, 26.0, ACCENT);
-                self.ui.text_in(&format!("Downloading openOMSI {}", release.version), title_r, 18.0, Weight::Bold, TEXT, Align::Left);
+                self.ui.text_in(&format!("Downloading K-OMSI {}", release.version), title_r, 18.0, Weight::Bold, TEXT, Align::Left);
                 let frac = if total > 0 { done as f32 / total as f32 } else { 0.0 };
                 self.ui.paragraph(&format!("{} of {} from github.com/{}", mb(done), mb(total), updater::REPO), body_at, inner.w, 13.0, Weight::Regular, TEXT_DIM);
                 self.ui.progress(Rect::new(inner.x, body_at.y + 40.0, inner.w, 10.0), frac, true);
             }
             Status::Installing(release) | Status::Restarting(release) => {
                 self.ui.icon("install_desktop", icon_at, 26.0, ACCENT);
-                self.ui.text_in(&format!("Installing openOMSI {}", release.version), title_r, 18.0, Weight::Bold, TEXT, Align::Left);
+                self.ui.text_in(&format!("Installing K-OMSI {}", release.version), title_r, 18.0, Weight::Bold, TEXT, Align::Left);
                 self.ui.paragraph("The new version is put in place; the launcher starts again in a moment.", body_at, inner.w, 13.0, Weight::Regular, TEXT_DIM);
                 self.ui.progress(Rect::new(inner.x, body_at.y + 40.0, inner.w, 10.0), 1.0, true);
             }
             Status::WaitingForInstaller(release) => {
                 self.ui.icon("install_mobile", icon_at, 26.0, ACCENT);
-                self.ui.text_in(&format!("Installing openOMSI {}", release.version), title_r, 18.0, Weight::Bold, TEXT, Align::Left);
+                self.ui.text_in(&format!("Installing K-OMSI {}", release.version), title_r, 18.0, Weight::Bold, TEXT, Align::Left);
                 self.ui.paragraph("Android asks whether to update openOMSI: press Update there. The app then starts again by itself.", body_at, inner.w, 13.0, Weight::Regular, TEXT_DIM);
                 self.ui.progress(Rect::new(inner.x, body_at.y + 60.0, inner.w, 10.0), 1.0, true);
             }

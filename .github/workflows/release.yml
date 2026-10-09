@@ -1,12 +1,12 @@
 # Builds openOMSI for Windows and Linux (x64, ARM64), macOS (Apple silicon, Intel) and Android
 # (plus the dedicated server for Linux and Windows) on every push to
-# main and publishes them as the release v<MAJOR.MINOR.COMMIT>; see docs/VERSIONING.md.
+# release (K-OMSI) and publishes them as the release v<MAJOR.MINOR.COMMIT>; see docs/VERSIONING.md.
 # Pull requests run the same builds without publishing.
 name: Release
 
 on:
   push:
-    branches: [main]
+    branches: [release]
   pull_request:
   workflow_dispatch:
 
@@ -37,7 +37,7 @@ jobs:
         env:
           PR: ${{ github.event.pull_request.number }}
         run: echo "version=$(sh scripts/version.sh)${PR:+-pr$PR}" >> "$GITHUB_OUTPUT"
-      - run: echo "### openOMSI ${{ steps.v.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+      - run: echo "### K-OMSI ${{ steps.v.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
 
   windows:
     needs: version
@@ -331,7 +331,7 @@ jobs:
             echo "Small changes and fixes." > changes.md
           fi
           cat > notes.md <<NOTES
-          **openOMSI $VERSION**
+          **K-OMSI $VERSION** (openOMSI based)
 
           > **Early release, expect bugs.** openOMSI needs an original OMSI 2 installation to run; it contains no game content.
 
@@ -359,10 +359,10 @@ jobs:
             # the same version built again (main was rewritten and pushed once more): the
             # release stays, with this build's files and notes
             gh release upload "v$VERSION" out/*.zip out/*.apk --clobber
-            gh release edit "v$VERSION" --title "openOMSI $VERSION" --notes-file notes.md
+            gh release edit "v$VERSION" --title "K-OMSI $VERSION" --notes-file notes.md
           else
             gh release create "v$VERSION" out/*.zip out/*.apk \
               --verify-tag \
-              --title "openOMSI $VERSION" \
+              --title "K-OMSI $VERSION" \
               --notes-file notes.md
           fi
