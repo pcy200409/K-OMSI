@@ -43,10 +43,10 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 /// The project on GitHub.
-pub const REPO: &str = "openOMSI-org/openOMSI";
-pub const REPO_URL: &str = "https://github.com/openOMSI-org/openOMSI";
-const LATEST_API: &str = "https://api.github.com/repos/openOMSI-org/openOMSI/releases/latest";
-const RELEASES_API: &str = "https://api.github.com/repos/openOMSI-org/openOMSI/releases?per_page=100";
+pub const REPO: &str = "pcy200409/K-OMSI";
+pub const REPO_URL: &str = "https://github.com/pcy200409/K-OMSI";
+const LATEST_API: &str = "https://api.github.com/repos/pcy200409/K-OMSI/releases/latest";
+const RELEASES_API: &str = "https://api.github.com/repos/pcy200409/K-OMSI/releases?per_page=100";
 const RELEASE_PAGES: u32 = 5;
 const NEWEST_API: &str = "https://api.github.com/repos/openOMSI-org/openOMSI/releases?per_page=10";
 pub const FIRST_SELF_TESTED: &str = "0.2.32";
