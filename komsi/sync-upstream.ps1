@@ -74,4 +74,4 @@ if ($Build) {
     Write-Host 'Build and tests passed.' -ForegroundColor Green
 }
 Write-Host "`nTo publish (rebased branches need --force-with-lease):"
-Write-Host "  git push --force-with-lease origin main $($branches -join ' ') release"
+Write-Host "  git push --force-with-lease origin $($branches -join ' ') release"
