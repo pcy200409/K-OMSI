@@ -53,7 +53,8 @@ else {
     if (Test-Path "$(git rev-parse --git-dir)/rebase-merge") { Stop-Msg 'A rebase is still in progress. git rebase --continue first.' }
     # patches already rebased stay as they are; rebase the rest onto main
     foreach ($b in $branches) {
-        if ((git merge-base --is-ancestor main $b; $LASTEXITCODE) -ne 0) {
+        git merge-base --is-ancestor main $b
+        if ($LASTEXITCODE -ne 0) {
             Write-Host "Rebasing $b onto main ..." -ForegroundColor Cyan
             git @id rebase main $b
             if ($LASTEXITCODE -ne 0) { git diff --name-only --diff-filter=U; Stop-Msg "Conflict in $b. Fix, git add, git rebase --continue, rerun -Continue." }
