@@ -122,6 +122,9 @@ scripts/build-macos.sh        # macOS   → dist/macos/openOMSI.app
 
 K-OMSI는 [openOMSI](https://github.com/openOMSI-Project/openOMSI)(Copyright (c) 2026 usonskyyyy 외
 기여자들)를 바탕으로 한 파생 빌드이며, 동일하게 [MIT 라이선스](https://github.com/pcy200409/K-OMSI/blob/release/LICENSE)로 배포됩니다.
+([한국어 참고 번역](https://github.com/pcy200409/K-OMSI/blob/release/LICENSE.ko.md), 법적 효력은 영어 원문에 있습니다.)
+기여 방법은 [CONTRIBUTING](https://github.com/pcy200409/K-OMSI/blob/release/.github/CONTRIBUTING.md), 보안 제보는
+[SECURITY](https://github.com/pcy200409/K-OMSI/blob/release/.github/SECURITY.md)를 보세요.
 OMSI와 OMSI 2는 각 권리자의 상표입니다. K-OMSI는 독립 프로젝트이며 OMSI 2의 권리자나
 openOMSI 프로젝트와 공식적인 관계가 없습니다.
 
