@@ -1,3 +1,5 @@
+> **K-OMSI** is a build of [openOMSI](https://github.com/openOMSI-Project/openOMSI) (MIT) with a few extra fixes, kept in step with the upstream releases. The text below is the upstream README.
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/logos/openomsi-wordmark-light.svg">
