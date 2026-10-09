@@ -384,6 +384,10 @@ pub fn depot(h: &Hof) -> ApiValue {
                 ("code", ApiValue::Num(t.code as f64)),
                 ("id", ApiValue::Str(t.texture_id.clone())),
                 ("name", ApiValue::Str(t.menu_name())),
+                // the terminus strings as the depot file has them (`GetTerminusString`'s
+                // indices): a page that draws the destination sign itself finds the
+                // Krueger/K++ bitmap names (`{{folder\file.png*POLY}}`) here
+                ("strings", ApiValue::List(t.strings.iter().map(|s| ApiValue::Str(s.clone())).collect())),
             ])
         })
         .collect();
