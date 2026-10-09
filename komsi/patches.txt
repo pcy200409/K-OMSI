@@ -2,3 +2,6 @@
 # `branding` is always first. Add a new patch branch here to keep it.
 branding
 patch/ncc-route-gaps
+patch/html-hangul-font
+patch/html-departure-details
+patch/depot-destination-strings
