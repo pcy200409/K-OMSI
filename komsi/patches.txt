@@ -5,3 +5,4 @@ patch/ncc-route-gaps
 patch/html-hangul-font
 patch/html-departure-details
 patch/depot-destination-strings
+patch/street-lamp-shadow-near
