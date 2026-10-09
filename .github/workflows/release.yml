@@ -361,6 +361,8 @@ jobs:
           | Dedicated server, Linux | \`openOMSI-$VERSION-server-linux-x64.zip\`, \`openOMSI-$VERSION-server-linux-arm64.zip\` |
           | Dedicated server, Windows | \`openOMSI-$VERSION-server-windows-x64.zip\`, \`openOMSI-$VERSION-server-windows-arm64.zip\` |
           NOTES
+          # K-OMSI: the notes are kept in the repository (komsi/release-notes.md); <버전> is the version
+          if [ -f komsi/release-notes.md ]; then sed "s/<버전>/$VERSION/g" komsi/release-notes.md > notes.md; fi
           git tag -f "v$VERSION" "$GITHUB_SHA"
           git push -f origin "v$VERSION"
           if gh release view "v$VERSION" >/dev/null 2>&1; then
