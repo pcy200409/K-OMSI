@@ -9,6 +9,7 @@
 - **HTML 한글 폰트** (`patch/html-hangul-font`): HTML 텍스처에서 한글 폰트 사용
 - **출발 정보 표시** (`patch/html-departure-details`): 정류장 표시기에 출발 상세 정보 추가
 - **차고지 행선 문구** (`patch/depot-destination-strings`)
+- **가로등 그림자 보정** (`patch/street-lamp-shadow-near`): Enhanced+에서 가로등 갓이 자기 불빛을 가려 발밑이 새까맣게 되는 문제 수정
 
 ## openOMSI 0.2.21 공식 변경사항 (요약)
 
