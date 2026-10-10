@@ -1,0 +1,4 @@
+# Branches merged into `release`, in this order (one per line, # = comment).
+# `branding` is always first. Add a new patch branch here to keep it.
+branding
+patch/telemetry-pedals
