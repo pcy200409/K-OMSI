@@ -397,7 +397,7 @@ impl ApplicationHandler for Launcher {
             Some((iw, ih)) => (winit::dpi::LogicalSize::new(iw, ih), None),
             None => crate::startup::fit_window(event_loop, 1440.0, 880.0),
         };
-        let mut attrs = Window::default_attributes().with_title("openOMSI").with_window_icon(crate::startup::window_icon()).with_inner_size(fit);
+        let mut attrs = Window::default_attributes().with_title("K-OMSI").with_window_icon(crate::startup::window_icon()).with_inner_size(fit);
         if !mobile::mobile() {
             // (no bigger than the window fitted to the screen: a small one at 150 % has less)
             attrs = attrs.with_min_inner_size(winit::dpi::LogicalSize::new(1080.0f64.min(fit.width), 680.0f64.min(fit.height)));
@@ -414,7 +414,7 @@ impl ApplicationHandler for Launcher {
         let window = match event_loop.create_window(attrs) {
             Ok(w) => Arc::new(w),
             Err(e) => {
-                crate::startup::fatal_message(&format!("openOMSI cannot open its window: {e}"));
+                crate::startup::fatal_message(&format!("K-OMSI cannot open its window: {e}"));
                 event_loop.exit();
                 return;
             }
@@ -432,7 +432,7 @@ impl ApplicationHandler for Launcher {
         let surface = match SurfaceState::new_with(&self.instance, window.clone(), &renderer, size.width, size.height, true) {
             Ok(s) => s,
             Err(e) => {
-                crate::startup::fatal_message(&format!("openOMSI cannot draw into its window: {e:#}"));
+                crate::startup::fatal_message(&format!("K-OMSI cannot draw into its window: {e:#}"));
                 event_loop.exit();
                 return;
             }
