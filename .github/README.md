@@ -36,11 +36,6 @@ openOMSI는 버스 시뮬레이터 **OMSI 2**를 Rust로 처음부터 다시 만
 | --- | --- |
 | 표시 이름 | 창 제목과 업데이트 안내 문구가 K-OMSI로 표시됩니다. |
 | 업데이트 | 자동 업데이트가 공식 openOMSI가 아니라 **이 저장소의 릴리스**를 확인합니다. 공식판으로 덮어써지지 않습니다. |
-| 시간표 버스 보정 (`patch/ncc-route-gaps`) | 분기점 앞에서 차선 변경, 시각이 정해지지 않은 중간 정류장에서의 대기 제한, 이어지지 않은 경로 구간을 건너뛰지 않도록 하는 수정 |
-| HTML 한글 폰트 (`patch/html-hangul-font`) | HTML 텍스처에서 한글 폰트 사용 |
-| 출발 정보 표시 (`patch/html-departure-details`) | 정류장 표시기에 출발 상세 정보 추가 |
-| 차고지 행선 문구 (`patch/depot-destination-strings`) | 차고지 행선 문구 보강 |
-| 가로등 그림자 보정 (`patch/street-lamp-shadow-near`) | Enhanced+에서 가로등 갓이 자기 불빛을 가려 발밑이 새까맣게 되는 문제 수정 |
 
 ## 다운로드
 
