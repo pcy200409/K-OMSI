@@ -87,6 +87,7 @@ pub mod scratch;
 pub mod pax;
 #[rustfmt::skip]
 pub mod pax_stops;
+pub mod place_choice;
 #[rustfmt::skip]
 pub mod pax_tick;
 #[rustfmt::skip]

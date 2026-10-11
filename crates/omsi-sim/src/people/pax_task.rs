@@ -502,30 +502,24 @@ impl PeopleSim {
                         // A seat in a disconnected trailer needs an entry on this side
                         // too; otherwise a passenger reserves it and can never board.
                         let side = self.preferred_entry_side(stop, bn, p.pos);
-                        let off: Vec<bool> = bn
-                            .cabin
-                            .seats
-                            .iter()
-                            .enumerate()
-                            .map(|(k, seat)| {
-                                bn.places_off.get(k).copied().unwrap_or(false)
-                                    || !bn.cabin.entries.iter().any(|door| {
-                                        door.point.is_some()
-                                            && door.group == seat.group
-                                            && entry_on_platform(side, door.side)
-                                    })
-                            })
-                            .collect();
-                        let short =
-                            self.short_rides_stand && short_ride(p.dest.as_deref(), p.ride_km);
-                        let place = if short {
-                            self.reserve_by_a_door(bn.id, &bn.cabin.seats, &off, &bn.cabin.exits)
-                        } else {
-                            None
+                        let off: Vec<bool> = bn.cabin.seats.iter().enumerate().map(|(k, seat)| {
+                            bn.places_off.get(k).copied().unwrap_or(false)
+                                || !bn.cabin.entries.iter().any(|door| door.point.is_some()
+                                    && door.group == seat.group && entry_on_platform(side, door.side))
+                        }).collect();
+                        // (K-OMSI: the place by the ride, the age and the doors)
+                        let here = bn.to_local(p.pos);
+                        let entry = bn.cabin.entries.iter().map(|d| d.inside).min_by(|a, b| (*a - here).length().total_cmp(&(*b - here).length()));
+                        let rider = super::place_choice::Rider {
+                            ride_km: p.ride_km,
+                            age: self.people[i].age,
+                            entry,
+                            exits: bn.cabin.exits.iter().map(|d| d.inside).collect(),
                         };
-                        if let Some(k) =
-                            place.or_else(|| self.reserve_place(bn.id, &bn.cabin.seats, &off))
-                        {
+                        // (upstream's opt-in short rides by a door first, then the K-OMSI choice)
+                        let short = self.short_rides_stand && short_ride(p.dest.as_deref(), p.ride_km);
+                        let place = if short { self.reserve_by_a_door(bn.id, &bn.cabin.seats, &off, &bn.cabin.exits) } else { None };
+                        if let Some(k) = place.or_else(|| self.reserve_place_for(bn.id, &bn.cabin.seats, &off, &rider)) {
                             let (tk, id) = self.decide_pax_ticket(i, bn);
                             let price = self
                                 .tickets
