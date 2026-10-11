@@ -99,6 +99,33 @@ fn info_drops_freetex_pictures_that_leave_the_vehicle() {
 }
 
 #[test]
+fn info_carries_the_fleet_number_and_plate_and_an_older_info_has_none() {
+    let mut p = pose(1.5);
+    p.number = "7012".into();
+    p.ident = "경기70아1234".into();
+    let text = p.encode_info();
+    let q = Pose::decode_info(&text.split('|').collect::<Vec<_>>()).unwrap();
+    assert_eq!((q.number.as_str(), q.ident.as_str()), ("7012", "경기70아1234"));
+    // a '|' in a plate does not shift the fields
+    p.ident = "A|B".into();
+    let q = Pose::decode_info(&p.encode_info().split('|').collect::<Vec<_>>()).unwrap();
+    assert_eq!(q.ident, "A B");
+    // an older game's INFO ends before the number and plate
+    let older: Vec<&str> = text.split('|').take(17).collect();
+    let q = Pose::decode_info(&older).unwrap();
+    assert!(q.number.is_empty() && q.ident.is_empty());
+    // and with everything else at its longest the INFO still fits one datagram, plate kept
+    p.number = "9".repeat(80);
+    p.ident = "가".repeat(80);
+    p.freetex = (0..MAX_FREETEX).map(|k| format!("{k}{}", "é".repeat(200))).collect();
+    p.bus = format!("Vehicles/{}/{}.bus", "Ü".repeat(60), "b".repeat(120));
+    p.texts = (0..MAX_TEXTS).map(|k| format!("{k}ß{}", "ñ".repeat(40))).collect();
+    let text = p.encode_info();
+    assert!(text.len() <= MAX_DATAGRAM, "{} bytes", text.len());
+    let q = Pose::decode_info(&text.split('|').collect::<Vec<_>>()).unwrap();
+    assert_eq!(q.ident.chars().count(), 32);
+}
+#[test]
 fn info_round_trip_and_cleaning() {
     let mut p = pose(1.5);
     p.id = 7;
