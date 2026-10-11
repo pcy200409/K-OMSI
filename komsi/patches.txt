@@ -2,3 +2,5 @@
 # `branding` is always first. Add a new patch branch here to keep it.
 branding
 patch/telemetry-pedals
+patch/pax-seat-choice
+patch/ai-list-editor
