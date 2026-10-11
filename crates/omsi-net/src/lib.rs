@@ -782,6 +782,11 @@ pub struct Pose {
     /// The player's own figure (`.hum` relative to its content root), for the driver at the
     /// wheel and the walker the others draw (empty: they pick one of the map's drivers).
     pub figure: String,
+    /// The fleet number and the number plate the bus was spawned with (its `number` and
+    /// `ident` string variables): the others' copy shows the same plate and number rather
+    /// than the first of its `[number]` list, or a blank plate.
+    pub number: String,
+    pub ident: String,
     /// Length and width (m) of the box around the whole vehicle (rear sections included),
     /// and how far its centre lies ahead of the vehicle's origin (negative: behind).
     pub length: f32,
@@ -896,8 +901,10 @@ impl Pose {
             ""
         };
         let tail = format!(
-            "|{content}|{:.2}",
-            finite_or(self.height, 0.0).clamp(0.0, 10.0)
+            "|{content}|{:.2}|{}|{}",
+            finite_or(self.height, 0.0).clamp(0.0, 10.0),
+            clean_text(&self.number, MAX_IDENT),
+            clean_text(&self.ident, MAX_IDENT)
         );
         // the display texts get what room is left in one datagram (long vehicle and figure
         // paths and a destination in another alphabet made an INFO too long to be taken in:
@@ -960,6 +967,14 @@ impl Pose {
                 .filter(|c| is_fingerprint(c))
                 .map(str::to_string)
                 .unwrap_or_default(),
+            number: parts
+                .get(17)
+                .map(|t| clean_text(t, MAX_IDENT))
+                .unwrap_or_default(),
+            ident: parts
+                .get(18)
+                .map(|t| clean_text(t, MAX_IDENT))
+                .unwrap_or_default(),
             height: parts
                 .get(16)
                 .and_then(|h| h.trim().parse::<f32>().ok())
@@ -980,6 +995,8 @@ impl Pose {
         self.texts = info.texts.clone();
         self.freetex = info.freetex.clone();
         self.figure = info.figure.clone();
+        self.number = info.number.clone();
+        self.ident = info.ident.clone();
         self.length = info.length;
         self.width = info.width;
         self.box_offset = info.box_offset;
@@ -1002,6 +1019,8 @@ impl Pose {
             texts: keep.texts,
             freetex: keep.freetex,
             figure: keep.figure,
+            number: keep.number,
+            ident: keep.ident,
             length: keep.length,
             width: keep.width,
             box_offset: keep.box_offset,
@@ -1106,6 +1125,9 @@ pub fn clean_text(s: &str, max: usize) -> String {
         .trim_end()
         .to_string()
 }
+
+/// The longest fleet number or number plate taken from the network (characters).
+const MAX_IDENT: usize = 32;
 
 fn field<'a>(parts: &[&'a str], i: usize) -> &'a str {
     parts.get(i).copied().unwrap_or("")
