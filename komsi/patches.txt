@@ -4,3 +4,4 @@ branding
 patch/telemetry-pedals
 patch/pax-seat-choice
 patch/lan-fleet-number
+patch/upstream-0.2.36-partial
