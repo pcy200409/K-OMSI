@@ -295,7 +295,8 @@ pub(crate) fn backend_order() -> Vec<GraphicsApi> {
         return vec![GraphicsApi::Native(wgpu::Backends::METAL)];
     }
     let settings = crate::settings::Settings::load();
-    let wanted = if settings.vr_requested() {
+    // (the headset and DLSS need DirectX 12: Streamline and OpenXR take wgpu's D3D12 device)
+    let wanted = if settings.vr_requested() || (cfg!(windows) && settings.dlss_mode().is_on()) {
         "dx12".to_owned()
     } else {
         omsi_cfg::flags::OMSI_BACKEND.var().map(str::to_string).unwrap_or(settings.graphics_api)
