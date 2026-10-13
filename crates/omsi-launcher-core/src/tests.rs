@@ -139,6 +139,16 @@ fn mirror_rendering_can_be_disabled() {
 }
 
 #[test]
+fn dlss_settings_round_trip() {
+    assert_eq!(settings_from_text(None)["dlss"], json!("off"));
+    let v = settings_from_text(Some("msaa=2\ndlss=Balanced\n"));
+    assert_eq!((v["dlss"].clone(), v["msaa"].clone()), (json!("balanced"), json!(2)));
+    let text = settings_to_text(&v, None);
+    assert!(text.lines().any(|l| l == "dlss=balanced") && text.lines().any(|l| l == "msaa=2"), "{text}");
+    assert_eq!(settings_from_text(Some("dlss=what\n"))["dlss"], json!("off"));
+}
+
+#[test]
 fn mirror_refresh_survives_the_launcher() {
     assert_eq!(settings_from_text(None)["mirror_refresh"], "full");
     for mode in ["off", "eco", "full", "every"] {
