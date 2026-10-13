@@ -1178,6 +1178,7 @@ pub fn my_pose(
     let (line, destination) = line_and_destination(v, duty);
     let texts = display_texts(v);
     let freetex = freetex_values(v);
+    let (number, ident) = identity_of(v);
     Pose {
         id: 0,
         name: String::new(),
@@ -1199,6 +1200,8 @@ pub fn my_pose(
         texts,
         freetex,
         figure: figure.map(|f| content_relative(f, &args.root)).unwrap_or_default(),
+        number,
+        ident,
         length: fp.length.max(bb[1]),
         width: bb[0],
         box_offset,
@@ -1305,6 +1308,38 @@ fn show_freetex(v: &mut omsi_sim::VehicleInstance, values: &[String]) {
             if let Some(s) = v.state.str_vars.get_mut(i as usize) {
                 if s != value {
                     *s = value.clone();
+                }
+            }
+        }
+    }
+}
+
+/// The fleet number and number plate the vehicle carries (its `number` and `ident` string
+/// variables, else what it was spawned with).
+fn identity_of(v: &omsi_sim::VehicleInstance) -> (String, String) {
+    let get = |name: &str, spawned: &Option<String>| {
+        v.ty.program
+            .str_var(name)
+            .and_then(|i| v.state.str_vars.get(i as usize))
+            .filter(|s| !s.trim().is_empty())
+            .or(spawned.as_ref())
+            .cloned()
+            .unwrap_or_default()
+    };
+    (get("number", &v.host.initial_number), get("ident", &v.host.initial_ident))
+}
+
+/// Give another player's bus here the fleet number and plate it was spawned with there
+/// (ours took the first of its `[number]` list, or no plate at all).
+fn show_identity(v: &mut omsi_sim::VehicleInstance, number: &str, ident: &str) {
+    for (name, value) in [("number", number), ("ident", ident)] {
+        if value.is_empty() {
+            continue;
+        }
+        if let Some(i) = v.ty.program.str_var(name) {
+            if let Some(s) = v.state.str_vars.get_mut(i as usize) {
+                if s != value {
+                    *s = value.to_string();
                 }
             }
         }
@@ -1690,7 +1725,8 @@ fn new_remote(
             .position(|s| s.name.eq_ignore_ascii_case(&pose.paint))
     };
     let (mut vehicle, hof) =
-        lan_host.remote_vehicle(args, ty, scheme, clock.cloned().unwrap_or_else(|| args.start_clock()));
+        // their fleet number and plate, there before the model's first {init} like ours
+        lan_host.remote_vehicle(args, ty, scheme, clock.cloned().unwrap_or_else(|| args.start_clock()), &pose.number, &pose.ident);
     // (with its rear sections: theirs are in the table too)
     let table = sync_table(game, &vehicle);
     vehicle.position = DVec3::new(pose.x, pose.y, pose.z);
@@ -2281,6 +2317,7 @@ pub fn tick_receive(
         }
         show_display_texts(&mut rv.vehicle, &pose.texts);
         show_freetex(&mut rv.vehicle, &pose.freetex);
+        show_identity(&mut rv.vehicle, &pose.number, &pose.ident);
         // (its sounds follow it: `view_sync::lan`)
         game.drawn.heard.push((pose.id, frame.inside_of == Some(pose.id)));
     }

@@ -859,6 +859,11 @@ pub struct Pose {
     /// The player's own figure (`.hum` relative to its content root), for the driver at the
     /// wheel and the walker the others draw (empty: they pick one of the map's drivers).
     pub figure: String,
+    /// The fleet number and the number plate the bus was spawned with (its `number` and
+    /// `ident` string variables): the others' copy shows the same plate and number rather
+    /// than the first of its `[number]` list, or a blank plate.
+    pub number: String,
+    pub ident: String,
     /// Length and width (m) of the box around the whole vehicle (rear sections included),
     /// and how far its centre lies ahead of the vehicle's origin (negative: behind).
     pub length: f32,
@@ -959,15 +964,18 @@ impl Pose {
             clean_text(&self.tour, MAX_FIELD),
         );
         let figure = human_path(&self.figure).unwrap_or_default();
+        // fleet number and plate at the very end (an older game passes them by), their room
+        // kept before the texts and pictures take theirs
+        let identity = format!("|{}|{}", clean_text(&self.number, MAX_IDENT), clean_text(&self.ident, MAX_IDENT));
         // the display texts get what room is left in one datagram (long vehicle and figure
         // paths and a destination in another alphabet made an INFO too long to be taken in:
         // the others never learnt which bus the player drove)
-        let room = MAX_DATAGRAM.saturating_sub(head.len() + figure.len() + 1);
+        let room = MAX_DATAGRAM.saturating_sub(head.len() + figure.len() + 1 + identity.len());
         let info = format!("{head}{}|{figure}", encode_texts(&self.texts, MAX_TEXTS, MAX_TEXT_LEN, room));
         // the `[matl_freetex]` pictures last, in what room is left (an older game reads the
         // fields it knows and passes this one by)
-        let room = MAX_DATAGRAM.saturating_sub(info.len() + 1);
-        format!("{info}|{}", encode_texts(&self.freetex, MAX_FREETEX, MAX_FREETEX_LEN, room))
+        let room = MAX_DATAGRAM.saturating_sub(info.len() + 1 + identity.len());
+        format!("{info}|{}{identity}", encode_texts(&self.freetex, MAX_FREETEX, MAX_FREETEX_LEN, room))
     }
 
     /// The info fields of an `INFO` message (checked and cleaned), or None.
@@ -997,6 +1005,8 @@ impl Pose {
             texts: parts.get(12).map(|t| decode_texts(t, MAX_TEXTS, MAX_TEXT_LEN)).unwrap_or_default(),
             figure: parts.get(13).and_then(|f| human_path(f)).unwrap_or_default(),
             freetex: parts.get(14).map(|t| decode_texts(t, MAX_FREETEX, MAX_FREETEX_LEN)).unwrap_or_default(),
+            number: parts.get(15).map(|t| clean_text(t, MAX_IDENT)).unwrap_or_default(),
+            ident: parts.get(16).map(|t| clean_text(t, MAX_IDENT)).unwrap_or_default(),
             ..Default::default()
         })
     }
@@ -1012,6 +1022,8 @@ impl Pose {
         self.texts = info.texts.clone();
         self.freetex = info.freetex.clone();
         self.figure = info.figure.clone();
+        self.number = info.number.clone();
+        self.ident = info.ident.clone();
         self.length = info.length;
         self.width = info.width;
         self.box_offset = info.box_offset;
@@ -1032,6 +1044,8 @@ impl Pose {
             texts: keep.texts,
             freetex: keep.freetex,
             figure: keep.figure,
+            number: keep.number,
+            ident: keep.ident,
             length: keep.length,
             width: keep.width,
             box_offset: keep.box_offset,
@@ -1128,6 +1142,9 @@ pub fn clean_text(s: &str, max: usize) -> String {
         .trim_end()
         .to_string()
 }
+
+/// The longest fleet number or number plate taken from the network (characters).
+const MAX_IDENT: usize = 32;
 
 /// The longest vehicle path taken from the network.
 const MAX_VEHICLE_PATH: usize = 260;
