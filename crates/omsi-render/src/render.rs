@@ -305,7 +305,11 @@ impl Renderer {
         if self.targets.triple_targets.take().is_some() {
             self.history.triple_culling = Default::default();
         }
+        // (DLSS is for the window's own picture: not for the mirrors, the headset's eyes or
+        // a picture drawn into a texture)
+        self.dlss.window = true;
         self.render_inner(scene, target, width, height, camera, lighting, true, None, None, false);
+        self.dlss.window = false;
     }
 
     /// Three independently culled and shaded physical panels, composited into a
@@ -790,6 +794,9 @@ impl Renderer {
         self.encode_upscale(&mut enc.picture, scene, &f, &mut timers);
         clock.stage(self, "encode", "mirror.encode");
         self.finish_and_submit(enc, main_parts, big, with_overlays, &mut clock, timers);
+        // DLSS: the picture is submitted, so Streamline may scale it into the window, and
+        // the HUD follows over its result
+        self.dlss_present(scene, &f);
     }
 
     /// Render off-screen and return RGBA8 pixels.
