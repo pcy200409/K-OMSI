@@ -46,8 +46,9 @@ pub(super) fn options_pages(app: &App) -> Vec<Page> {
         preset_row(&file, "Quality preset", "Sets most of the graphics options at once"),
         app.can_optimise().then(|| button("Optimise for my PC", "Start", "Measures while you drive and adjusts the graphics for a smooth frame rate; your settings are saved first", "optimise")),
         omsi_launcher_lib::optimise::backup().is_some().then(|| button("Restore my previous settings", "Restore", "The graphics settings as they were before the last optimisation", "optimise_restore")),
-        pick("msaa", "Anti-aliasing", later),
-        pick("render_scale", "Render scale", later),
+        pick("aa", "Anti-aliasing", later),
+        // (DLSS draws at the size its quality asks for: it takes the render scale's row)
+        if dlss_on(&file) { pick("dlss", "DLSS quality", "Changes at once; DLSS on or off takes effect when the game starts the next time") } else { pick("render_scale", "Render scale", later) },
         pick("anisotropy", "Anisotropic", later),
         // (Enhanced+ traces its shadows, occlusion and reflections: always on there)
         switch_row(app, "shadows", "Sun shadows", "Enables/Disables shadows").filter(|_| shown("shadows")),

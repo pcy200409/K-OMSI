@@ -285,7 +285,11 @@ impl Renderer {
         if self.targets.triple_targets.take().is_some() {
             self.history.triple_culling = Default::default();
         }
+        // (DLSS is for the window's own picture: not for the mirrors, the headset's eyes or
+        // a picture drawn into a texture)
+        self.dlss.window = true;
         self.render_inner(scene, target, width, height, camera, lighting, true, None, None, false);
+        self.dlss.window = false;
     }
 
     /// Three independently culled and shaded physical panels, composited into a
@@ -714,7 +718,7 @@ impl Renderer {
         self.encode_lamp_shadows(&mut enc.shadow, scene, &f, &shadow_batches, &mut timers);
         self.encode_precip_map(&mut enc.shadow, scene, &sh, &shadow_batches, &mut timers);
         let prepass_batches = if self.shares_prepass_depth(&f, &plan) { plan.prefill_batches() } else { &plan.prepass_batches };
-        self.encode_depth_prepass(&mut enc.prepass, scene, &f, prepass_batches, &mut timers);
+        self.encode_depth_prepass(&mut enc.prepass, scene, &f, prepass_batches, &plan.rain_batches, &mut timers);
         if f.enhanced && f.lead_view && f.prepass_on && self.device_lost().is_none() {
             if let (Some(s), Some(ao)) = (self.tone.lamp_sight.as_mut(), self.targets.ao.as_ref()) {
                 s.encode(&self.device, &self.queue, &mut enc.prepass, &ao.depth_view, vp_mat, f.ro, f.cam_rel);
@@ -745,6 +749,9 @@ impl Renderer {
         self.encode_upscale(&mut enc.picture, scene, &f, &mut timers);
         clock.stage(self, "encode", "mirror.encode");
         self.finish_and_submit(enc, main_parts, big, with_overlays, &mut clock, timers);
+        // DLSS: the picture is submitted, so Streamline may scale it into the window, and
+        // the HUD follows over its result
+        self.dlss_present(scene, &f);
     }
 
     /// Render off-screen and return RGBA8 pixels.

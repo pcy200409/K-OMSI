@@ -71,8 +71,17 @@ impl Renderer {
         // from here on `width` and `height` are the size of the picture, `full_*` the
         // window's (the HUD is drawn at that size). Mirrors keep their own size.
         let (full_w, full_h) = (width, height);
-        let (width, height) = if with_overlays {
-            self.scene_size(full_w, full_h)
+        // DLSS: the window's own picture (not a mirror's, an eye's or one for a texture), at
+        // the size DLSS brings up to the window; it takes the place of FXAA and the render
+        // scale, and draws the HUD over its result
+        let dlss_frame = self.dlss_frame_wanted(with_overlays, projection);
+        let mut dlss_target = None;
+        let (width, height) = if dlss_frame {
+            let (size, target) = self.dlss_frame_targets((full_w, full_h));
+            dlss_target = target;
+            size
+        } else if with_overlays {
+            self.render_scale_size(full_w, full_h)
         } else {
             (full_w, full_h)
         };
@@ -80,6 +89,7 @@ impl Renderer {
         // edges (the Enhanced path has it in its post passes): the picture is drawn into a
         // texture of the window's size and smoothed on its way to the window, the HUD after
         let vanilla_fxaa = with_overlays
+            && !dlss_frame
             && (width, height) == (full_w, full_h)
             && self.options.fxaa
             && self.options.msaa <= 1
@@ -92,8 +102,11 @@ impl Renderer {
             && scene.glass_slot.is_some()
             && (lighting.rain > 0.001 || lighting.wetness > 0.02)
             && !env.no_glass_picture;
-        let scaled = (width, height) != (full_w, full_h) || vanilla_fxaa || (glass_on && !enhanced_view);
-        let scene_target: Option<(wgpu::TextureView, wgpu::BindGroup)> = if scaled {
+        let scaled = (width, height) != (full_w, full_h) || vanilla_fxaa || (glass_on && !enhanced_view) || dlss_frame;
+        let scene_target: Option<(wgpu::TextureView, wgpu::BindGroup)> = if dlss_frame {
+            // DLSS's own: the picture it is asked to scale
+            dlss_target
+        } else if scaled {
             Some(self.scale_target(width, height))
         } else {
             None
@@ -141,7 +154,8 @@ impl Renderer {
         // the enhanced path's shading is costly: the depth prepass keeps it to the visible
         // surface (without multisampling, see `share_depth`)
         let depth_wanted = puddles_wanted || glass_on || (enhanced && (with_overlays || xr_view)) || (self.depth_readback && projection.is_none());
-        let prepass_on = ao_on || depth_wanted;
+        // (DLSS reads the prepass's depth, and the prepass writes its motion vectors)
+        let prepass_on = ao_on || depth_wanted || dlss_frame;
         let prepass_reach = if depth_wanted || env.no_ao_reach { f32::MAX } else { AO_PREPASS_REACH };
         // (only the bind group is made again, by `upload_draw_list`: dropping the instance
         // buffers for it wrote every instance's entries again at each render-scale step)
@@ -194,6 +208,7 @@ impl Renderer {
             second_eye,
             ro,
             full_w,
+            full_h,
             width,
             height,
             vanilla_fxaa,
@@ -215,6 +230,7 @@ impl Renderer {
             ao_on,
             prepass_on,
             prepass_reach,
+            dlss_frame,
             dt,
             overlays,
         }
@@ -231,6 +247,8 @@ impl Renderer {
             .projection
             .map(|p| p * Mat4::look_to_rh((camera.position - ro).as_vec3(), camera.forward(), camera.up()))
             .unwrap_or_else(|| camera.view_proj(aspect, ro));
+        // DLSS: the projection moved by the frame's sub-pixel offset (see `dlss_jitter`)
+        let vp_mat = self.dlss_jitter(scene, f, vp_mat);
         // where the tile light maps lie, relative to the render origin
         {
             let (lx, ly, side) = self.lights.lm_place.get();
