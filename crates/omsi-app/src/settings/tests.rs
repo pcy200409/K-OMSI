@@ -392,6 +392,23 @@ fn voice_chat_is_off_by_default_and_round_trips() {
 }
 
 #[test]
+fn dlss_is_read_and_written() {
+    assert_eq!(Settings::from_text("").dlss, "off");
+    assert_eq!(Settings::from_text("dlss=Ultra Performance\n").dlss, "ultra_performance");
+    assert_eq!(Settings::from_text("dlss=nonsense\n").dlss, "off");
+    let on = Settings::from_text("msaa=4\ndlss=dlaa\n");
+    assert_eq!(on.dlss, "dlaa");
+    // (the renderer drops the MSAA itself; the setting keeps it for a machine without DLSS)
+    assert_eq!(on.msaa, 4);
+    if cfg!(windows) {
+        assert_eq!(on.render_options().dlss, omsi_render::DlssMode::Dlaa);
+    } else {
+        assert_eq!(on.render_options().dlss, omsi_render::DlssMode::Off);
+    }
+    assert_eq!(Settings::from_text(&on.to_text()), on);
+}
+
+#[test]
 fn post_aa_is_read_and_written() {
     assert_eq!(Settings::from_text("enhanced=1\n").post_aa, "fxaa");
     let off = Settings::from_text("enhanced=1\npost_aa=off\n");

@@ -474,6 +474,24 @@ package ships them, built from ANGLE's own source by
 [angle-openomsi](https://github.com/openOMSI-org/angle-openomsi) (there is no ARM64 build);
 with them the log names the adapter `ANGLE (…Direct3D11…)` on the `Gl` backend.
 
+`dlss` (Settings → Anti-aliasing → **DLSS / DLAA**, its quality in the row below; the same in
+the game menu's Options → Graphics, where another quality is taken at once) draws the
+picture with NVIDIA DLSS Super Resolution instead of MSAA, FXAA and the render scale: `off`
+(default), `dlaa` (the window's own resolution, DLSS as anti-aliasing only), `quality`,
+`balanced`, `performance` or `ultra_performance` (about 67 %, 58 %, 50 % and 33 % of the
+window's width and height, scaled up by DLSS; the HUD stays at full resolution). It needs
+Windows, DirectX 12 (the game takes it when DLSS is on) and a GeForce RTX card with a
+current driver, and NVIDIA's Streamline runtime beside `openomsi.exe` - openOMSI ships none
+of NVIDIA's files: copy `sl.interposer.dll`, `sl.common.dll`, `sl.dlss.dll` and
+`nvngx_dlss.dll` from the [Streamline SDK](https://github.com/NVIDIA-RTX/Streamline)'s
+`bin/x64` (or point `OMSI_STREAMLINE_DIR` at them). Without any of that the game says why
+in its log and draws as without DLSS, with the `msaa` the settings hold. The picture DLSS
+gets is the tone-mapped one; each frame the projection moves by a sub-pixel offset, and the
+depth prepass writes every pixel's motion (the camera's and each object's, from last
+frame's model matrices). The drops of the rain on the windscreen get their pane's motion and
+DLSS's bias mask (the current picture before the history), so they neither streak nor show
+twice; at Ultra performance they flicker a little, drawn from a ninth of the pixels.
+
 `drive_keys` is a control preset: `simple` (W/S/A/D and Up/Down drive, Left/Right keep
 OMSI's interior camera switch; the default), `wasd` (W/S/A/D only), `arrows` (the four arrow
 keys only; W, S and D keep their OMSI jobs), or `omsi` ("Custom controls") - only the layout
@@ -976,6 +994,9 @@ lists every switch.
 | `OMSI_NO_BRIDGE=1` | LAN play leaves the internet alone: no rendezvous, no UPnP, no tunnel (tests, LAN parties) |
 | `OMSI_NO_LAN_MODS=1` | a LAN host serves no mods and a joining game fetches none |
 | `OMSI_BACKEND=vulkan\|dx12\|metal\|gl\|angle` | the graphics interface to ask first, over the setting (the log lists every adapter each one offers; `angle`, also `dx11`/`d3d11`: OpenGL ES on ANGLE over DirectX 11, Windows, with ANGLE's DLLs beside the game) |
+| `OMSI_DLSS=off\|dlaa\|quality\|balanced\|performance\|ultra_performance` | DLSS whatever the settings say |
+| `OMSI_STREAMLINE_DIR=dir`, `OMSI_DLSS_VERBOSE=1` | where Streamline's DLLs are (the game's folder by default), and all of Streamline's log |
+| `OMSI_DLSS_JITTER_SIGN=-1` | tell DLSS the sub-pixel offset the other way round (a picture that shimmers or smears on every edge with DLSS) |
 | `OMSI_GPU_LIMITS=default\|downlevel` | pretend the graphics card can only do this much (tests of old cards) |
 | `OMSI_GPU_ARRAYS=textures\|nostorage\|lighttextures` | read the scene's arrays from textures, as on OpenGL chips without storage buffers in the vertex shader (or without any: no per-pixel lamp light; with `lighttextures` the lamps read from textures too, as on ANGLE) - tests of old cards |
 | `OMSI_GL_TEXTURE_UNITS=1` | use the OpenGL backend's texture-unit layout on any device (tests of old cards) |

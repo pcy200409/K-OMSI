@@ -141,7 +141,19 @@ pub(crate) fn dropdown_apply(app: &mut App, action: &str) {
         "pick" => {
             if let Some((key, value)) = arg.split_once(' ') {
                 let before = app.settings.mirror_hud;
-                remember_setting(key, value);
+                match (key, value) {
+                    // anti-aliasing: DLSS (its quality kept when it was on), or an MSAA that turns it off
+                    ("aa", "dlss") => {
+                        if !dlss_on(&settings_file()) {
+                            remember_setting("dlss", "quality");
+                        }
+                    }
+                    ("aa", msaa) => {
+                        remember_setting("dlss", "off");
+                        remember_setting("msaa", msaa);
+                    }
+                    _ => remember_setting(key, value),
+                }
                 reload_settings(app);
                 if key == "mirror_hud" && app.settings.mirror_hud != before {
                     if let Some(p) = app.player.as_ref() {
@@ -267,6 +279,11 @@ pub(super) fn select_options(key: &str) -> Vec<(&'static str, &'static str)> {
         "puddles" => vec![("high", "High"), ("low", "Low"), ("off", "Off")],
         "graphics" => vec![("vanilla", "Vanilla (as OMSI 2)"), ("vanilla_plus", "Vanilla+"), ("enhanced", "Enhanced"), ("enhanced_plus", "Enhanced+")],
         "msaa" => vec![("1", "Off"), ("2", "2x MSAA"), ("4", "4x MSAA"), ("8", "8x MSAA")],
+        // anti-aliasing as the settings have it: MSAA (`msaa`), or NVIDIA DLSS (`dlss`,
+        // Windows: it needs DirectX 12) with its quality in a row of its own
+        "aa" if cfg!(windows) => vec![("1", "Off"), ("2", "2x MSAA"), ("4", "4x MSAA"), ("8", "8x MSAA"), ("dlss", "DLSS / DLAA")],
+        "aa" => select_options("msaa"),
+        "dlss" if cfg!(windows) => vec![("dlaa", "DLAA (native resolution)"), ("quality", "Quality"), ("balanced", "Balanced"), ("performance", "Performance"), ("ultra_performance", "Ultra performance")],
         "render_scale" => vec![("auto", "Auto"), ("1", "100%"), ("0.85", "85%"), ("0.75", "75%"), ("0.67", "67%"), ("0.5", "50%")],
         "upscaler" => vec![("default", "Standard (Catmull-Rom)"), ("fsr1", "AMD FSR 1 (experimental)")],
         "fsr_quality" => vec![("ultra", "Ultra Quality (77%)"), ("quality", "Quality (67%)"), ("balanced", "Balanced (59%)"), ("performance", "Performance (50%)"), ("auto", "Automatic (keeps the frame rate)"), ("custom", "Use render scale")],
@@ -307,9 +324,18 @@ pub(super) fn select_options(key: &str) -> Vec<(&'static str, &'static str)> {
 
 pub(super) fn select_state(file: &serde_json::Value, key: &str) -> (Vec<(&'static str, &'static str)>, Option<usize>, String) {
     let options = select_options(key);
-    let cur = value_text(file.get(key).unwrap_or(&serde_json::Value::Null));
+    let cur = match key {
+        "aa" if dlss_on(file) => "dlss".to_string(),
+        "aa" => value_text(file.get("msaa").unwrap_or(&serde_json::Value::Null)),
+        _ => value_text(file.get(key).unwrap_or(&serde_json::Value::Null)),
+    };
     let at = options.iter().position(|o| same_value(o.0, &cur));
     (options, at, cur)
+}
+
+/// Whether the settings file asks for NVIDIA DLSS (Windows only).
+pub(super) fn dlss_on(file: &serde_json::Value) -> bool {
+    cfg!(windows) && file.get("dlss").and_then(|v| v.as_str()).is_some_and(|m| m != "off")
 }
 
 pub(super) fn select_row(file: &serde_json::Value, key: &str, name: &str, desc: &str) -> Option<(String, String)> {
@@ -414,6 +440,10 @@ pub(super) fn sync_live(app: &mut App) {
     let street_light = app.settings.render_options().street_light;
     if let Some(r) = app.renderer.as_mut() {
         r.options.street_light = street_light;
+    }
+    // (another DLSS quality is taken at once; DLSS on or off with the next start)
+    if let Some(r) = app.renderer.as_mut() {
+        r.set_dlss_mode(app.settings.dlss_mode());
     }
     let s = &app.settings;
     if let Some(w) = app.world.as_ref() {

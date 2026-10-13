@@ -18,6 +18,9 @@
 pub mod angle;
 pub mod atmosphere;
 pub mod clouds;
+pub mod dlss;
+mod dlss_state;
+use dlss_state::DlssRes;
 mod cookies;
 pub use cookies::{Cookie, COOKIE_LAYERS};
 mod gpu_memory;
@@ -247,6 +250,8 @@ pub struct Renderer {
     history: ViewHistory,
     /// What the device's error handlers report: errors with multisampling or ray tracing on, out of memory, the device lost.
     errors: GpuErrors,
+    /// NVIDIA DLSS: its motion prepass, Streamline and its targets (see `dlss_state`).
+    dlss: DlssRes,
 }
 
 pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
@@ -335,7 +340,13 @@ pub struct RenderOptions {
     /// `gpu_memory::lighter_picture`).
     pub street_light: Option<bool>,
     pub max_scene: Option<(u32, u32)>,
+    /// NVIDIA DLSS (or DLAA) instead of multisampling, FXAA and the render scale: DirectX 12
+    /// on a GeForce RTX with Streamline's DLLs beside the game (see `dlss`). Elsewhere, or
+    /// when it cannot start, the picture is drawn as without it.
+    pub dlss: DlssMode,
 }
+
+pub use dlss::DlssMode;
 
 impl Default for RenderOptions {
     fn default() -> Self {
@@ -364,6 +375,7 @@ impl Default for RenderOptions {
             ray_tracing: false,
             street_light: None,
             max_scene: None,
+            dlss: DlssMode::Off,
         }
     }
 }
@@ -538,11 +550,21 @@ impl Renderer {
     /// FSR 1 upscales the window's picture now (asked for, built, and the picture drawn
     /// smaller than the window).
     pub fn fsr_active(&self, width: u32, height: u32) -> bool {
-        self.options.fsr1 && self.scale.fsr.is_some() && self.scene_size(width, height) != (width, height)
+        // (K-OMSI: not while DLSS scales the picture)
+        self.options.fsr1 && self.scale.fsr.is_some() && !self.dlss.usable(&self.options) && self.scene_size(width, height) != (width, height)
     }
 
     /// The size the 3D scene is drawn at for a window of this size.
+    /// (With DLSS: the size its quality mode draws at, by NVIDIA's ratios.)
     pub fn scene_size(&self, width: u32, height: u32) -> (u32, u32) {
+        if self.dlss.usable(&self.options) {
+            return dlss::fallback_render_size(self.options.dlss, (width, height));
+        }
+        self.render_scale_size(width, height)
+    }
+
+    /// The size the render scale draws a window of this size at.
+    pub(crate) fn render_scale_size(&self, width: u32, height: u32) -> (u32, u32) {
         let s = self.scene_scale(width, height);
         if s >= 0.999 {
             return (width, height);
