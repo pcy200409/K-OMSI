@@ -74,12 +74,19 @@ jobs:
           workspaces: |
             . -> target
             launcher/src-tauri -> target
+      # K-OMSI: ReShade loads into the game (wgpu's IDXGIFactoryMedia call taken out; see the script)
+      - name: ReShade workaround
+        shell: pwsh
+        run: komsi/reshade-workaround.ps1 -Target ${{ matrix.target }}
       - name: Workspace regression tests
         if: matrix.arch == 'x64'
         run: cargo test --locked --workspace --no-fail-fast
       - name: Build
         shell: cmd
         run: scripts\build-windows.cmd ${{ matrix.target }}
+      - name: ReShade workaround is in the program
+        shell: pwsh
+        run: komsi/reshade-workaround.ps1 -Target ${{ matrix.target }} -Verify
       # Microsoft's shader compiler for DirectX 12 (dxcompiler.dll, dxil.dll beside the
       # program): without it wgpu falls back to the old FXC, which is slow and refuses
       # some of the game's shaders. DirectX 12 is the way round a Vulkan driver that fails.
