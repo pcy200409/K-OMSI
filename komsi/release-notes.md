@@ -9,6 +9,8 @@
 - **승객 좌석 선택**: 승객이 빈자리를 무작위로 잡지 않고 고릅니다. 짧게 타는 승객은 하차문 근처에 서고, 멀리 가는 승객은 안쪽에 앉으며, 남은 몇 자리는 멀리 가는 승객 몫입니다. 노인(65세 이상)은 빈 좌석이 있으면 앉고 탄 문 가까이 앉습니다. 빈 2인석·창가·사람과 떨어진 입석 자리를 먼저 고릅니다.
 - **LAN 차량번호·번호판**: 멀티플레이에서 다른 플레이어의 버스가 그 플레이어 화면과 같은 차량번호와 번호판으로 보입니다.
 - **AI 차량 차선 변경 신호**: AI 차량이 다른 차선으로 옮기기 2초 전에 방향지시등을 켭니다(기존 1.2초).
+- **NVIDIA DLSS / DLAA (시험 기능)**: 설정 → 그래픽 → 안티에일리어싱 아래 **DLSS** 칸(끔·DLAA·품질·균형·성능·울트라 성능). 기본은 꺼짐입니다. Windows + DirectX 12(켜면 자동 선택) + GeForce RTX가 필요하고, NVIDIA Streamline의 `sl.interposer.dll`, `sl.common.dll`, `sl.dlss.dll`, `nvngx_dlss.dll`을 [Streamline SDK](https://github.com/NVIDIA-RTX/Streamline) `bin/x64`에서 받아 `openomsi.exe` 옆에 넣어야 합니다(NVIDIA 파일은 포함하지 않음). 없으면 이유를 로그에 남기고 평소대로 그립니다. openOMSI PR #942(Nussaccino)를 옮겨 온 것입니다.
+- **ReShade 호환**: 게임이 ReShade를 넣으면 창이 뜨기 전에 꺼지던 문제를 고쳤습니다(wgpu의 `IDXGIFactoryMedia` 생성 제거, Criisko/openOMSI 방식). ReShade는 `openomsi.exe`에 DirectX 10/11/12로 설치하세요.
 - **한국어 번역 보완**: 번역이 없던 인터페이스 문구 1,351개(런처, 설정, 날씨, 컨트롤러, LAN 등)를 기계 번역으로 채웠습니다. 어색한 표현은 이슈로 알려 주세요.
 
 
