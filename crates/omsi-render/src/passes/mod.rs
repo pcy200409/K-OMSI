@@ -128,6 +128,8 @@ pub(crate) struct FrameCtx<'a> {
     pub ro: DVec3,
     /// the window's width (the HUD is drawn at the window's size)
     pub full_w: u32,
+    /// the window's height (DLSS's output)
+    pub full_h: u32,
     /// the 3D picture's size (smaller than the window's with a render scale)
     pub width: u32,
     pub height: u32,
@@ -149,6 +151,8 @@ pub(crate) struct FrameCtx<'a> {
     pub rt_frame: bool,
     pub ao_on: bool,
     pub prepass_on: bool,
+    /// DLSS: this frame is the window's, drawn at the size DLSS brings up to it
+    pub dlss_frame: bool,
     pub dt: f32,
     pub overlays: Vec<(TextureId, [f32; 4])>,
 }
