@@ -38,8 +38,9 @@ pub(super) fn options_pages(app: &App) -> Vec<Page> {
     let graphics: Vec<(String, String)> = vec![
         pick("graphics", "Graphics", later),
         preset_row(&file, "Quality preset", "Sets most of the graphics options at once"),
-        pick("msaa", "Anti-aliasing", later),
-        pick("render_scale", "Render scale", later),
+        pick("aa", "Anti-aliasing", later),
+        // (DLSS draws at the size its quality asks for: it takes the render scale's row)
+        if dlss_on(&file) { pick("dlss", "DLSS quality", "Changes at once; DLSS on or off takes effect when the game starts the next time") } else { pick("render_scale", "Render scale", later) },
         pick("anisotropy", "Anisotropic", later),
         // (Enhanced+ traces its shadows, occlusion and reflections: always on there)
         switch_row(app, "shadows", "Sun shadows", "Enables/Disabled shadows").filter(|_| !app.settings.ray_tracing()),
