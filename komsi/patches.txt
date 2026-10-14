@@ -8,3 +8,4 @@ patch/korean-translation
 patch/ai-lane-signal
 patch/dlss
 patch/reshade
+patch/html-font-file
