@@ -9,3 +9,4 @@ patch/ai-lane-signal
 patch/dlss
 patch/reshade
 patch/html-font-file
+patch/scenery-show-lookup
