@@ -1,4 +1,8 @@
-**K-OMSI** - [openOMSI](https://github.com/openOMSI-Project/openOMSI) 0.2.48을 바탕으로 K-OMSI 수정을 얹은 빌드입니다.
+**K-OMSI** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.2.50(이후 main)을 바탕으로 K-OMSI 수정을 얹은 빌드입니다.
+
+> **비공식 포크입니다.** K-OMSI는 공식 openOMSI(openOMSI.org)와 관계없는 독립 프로젝트이며, openOMSI의 이름·로고는 원작자의 것입니다([TRADEMARKS.md](https://github.com/pcy200409/K-OMSI/blob/release/TRADEMARKS.md)). 문제는 공식 저장소가 아니라 [K-OMSI 이슈](https://github.com/pcy200409/K-OMSI/issues)로 알려 주세요.
+>
+> **라이선스: GNU AGPL v3 (`AGPL-3.0-only`)** - 공식 openOMSI를 따라 이번 릴리스부터 MIT에서 바뀌었습니다(예전 MIT 고지는 `LICENSE`에 남아 있음). 소스는 이 저장소에 모두 공개되어 있습니다.
 
 > **초기 단계 프로젝트입니다. 버그가 있을 수 있습니다.** OMSI 2 정품이 설치되어 있어야 실행됩니다. 이 프로그램에는 게임 콘텐츠가 들어 있지 않습니다.
 
@@ -15,6 +19,10 @@
 - **지도 오브젝트 화면·글자·소리 누락 수정**: 늦게 불러온 타일의 스크립트 오브젝트 일부가 화면(HTML 페이지)·글자 텍스처·소리·움직임을 받지 못하던 문제를 고쳤습니다(정류장 버스정보안내기가 검게 나오던 원인). 공식 openOMSI에도 있는 문제입니다.
 - **한국어 번역 보완**: 번역이 없던 인터페이스 문구 1,351개(런처, 설정, 날씨, 컨트롤러, LAN 등)를 기계 번역으로 채웠습니다. 어색한 표현은 이슈로 알려 주세요.
 
+
+## openOMSI 0.2.49 ~ 0.2.50 이후 공식 변경사항
+
+게임 기능 변화는 없습니다: 라이선스(AGPL v3)·상표 안내, 공식 쪽 릴리스 절차(베타/정식), 코드 검사(CodeQL)·PR 점검 정리.
 
 ## openOMSI 0.2.48 공식 변경사항 (요약)
 
