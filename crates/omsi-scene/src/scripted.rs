@@ -659,13 +659,22 @@ impl World {
         let mut scripted = self.scripted.lock();
         let views = &mut scripted.views;
         let omsi_sim::scenery::SceneryOutputs { cmds, vars, transforms, visible, .. } = out;
-        // (the commands and the views are both in key order: one pass, from where the last
-        // one was found)
+        // (the views are in key order; the commands mostly too: looked for from where the
+        // last one was found. But a step's `Show`s come in the objects' order, which is not
+        // always the keys' - an object of a tile loaded later can have an older key - and
+        // one behind the cursor was never found: its pages, texts and sounds were lost)
         let mut from = 0;
         let mut view_of = |key: u64, views: &mut [ScriptedView]| -> Option<usize> {
             let i = from + views[from..].partition_point(|v| v.key < key);
-            from = i;
-            (views.get(i).map(|v| v.key) == Some(key)).then_some(i)
+            if views.get(i).map(|v| v.key) == Some(key) {
+                from = i;
+                return Some(i);
+            }
+            let j = views.partition_point(|v| v.key < key);
+            (views.get(j).map(|v| v.key) == Some(key)).then(|| {
+                from = j;
+                j
+            })
         };
         for cmd in cmds.iter_mut() {
             let s = match cmd {
