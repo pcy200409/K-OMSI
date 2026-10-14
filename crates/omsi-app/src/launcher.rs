@@ -38,7 +38,7 @@ pub(crate) fn install() {
 /// and it draws Vanilla+ whatever the game does (`showroom::lighting_for`): no enhanced
 /// pipelines, reflection probe or cloud noise either (`RenderOptions::preview_only`).
 pub(crate) fn showroom_options(settings: &crate::settings::Settings) -> omsi_render::RenderOptions {
-    omsi_render::RenderOptions { msaa: 4, ssao: false, shadow_size: 1024, render_scale: 1.0, preview_only: true, no_enhanced: true, ray_tracing: false, ..settings.render_options() }
+    omsi_render::RenderOptions { msaa: 4, ssao: false, shadow_size: 1024, render_scale: 1.0, preview_only: true, no_enhanced: true, ray_tracing: false, dlss: omsi_render::DlssMode::Off, ..settings.render_options() }
 }
 
 struct AppHost;
