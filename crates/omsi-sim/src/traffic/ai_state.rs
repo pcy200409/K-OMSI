@@ -11,8 +11,9 @@ const PLAN_LANES: usize = 10;
 /// Linked lanes may end up to 1.5 m apart; over this many metres on either side of a joint
 /// the way is bent so that it has no step (half the gap on each side).
 const JOINT_BLEND: f32 = 6.0;
-/// Seconds of signalling before a lane change begins to move sideways.
-pub const SIGNAL_BEFORE_CHANGE: f32 = 1.2;
+/// Seconds of signalling before a lane change begins to move sideways (two, as a driver
+/// signals before moving over; the indicator is on from the decision).
+pub const SIGNAL_BEFORE_CHANGE: f32 = 2.0;
 
 /// One AI vehicle moving on the network: where it is along its lanes and which way it is
 /// going. The body that follows this way is `ai_motion::AiBody`.
