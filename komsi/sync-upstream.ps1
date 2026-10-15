@@ -71,6 +71,8 @@ if ($Build) {
     if ($LASTEXITCODE -ne 0) { Stop-Msg 'omsi-sim tests failed.' }
     cargo check -p omsi-app
     if ($LASTEXITCODE -ne 0) { Stop-Msg 'cargo check failed.' }
+    cargo test -p omsi-app --lib --no-run
+    if ($LASTEXITCODE -ne 0) { Stop-Msg 'omsi-app test build failed.' }
     Write-Host 'Build and tests passed.' -ForegroundColor Green
 }
 Write-Host "`nTo publish (rebased branches need --force-with-lease):"
