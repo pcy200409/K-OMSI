@@ -14,7 +14,7 @@ pub(crate) fn scene_shader_source(gl: bool) -> String {
 }
 
 pub(crate) fn scene_shader_for(gl: bool, path: ArrayPath) -> String {
-    let src = arrays_as_textures(&scene_shader_text(gl), path);
+    let src = arrays_as_textures(&crate::dlss_state::with_motion_passes(scene_shader_text(gl), gl, path), path);
     if gl && path == ArrayPath::NoStorage { compares_without_gather(&src) } else { src }
 }
 
