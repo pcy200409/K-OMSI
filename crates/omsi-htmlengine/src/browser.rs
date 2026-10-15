@@ -531,7 +531,10 @@ fn run(
             if let Ok(events) = serde_json::from_str::<Vec<(String, f32)>>(s) {
                 for (name, v) in events.into_iter().take(32) {
                     if name == "k_omsi_youtube_paste" {
-                        let text = arboard::Clipboard::new().and_then(|mut c| c.get_text());
+                        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+                        let text = arboard::Clipboard::new().and_then(|mut c| c.get_text()).map_err(|_| ());
+                        #[cfg(any(target_os = "android", target_os = "ios"))]
+                        let text: Result<String, ()> = Err(());
                         let expression=match text { Ok(t) if t.len()<=4096=>format!("window.loadYouTube({})",json!(t)),_=>"document.getElementById('videoStatus').textContent='클립보드의 영상 링크를 읽을 수 없습니다'".into() };
                         cdp.call("Runtime.evaluate", json!({"expression":expression}))?;
                     } else if name == "k_omsi_android_auto" && v.is_finite() {
