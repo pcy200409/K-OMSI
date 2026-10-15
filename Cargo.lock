@@ -3602,10 +3602,16 @@ name = "omsi-htmlengine"
 version = "0.1.0"
 dependencies = [
  "ab_glyph",
+ "arboard",
+ "base64 0.22.1",
  "log",
  "omsi-cfg",
  "omsi-sim",
  "omsi-texture",
+ "serde_json",
+ "tungstenite",
+ "ureq",
+ "windows 0.62.2",
 ]
 
 [[package]]
@@ -3862,6 +3868,7 @@ dependencies = [
  "parking_lot",
  "pollster 1.0.1",
  "rayon",
+ "serde_json",
  "wgpu",
  "zip",
 ]
