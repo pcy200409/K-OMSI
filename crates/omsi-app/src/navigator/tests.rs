@@ -65,6 +65,7 @@ fn the_navigator_keeps_where_it_was_dragged_on_a_phone_and_clear_of_the_informat
 }
 
 use super::*;
+use omsi_sim::traffic::cartography::visible_road_lanes;
 use omsi_sim::traffic::Lane;
 
 #[test]
