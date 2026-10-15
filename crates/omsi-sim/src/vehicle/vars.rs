@@ -116,6 +116,11 @@ impl VehicleInstance {
     }
 
     pub fn trigger(&mut self, name: &str) -> bool {
+        if name.eq_ignore_ascii_case(android_auto::TOGGLE) {
+            if let Some(mode) = self.var(android_auto::MODE) {
+                return self.set_var(android_auto::MODE, if mode > 0.5 { 0.0 } else { 1.0 });
+            }
+        }
         let p = self.ty.program.clone();
         let coins_before = self.host.change_coins.len();
         let fired = self
