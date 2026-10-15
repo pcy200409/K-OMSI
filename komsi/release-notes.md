@@ -1,4 +1,4 @@
-**K-OMSI** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.30(0.3.0 이후 main)을 바탕으로 K-OMSI 수정을 얹은 빌드입니다.
+**K-OMSI** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.31(이후 main)을 바탕으로 K-OMSI 수정을 얹은 빌드입니다.
 
 > **비공식 포크입니다.** K-OMSI는 공식 openOMSI(openOMSI.org)와 관계없는 독립 프로젝트이며, openOMSI의 이름·로고는 원작자의 것입니다([TRADEMARKS.md](https://github.com/pcy200409/K-OMSI/blob/release/TRADEMARKS.md)). 문제는 공식 저장소가 아니라 [K-OMSI 이슈](https://github.com/pcy200409/K-OMSI/issues)로 알려 주세요.
 >
@@ -18,8 +18,21 @@
 - **HTML 페이지 한글 글꼴 지정**: `openomsi.exe` 옆 `fonts/html_fallback.ttf`(굵은 글씨는 `html_fallback_bold.ttf`)가 있으면 HTML 페이지(정류장 안내기, 단말기 화면 등)의 한글을 그 글꼴로 그립니다(없으면 기존대로 맑은 고딕). 업데이트해도 이 파일은 지워지지 않습니다.
 - **지도 오브젝트 화면·글자·소리 누락 수정**: 늦게 불러온 타일의 스크립트 오브젝트 일부가 화면(HTML 페이지)·글자 텍스처·소리·움직임을 받지 못하던 문제를 고쳤습니다(정류장 버스정보안내기가 검게 나오던 원인). 공식 openOMSI에도 있는 문제입니다.
 - **하이거 Auto 화면 (시험 기능)**: 하이거 1611P 문 CCTV 화면을 눌러 여는 안드로이드 오토 풍 차량 화면입니다. 게임 도로 지도·노선·차량 위치, 다음 정류장 3곳과 운행표 시각, 정류장 접근·문 열림 표시, YouTube 링크 재생을 보여 줍니다. 설치된 Edge 또는 Chrome이 필요하고, 차량 옆에 `HigerHypers1611P.android-auto.cfg`(예시: `docs/examples/android-auto`)를 두어야 켜집니다. 자세한 내용과 한계: [docs/android-auto.md](https://github.com/pcy200409/K-OMSI/blob/release/docs/android-auto.md)
-- **한국어 번역 보완**: 공식 번역에도 아직 없던 인터페이스 문구 1,026개(런처, 설정, 날씨, 컨트롤러, LAN 등)를 기계 번역으로 채웠습니다. 어색한 표현은 이슈로 알려 주세요.
+- **한국어 번역 보완**: 공식 번역에도 아직 없던 인터페이스 문구 1,022개(런처, 설정, 날씨, 컨트롤러, LAN 등)를 기계 번역으로 채웠습니다. 어색한 표현은 이슈로 알려 주세요.
 
+
+## openOMSI 0.3.31 및 이후 main 공식 변경사항 (요약)
+
+0.3.31과 그 뒤 main의 변경입니다(공식 CHANGELOG의 'Unreleased').
+
+### 수정
+- **교통·운행표**: 운행표 버스가 OMSI 2처럼 운행(tour) 시작 시각에 나타남, 정류장에서 앞차 뒤로 서비스한 AI 버스가 정류장이 비면 다시 다가가 승하차, 신호등 접근 요청이 방향지시등을 따름, 크로노 시나리오가 화폐·AI·주차 목록을 OMSI 2처럼 전환.
+- **차량·카메라**: 후부 조향 굴절버스(Van Hool AG300, Ikarus 280)의 뒷차축 조향, 뒤 차체 운전 카메라 순서를 OMSI 2처럼, 운전자 시점이 좌석 서스펜션과 함께 움직임, `GetTicketName`이 발권기가 찍는 표 이름을 돌려줌.
+- **조작**: 다른 애드온의 keyboard.cfg 키가 Ctrl+Shift+M(거울 편집기) 같은 게임 단축키를 빼앗지 않음, Num4+왼쪽 화살표 동시 입력 시 조향이 걸리던 문제(Windows), DirectInput 축 범위를 실제 값으로 보정(Fanatec 페달 등), Linux에서 실제 컨트롤러 축만 사용.
+- **그래픽·소리**: 기억된 MSAA 후퇴가 새 버전마다 한 번 다시 시도됨, 종이 운행표가 Courier New 간격을 유지, 지도 소리가 800 m까지 닿고 끝에서 서서히 작아짐, OpenGL ES 3.1/3.2 셰이더 시험 보강, 밤에 집·나무 뒤 가로등이 눈부시게 보이지 않음.
+- **성능**: 운행표 열차 연결 차량 조회를 5초마다가 아니라 한 번만 해 주행 중 잔끊김 제거, 지도 스크립트용 보조 스레드가 작업량에 맞춰 붙음(결과 동일).
+- **멀티플레이**: 다른 컴퓨터가 보낸 모드 파일(그림·소리·메시·텍스트)이 이름과 맞는지 검사하고, 끝나지 않는 차량 스크립트는 중단시킴.
+- **기타**: 헤드셋 [game] 키가 VR에서만 조합키를 받음(#2577), 런처가 sevenz-rust2 0.23으로 다시 빌드됨, Discord 링크가 만료되지 않은 초대로 바뀜, 의존성(resvg, rand 등) 갱신과 보안 점검 보강.
 
 ## openOMSI 0.2.60 ~ 0.3.30 공식 변경사항 (요약)
 
