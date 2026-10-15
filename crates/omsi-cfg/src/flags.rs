@@ -262,6 +262,10 @@ flags! {
     OMSI_DEBUG_WALLS: Bool, Debug, Use, "off", "Log the walls a walking player slides along.";
     OMSI_DEBUG_WARP: Bool, Debug, Use, "off", "Log crossings whose ground was moved by more than a metre.";
     OMSI_DEBUG_WHEELS: Bool, Debug, Use, "off", "Log where the wheel meshes of every vehicle type turn.";
+    OMSI_DLSS: Text, Setup, Use, "settings", "dlaa, quality, balanced, performance or ultra_performance (or off): DLSS whatever the settings say. Windows only.";
+    OMSI_DLSS_JITTER_SIGN: Num, Debug, Use, "1", "Tell DLSS the sub-pixel jitter the other way round (-1), for a driver that reads it so (a picture that shimmers or smears with DLSS).";
+    OMSI_DLSS_PROJECT_ID: Text, Setup, Use, "-", "Streamline's project id for the DLSS runtime (its own default when unset).";
+    OMSI_DLSS_VERBOSE: Bool, Debug, Use, "off", "All of Streamline's own log (eVerbose).";
     OMSI_DRIVER_HANDS: Text, Test, Use, "-", "left,right: both driver hands held at these angles (grip close-ups).";
     OMSI_DRIVER_SHIFTER: Text, Test, Use, "-", "Part of a variable or file name: force the shifter the driver's hand uses; off: both hands on the wheel.";
     OMSI_DRIVE_PROFILE: Text, Test, Use, "-", "Offscreen: \"t throttle brake [steer]/...\" piecewise constant pedals (crash/kerb tests).";
@@ -434,6 +438,7 @@ flags! {
     OMSI_SKIP_OBJECT: Text, Test, Use, "-", "Leave out the objects whose file name contains this text.";
     OMSI_SKIP_PIPE: Text, Test, Frame, "-", "Pipeline kinds to leave out of the main pass (comma-separated numbers).";
     OMSI_SPOT_SELECT: Num, Test, Use, "-", "Turn on spotlight n (headlight pictures).";
+    OMSI_STREAMLINE_DIR: Text, Setup, Use, "-", "The folder Streamline's DLLs are looked for in (the game's folder by default).";
     OMSI_SURFACE_BIAS: Num, Tuning, Use, "-24", "Depth bias of road surfaces.";
     OMSI_SURFACE_FLUSH: Num, Tuning, Once, "0.12", "Height in metres under which a surface counts as flush with the road.";
     OMSI_SUSP_TRACE: Text, Debug, Use, "-", "Offscreen CSV: body height and each wheel's travel and load every frame.";

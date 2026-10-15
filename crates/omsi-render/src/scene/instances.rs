@@ -55,6 +55,7 @@ impl Renderer {
             uploaded_instances: 0,
             next_instance_order: 0,
             uploaded_entries: 0,
+            model_epoch: 0,
             cpu_models: Vec::new(),
             cpu_params: Vec::new(),
             last_grid: Vec::new(),

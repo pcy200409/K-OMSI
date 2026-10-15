@@ -57,7 +57,9 @@ impl Renderer {
         self.queue
             .write_buffer(&self.tone.post_buf, 0, bytemuck::bytes_of(&pu));
         // (a mirror's small picture goes without FXAA)
+        // (nor a picture for DLSS: it smooths the edges itself, from the jittered frames)
         let fxaa = with_overlays
+            && !f.dlss_frame
             && self.options.fxaa
             && self.options.msaa <= 1
             && !f.env.no_fxaa;
@@ -174,7 +176,7 @@ impl Renderer {
 
     // --- the smaller picture scaled up to the window, the HUD on top at full size;
     // the smaller the picture, the more it is sharpened
-    pub(crate) fn encode_upscale(&self, encoder: &mut wgpu::CommandEncoder, scene: &Scene, f: &FrameCtx, timers: &mut PassTimers) {
+    pub(crate) fn encode_upscale(&mut self, encoder: &mut wgpu::CommandEncoder, scene: &Scene, f: &FrameCtx, timers: &mut PassTimers) {
         let (width, height, full_w) = (f.width, f.height, f.full_w);
         let overlays = &f.overlays;
         if let Some((_, bg)) = &f.scene_target {
@@ -184,6 +186,12 @@ impl Renderer {
                 0,
                 bytemuck::cast_slice(&[width as f32, height as f32, sharpen.clamp(0.0, 0.8), if f.vanilla_fxaa { 1.0 } else { 0.0 }]),
             );
+            if f.dlss_frame {
+                // DLSS reads the picture after this submit, and the HUD is drawn over its
+                // result after DLSS (see `dlss_present`)
+                self.dlss_end_of_scene(encoder, scene);
+                return;
+            }
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("upscale"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {

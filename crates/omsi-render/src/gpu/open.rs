@@ -118,6 +118,8 @@ impl Renderer {
         // a small or shared graphics chip gets a lighter picture (see `lighter_picture`)
         GL_BACKEND.store(info.backend == wgpu::Backend::Gl, std::sync::atomic::Ordering::Relaxed);
         let (options, lighter) = gpu_memory::lighter_picture(&info, vram, options);
+        // (DLSS takes the place of multisampling, on an NVIDIA card on DirectX 12 only)
+        let options = crate::dlss_state::settle_options(options, &info);
         let shadow_size = options
             .shadow_size
             .clamp(512, if intel_vulkan_safe { 2048 } else { 8192 });
@@ -292,7 +294,7 @@ impl Renderer {
         let compress =
             bc && options.compress_textures && !omsi_cfg::flags::OMSI_NO_TEXCOMPRESS.is_set();
         omsi_texture::set_gpu_options(omsi_texture::GpuOptions { bc, compress });
-        log::info!("renderer: {} ({:?}), {:?}, {}x MSAA{}, anisotropy {}, shadow map {}, SSAO {}, render scale {}, textures {}", info.name, info.backend, format, options.msaa, if adapter_table { " (adapter format table)" } else { "" }, options.anisotropy, options.shadow_size, options.ssao, if options.render_scale > 0.0 { format!("{:.2}", options.render_scale.clamp(0.5, 1.0)) } else { "auto".to_string() }, match (bc, compress) { (false, _) => "RGBA (no BC on this device)", (true, false) => "DXT as blocks, others RGBA", (true, true) => "DXT as blocks, others compressed where close" });
+        log::info!("renderer: {} ({:?}), {:?}, {}x MSAA{}, DLSS {}, anisotropy {}, shadow map {}, SSAO {}, render scale {}, textures {}", info.name, info.backend, format, options.msaa, if adapter_table { " (adapter format table)" } else { "" }, options.dlss.as_str(), options.anisotropy, options.shadow_size, options.ssao, if options.render_scale > 0.0 { format!("{:.2}", options.render_scale.clamp(0.5, 1.0)) } else { "auto".to_string() }, match (bc, compress) { (false, _) => "RGBA (no BC on this device)", (true, false) => "DXT as blocks, others RGBA", (true, true) => "DXT as blocks, others compressed where close" });
         // Every pipeline is built under an error scope of every kind and the renderer built
         // again with less where one fails: without multisampling (a driver whose table
         // promises more than it takes), then without the pipelines a picture can do without
@@ -500,6 +502,8 @@ impl Renderer {
         if sixteen_texture_units() && !options.no_enhanced && !options.preview_only {
             log::warn!("renderer: the enhanced graphics take more textures than OpenGL has units for on {adapter_name}; drawing vanilla+");
         }
+        // (DLSS: the scene module with its motion passes, see `dlss_state::with_motion_passes`)
+        crate::dlss_state::DLSS_MOTION.store(options.dlss.is_on(), std::sync::atomic::Ordering::Relaxed);
         let scene = scene::SceneBase::new(&device, leave_out_enhanced);
         let hdr_format = wgpu::TextureFormat::Rgba16Float;
         let shadows = shadows::build(&device, &scene, shadow_size);
@@ -521,6 +525,8 @@ impl Renderer {
         let enhanced = enhanced::build(&device, &queue, hdr_format, &defaults.camera_buf, &sky, !leave_out_enhanced);
         let (overlay_pipeline_1x, xr_ui_pipeline) = overlays.single_sampled(&device, format);
         let upscale = upscale::build(&device, format);
+        // DLSS: the motion prepass's pipelines, made only when DLSS is asked for
+        let dlss = DlssRes::new(crate::dlss_state::build_pipelines(&device, &scene, &options));
         let gpu_timers = [GpuTimers::new(&device), GpuTimers::new(&device)];
         // GLES cannot reliably read the depth buffer (the same limitation as SSAO).
         let puddles = (!gl && !passes.leave_out_enhanced).then(|| {
@@ -628,6 +634,7 @@ impl Renderer {
                 out_of_memory: errors.out_of_memory,
                 device_lost: errors.device_lost,
             },
+            dlss,
             _device_poller: DevicePoller::start(&device),
             mip_pipeline: mip.pipeline,
             mip_layout: mip.layout,
