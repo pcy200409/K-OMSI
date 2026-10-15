@@ -34,5 +34,6 @@ rayon.workspace = true
 wgpu.workspace = true
 
 [dev-dependencies]
+serde_json.workspace = true
 pollster.workspace = true
 zip.workspace = true

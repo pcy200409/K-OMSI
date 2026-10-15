@@ -14,6 +14,7 @@ mod extend;
 mod lane;
 mod lights;
 mod network;
+pub mod cartography;
 #[cfg(test)]
 mod extend_tests;
 
