@@ -344,6 +344,8 @@ pub struct Navigator {
     stop_names_learnt: bool,
     pub global_version: u64,
     roads: Option<Roads>,
+    /// Cached map-only carriageways; never replace the traffic graph with these.
+    vehicle_roads: Option<(u64, usize, Vec<MapRoad>)>,
     route: Route,
     /// The route mesh (buffers 1 and 9): the route and traffic versions, the anchor, its
     /// size, the bus's lane and the look it was built for.
@@ -552,6 +554,7 @@ impl Navigator {
             stop_names_learnt: false,
             global_version: 0,
             roads: None,
+            vehicle_roads: None,
             route: Route::default(),
             route_mesh: (u64::MAX, 0, DVec2::ZERO, 0, 0, 0),
             congestion: HashMap::new(),
@@ -1146,7 +1149,7 @@ impl Navigator {
         self.dock_slot = None;
         self.board = None;
         // (with the navigator off the route is still followed for OMSI 2's arrows)
-        if !self.enabled && !self.city.open && !self.arrows && self.shown < 0.01 {
+        if !self.enabled && !self.city.open && !self.arrows && self.shown < 0.01 && !omsi_htmlengine::browser::navigation_requested() {
             return;
         }
         let target = if self.enabled { 1.0 } else { 0.0 };
@@ -1231,6 +1234,7 @@ impl Navigator {
                 .map(str::to_string);
             self.update_place(f.bus.truncate());
         }
+        self.publish_vehicle_map(f);
         self.first = false;
         if !self.enabled && self.shown < 0.01 {
             self.panel_rect = [0.0; 4];
@@ -1364,4 +1368,92 @@ use lines_panel::*;
 #[cfg(test)]
 mod tests;
 
+impl Navigator {
+    /// Bounded road geometry for the vehicle's browser canvas, using the same lane IDs
+    /// and computed route/turn as the HUD navigator. No GPU readback or invented roads.
+    fn publish_vehicle_map(&mut self, f: &NavFrame) {
+        if !omsi_htmlengine::browser::navigation_requested() {
+            return;
+        }
+        static LAST: std::sync::OnceLock<std::sync::Mutex<std::time::Instant>> =
+            std::sync::OnceLock::new();
+        let mut last = LAST
+            .get_or_init(|| {
+                std::sync::Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(1))
+            })
+            .lock()
+            .unwrap();
+        if last.elapsed().as_secs_f32() < 0.5 {
+            return;
+        }
+        *last = std::time::Instant::now();
+        let net = self.global.as_deref().or(f.traffic.map(|t| &t.net));
+        let Some(net) = net else {
+            omsi_htmlengine::browser::publish_navigation(serde_json::Value::Null);
+            return;
+        };
+        use omsi_sim::traffic::cartography::{nearby_roads, simplify_road};
+        let key = (self.global_version, net.lanes.len());
+        if self
+            .vehicle_roads
+            .as_ref()
+            .is_none_or(|c| (c.0, c.1) != key)
+        {
+            self.vehicle_roads = Some((key.0, key.1, road_geometry(net)));
+        }
+        let roads: Vec<_> = nearby_roads(
+            &self.vehicle_roads.as_ref().unwrap().2,
+            f.bus.truncate(),
+            1200.,
+            2500,
+        )
+        .into_iter()
+        .map(|r| {
+            serde_json::json!({"width":r.width,"main":r.main,
+                "elevation":r.points.get(r.points.len()/2).map(|p|p.z).unwrap_or(0.),
+                "points":simplify_road(&r.points,0.35)})
+        })
+        .collect();
+        let points = |lane: &omsi_sim::traffic::Lane| simplify_road(&lane.points, 0.2);
+        let labels:Vec<_>=self.streets.as_ref().into_iter().flat_map(|s|s.labels.iter().filter_map(|(p,angle,id)| {
+            if p.distance(f.bus.truncate())>1200. {return None;}
+            Some(serde_json::json!({"position":[p.x,p.y],"angle":angle,"text":s.names.get(*id as usize)?}))
+        })).take(160).collect();
+        let surface = self.vehicle_surface(f.bus.truncate());
+        let route: Vec<_> = self
+            .route
+            .lanes
+            .iter()
+            .skip(self.route.progress)
+            .take(150)
+            .filter_map(|&i| net.lanes.get(i))
+            .map(points)
+            .collect();
+        let stops: Vec<_> = f
+            .stops
+            .iter()
+            .take(20)
+            .map(|s| serde_json::json!({"name":s.name,"position":[s.position.x,s.position.y]}))
+            .collect();
+        let turn=self.next_turn.as_ref().map(|(direction,_,distance,street)|serde_json::json!({"direction":direction,"distance":distance,"street":street}));
+        omsi_htmlengine::browser::publish_navigation(
+            serde_json::json!({"origin":[f.bus.x,f.bus.y],"roads":roads,"labels":labels,"surface":surface,"route":route,"stops":stops,"turn":turn,"nextDistance":self.next_dist,"street":self.street_here,"rerouting":self.route.off_for>2.0}),
+        );
+    }
+}
 
+impl Navigator {
+    /// Only author-provided map packages supply land/water here. No inferred buildings.
+    fn vehicle_surface(&self, center: DVec2) -> serde_json::Value {
+        let Some(package) = self.surface.as_ref().filter(|_| self.show_surface) else {
+            return serde_json::Value::Null;
+        };
+        let layers = package.layers(Some((
+            (center.x - 1200., center.y - 1200.),
+            (center.x + 1200., center.y + 1200.),
+        )));
+        let fills:Vec<_>=layers.fills.iter().enumerate().map(|(class,triangles)|serde_json::json!({"class":class,"triangles":triangles.iter().take(40000).map(|t|t.map(|p|[p.0,p.1])).collect::<Vec<_>>()})).collect();
+        let lines:Vec<_>=layers.lines.iter().take(2000).map(|l|serde_json::json!({"class":l.class,"width":l.width,"points":l.points.iter().map(|p|[p.0,p.1]).collect::<Vec<_>>()})).collect();
+        serde_json::json!({"fills":fills,"lines":lines,"credit":package.credit})
+    }
+}
