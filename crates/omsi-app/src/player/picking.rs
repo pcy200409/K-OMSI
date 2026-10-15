@@ -141,6 +141,10 @@ pub(crate) fn pick_html_in(vehicle: &omsi_sim::VehicleInstance, origin: DVec3, d
             continue;
         }
         let def = &vehicle.ty.model.meshes[vm.def_index];
+        if def.mouse_event.as_deref() == Some(omsi_sim::vehicle::android_auto::TOGGLE)
+            && vehicle.var(omsi_sim::vehicle::android_auto::MODE).unwrap_or(0.0) < 0.5 {
+            continue;
+        }
         let shows_page = |n: Option<i32>| n.is_some_and(|n| pages.contains(&(n.max(0) as usize)));
         if !def.materials.iter().any(|m| shows_page(m.use_script_texture)) {
             continue;
