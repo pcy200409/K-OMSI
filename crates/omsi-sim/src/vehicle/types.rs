@@ -362,6 +362,12 @@ impl VehicleType {
         let model_path = omsi_cfg::resolve_path(&dir, &model_rel);
         let mut model = Model::load(&model_path)
             .with_context(|| format!("loading {}", model_path.display()))?;
+        let android_auto = if keep_meshes {
+            match android_auto::configure(bus_file, &mut model) {
+                Ok(enabled) => enabled,
+                Err(e) => { log::warn!("Android Auto disabled: {e}"); false }
+            }
+        } else { false };
         let model_dir = model_path
             .parent()
             .map(|p| p.to_path_buf())
@@ -375,6 +381,7 @@ impl VehicleType {
         input.stringvarlists = def.scripts.stringvarlists.clone();
         input.constfiles = def.scripts.constfiles.clone();
         input.scripts = def.scripts.scripts.clone();
+        if android_auto { input.builtin_vars.push(android_auto::MODE.into()); }
         let mut program = compile(&input);
         for e in &program.errors {
             log::warn!("{e}");
