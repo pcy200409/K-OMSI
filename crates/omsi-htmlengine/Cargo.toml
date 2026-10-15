@@ -15,7 +15,9 @@ ureq.workspace = true
 omsi-texture = { path = "../omsi-texture" }
 base64 = "0.22"
 tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
-arboard = { version = "3", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 windows = { workspace = true, features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading"] }
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+arboard = { version = "3", default-features = false }
