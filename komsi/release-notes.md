@@ -17,6 +17,7 @@
 - **ReShade 호환**: 게임이 ReShade를 넣으면 창이 뜨기 전에 꺼지던 문제를 고쳤습니다(wgpu의 `IDXGIFactoryMedia` 생성 제거, Criisko/openOMSI 방식). ReShade는 `openomsi.exe`에 DirectX 10/11/12로 설치하세요. 두 방식 쓰는 법: [DLSS · ReShade 안내](https://github.com/pcy200409/K-OMSI/blob/branding/komsi/RESHADE_DLSS.md)
 - **HTML 페이지 한글 글꼴 지정**: `openomsi.exe` 옆 `fonts/html_fallback.ttf`(굵은 글씨는 `html_fallback_bold.ttf`)가 있으면 HTML 페이지(정류장 안내기, 단말기 화면 등)의 한글을 그 글꼴로 그립니다(없으면 기존대로 맑은 고딕). 업데이트해도 이 파일은 지워지지 않습니다.
 - **지도 오브젝트 화면·글자·소리 누락 수정**: 늦게 불러온 타일의 스크립트 오브젝트 일부가 화면(HTML 페이지)·글자 텍스처·소리·움직임을 받지 못하던 문제를 고쳤습니다(정류장 버스정보안내기가 검게 나오던 원인). 공식 openOMSI에도 있는 문제입니다.
+- **하이거 Auto 화면 (시험 기능)**: 하이거 1611P 문 CCTV 화면을 눌러 여는 안드로이드 오토 풍 차량 화면입니다. 게임 도로 지도·노선·차량 위치, 다음 정류장 3곳과 운행표 시각, 정류장 접근·문 열림 표시, YouTube 링크 재생을 보여 줍니다. 설치된 Edge 또는 Chrome이 필요하고, 차량 옆에 `HigerHypers1611P.android-auto.cfg`(예시: `docs/examples/android-auto`)를 두어야 켜집니다. 자세한 내용과 한계: [docs/android-auto.md](https://github.com/pcy200409/K-OMSI/blob/release/docs/android-auto.md)
 - **한국어 번역 보완**: 공식 번역에도 아직 없던 인터페이스 문구 1,026개(런처, 설정, 날씨, 컨트롤러, LAN 등)를 기계 번역으로 채웠습니다. 어색한 표현은 이슈로 알려 주세요.
 
 
