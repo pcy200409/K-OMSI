@@ -16,6 +16,7 @@ mod lights;
 mod network;
 mod walk_path;
 pub mod way;
+pub mod cartography;
 #[cfg(test)]
 mod extend_tests;
 
