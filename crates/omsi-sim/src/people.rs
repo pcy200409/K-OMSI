@@ -70,6 +70,7 @@ pub mod scratch;
 // The passengers, as Omsi.exe runs them.
 pub mod pax;
 pub mod pax_stops;
+pub mod place_choice;
 pub mod pax_tick;
 pub mod pax_task;
 pub mod pax_driver;
