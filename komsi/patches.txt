@@ -1,4 +1,4 @@
-# Branches merged into `release`, in this order (one per line, # = comment).
+﻿# Branches merged into `release`, in this order (one per line, # = comment).
 # `branding` is always first. Add a new patch branch here to keep it.
 branding
 patch/telemetry-pedals
@@ -9,5 +9,4 @@ patch/ai-lane-signal
 patch/dlss
 patch/reshade
 patch/html-font-file
-patch/scenery-show-lookup
 patch/android-auto
