@@ -6,7 +6,6 @@ patch/pax-seat-choice
 patch/lan-fleet-number
 patch/korean-translation
 patch/ai-lane-signal
-patch/dlss
 patch/reshade
 patch/html-font-file
 patch/android-auto
