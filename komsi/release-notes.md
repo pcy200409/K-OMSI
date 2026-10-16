@@ -1,4 +1,4 @@
-**K-OMSI** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.31(이후 main)을 바탕으로 K-OMSI 수정을 얹은 빌드입니다.
+**K-OMSI** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.33을 바탕으로 K-OMSI 수정을 얹은 빌드입니다.
 
 > **비공식 포크입니다.** K-OMSI는 공식 openOMSI(openOMSI.org)와 관계없는 독립 프로젝트이며, openOMSI의 이름·로고는 원작자의 것입니다([TRADEMARKS.md](https://github.com/pcy200409/K-OMSI/blob/release/TRADEMARKS.md)). 문제는 공식 저장소가 아니라 [K-OMSI 이슈](https://github.com/pcy200409/K-OMSI/issues)로 알려 주세요.
 >
@@ -16,7 +16,6 @@
 - **NVIDIA DLSS / DLAA (시험 기능)**: 설정 → 그래픽 → 안티에일리어싱 아래 **DLSS** 칸(끔·DLAA·품질·균형·성능·울트라 성능). 기본은 꺼짐입니다. Windows + DirectX 12(켜면 자동 선택) + GeForce RTX가 필요하고, NVIDIA Streamline의 `sl.interposer.dll`, `sl.common.dll`, `sl.dlss.dll`, `nvngx_dlss.dll`을 [Streamline SDK](https://github.com/NVIDIA-RTX/Streamline) `bin/x64`에서 받아 `openomsi.exe` 옆에 넣어야 합니다(NVIDIA 파일은 포함하지 않음). 없으면 이유를 로그에 남기고 평소대로 그립니다. openOMSI PR #942(Nussaccino)를 옮겨 온 것입니다.
 - **ReShade 호환**: 게임이 ReShade를 넣으면 창이 뜨기 전에 꺼지던 문제를 고쳤습니다(wgpu의 `IDXGIFactoryMedia` 생성 제거, Criisko/openOMSI 방식). ReShade는 `openomsi.exe`에 DirectX 10/11/12로 설치하세요. 두 방식 쓰는 법: [DLSS · ReShade 안내](https://github.com/pcy200409/K-OMSI/blob/branding/komsi/RESHADE_DLSS.md)
 - **HTML 페이지 한글 글꼴 지정**: `openomsi.exe` 옆 `fonts/html_fallback.ttf`(굵은 글씨는 `html_fallback_bold.ttf`)가 있으면 HTML 페이지(정류장 안내기, 단말기 화면 등)의 한글을 그 글꼴로 그립니다(없으면 기존대로 맑은 고딕). 업데이트해도 이 파일은 지워지지 않습니다.
-- **지도 오브젝트 화면·글자·소리 누락 수정**: 늦게 불러온 타일의 스크립트 오브젝트 일부가 화면(HTML 페이지)·글자 텍스처·소리·움직임을 받지 못하던 문제를 고쳤습니다(정류장 버스정보안내기가 검게 나오던 원인). 공식 openOMSI에도 있는 문제입니다.
 - **하이거 Auto 화면 (시험 기능)**: 하이거 1611P 문 CCTV 화면을 눌러 여는 안드로이드 오토 풍 차량 화면입니다. 게임 도로 지도·노선·차량 위치, 다음 정류장 3곳과 운행표 시각, 정류장 접근·문 열림 표시, YouTube 링크 재생을 보여 줍니다. 설치된 Edge 또는 Chrome이 필요하고, 차량 옆에 `HigerHypers1611P.android-auto.cfg`(예시: `docs/examples/android-auto`)를 두어야 켜집니다. 자세한 내용과 한계: [docs/android-auto.md](https://github.com/pcy200409/K-OMSI/blob/release/docs/android-auto.md)
 - **한국어 번역 보완**: 공식 번역에도 아직 없던 인터페이스 문구 1,022개(런처, 설정, 날씨, 컨트롤러, LAN 등)를 기계 번역으로 채웠습니다. 어색한 표현은 이슈로 알려 주세요.
 
@@ -32,6 +31,9 @@
 - **그래픽·소리**: 기억된 MSAA 후퇴가 새 버전마다 한 번 다시 시도됨, 종이 운행표가 Courier New 간격을 유지, 지도 소리가 800 m까지 닿고 끝에서 서서히 작아짐, OpenGL ES 3.1/3.2 셰이더 시험 보강, 밤에 집·나무 뒤 가로등이 눈부시게 보이지 않음.
 - **성능**: 운행표 열차 연결 차량 조회를 5초마다가 아니라 한 번만 해 주행 중 잔끊김 제거, 지도 스크립트용 보조 스레드가 작업량에 맞춰 붙음(결과 동일).
 - **멀티플레이**: 다른 컴퓨터가 보낸 모드 파일(그림·소리·메시·텍스트)이 이름과 맞는지 검사하고, 끝나지 않는 차량 스크립트는 중단시킴.
+- **그래픽 메모리(새)**: 설정 "텍스처 메모리"가 "비디오 메모리"로 바뀌어 텍스처·메시·렌더 타깃·그림자 맵 등 그래픽 카드에 올리는 모든 것의 상한이 됨(드라이버가 알려 주는 실제 한도도 지킴, 자동=카드 메모리의 9/10, 8·12·16 GB 선택 추가, 예전 텍스처 메모리·`texmemlimit`은 이어받지 않고 자동으로 시작), 그래픽 장치 손실 뒤에는 카드 메모리의 2/3 사용.
+- **창문 빗방울 부담 감소 / Enhanced+ 메모리 절감**: 운전석 창문 빗방울을 프레임 옆에서 그리고 바뀐 줄만 보냄(폭우·Radeon 680M에서 창문 비용 10.3→3.3 ms), Enhanced+의 8x MSAA를 4x로 그림(`OMSI_FULL_GPU=1`이면 8x 유지), 5초간 쓰지 않은 크기의 렌더 타깃을 놓아줌.
+- **정류장 안내기·스크립트 오브젝트**: 정류장 출발 안내기(HafenCity Hamburg HVV 등)가 다시 버스를 보여 주고, 멀리 있는 오브젝트가 범위 밖일 때 가까운 스크립트 오브젝트가 글자·소리·움직임을 놓치지 않음. (K-OMSI의 같은 목적 패치는 공식에 반영되어 뺐습니다.)
 - **기타**: 헤드셋 [game] 키가 VR에서만 조합키를 받음(#2577), 런처가 sevenz-rust2 0.23으로 다시 빌드됨, Discord 링크가 만료되지 않은 초대로 바뀜, 의존성(resvg, rand 등) 갱신과 보안 점검 보강.
 
 ## openOMSI 0.2.60 ~ 0.3.30 공식 변경사항 (요약)
