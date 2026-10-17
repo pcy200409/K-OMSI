@@ -368,6 +368,8 @@ impl PeopleSim {
             .filter(|&l| {
                 (net.lanes[l].start() - center).truncate().length() < STROLL_RADIUS * 0.9
                     && net.lanes[l].length() > 4.0
+                    // (a pavement the map gives no foot traffic: `[rule] trafficdensity 0`)
+                    && net.lanes[l].density > 0.0
             })
             .collect();
         let crowd = (lanes.len() as f32 / 120.0).clamp(0.6, 3.0);
