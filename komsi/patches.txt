@@ -9,3 +9,4 @@ patch/ai-lane-signal
 patch/reshade
 patch/html-font-file
 patch/android-auto
+patch/map-rule-limits
