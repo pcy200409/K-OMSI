@@ -516,9 +516,10 @@ pub fn personality(state: &mut AiState, seed: u64, heavy: bool) {
     let rg = |k: u64| random::draw_gaussian(seed, 50000 + k);
 
     state.desire = if heavy {
-        (0.93 + 0.05 * rg(3)).clamp(0.8, 1.2)
+        (0.93 + 0.05 * rg(3)).clamp(0.8, 1.0)
     } else {
-        (1.01 + 0.11 * rg(3)).clamp(0.7, 1.3)
+        // (never over the limit the map sets: `[rule] speedlimit`)
+        (1.01 + 0.11 * rg(3)).clamp(0.7, 1.0)
     };
     state.headway = 1.4 + 0.2 * rg(11);
     state.min_gap = 1.6 + 1.4 * ru(19);
