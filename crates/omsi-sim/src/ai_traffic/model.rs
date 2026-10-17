@@ -480,7 +480,8 @@ pub fn personality(state: &mut AiState, seed: u64, heavy: bool) {
     state.desire = if heavy {
         0.88 + 0.1 * r(3)
     } else {
-        0.9 + 0.22 * r(3)
+        // (never over the limit the map sets: `[rule] speedlimit`)
+        0.88 + 0.12 * r(3)
     };
     state.headway = 1.0 + 0.8 * r(11);
     state.min_gap = 1.6 + 1.4 * r(19);
