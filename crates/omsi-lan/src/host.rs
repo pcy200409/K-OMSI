@@ -31,6 +31,8 @@ pub trait LanHost {
         ty: Arc<omsi_sim::VehicleType>,
         scheme: Option<usize>,
         clock: omsi_sim::SimClock,
+        number: &str,
+        ident: &str,
     ) -> (omsi_sim::VehicleInstance, Option<Arc<omsi_vehicle::Hof>>);
     /// Set a vehicle's line and destination displays as the timetable sets an AI bus's.
     fn set_destination(&self, v: &mut omsi_sim::VehicleInstance, hof: Option<&omsi_vehicle::Hof>, line: &str, destination: &str);
