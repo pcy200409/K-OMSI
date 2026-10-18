@@ -390,7 +390,7 @@ jobs:
 
   release:
     # (the platforms not built again are skipped, not failed)
-    if: ${{ !cancelled() && !failure() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+    if: ${{ !cancelled() && !failure() && github.event_name != 'pull_request' && github.ref == 'refs/heads/release' }}
     needs: [version, windows, windows-tests, macos, linux, android]
     runs-on: ubuntu-latest
     permissions:
@@ -406,32 +406,30 @@ jobs:
         with:
           path: out
           merge-multiple: true
-      - name: Publish v${{ needs.version.outputs.version }} (beta)
+      - name: Publish v${{ needs.version.outputs.version }}
         run: |
           ls -l out
           if [ "$(gh release view "v$VERSION" --json isDraft --jq .isDraft 2>/dev/null)" = true ]; then
             gh release delete "v$VERSION" --yes
           fi
-          if gh release view "v$VERSION" >/dev/null 2>&1; then
-            echo "::error::v$VERSION is already published and stays as it is: a fix is released as a new version"
-            exit 1
+          # K-OMSI: the notes are kept in the repository (komsi/release-notes.md); <버전> is the version
+          if [ -f komsi/release-notes.md ]; then
+            sed "s/<버전>/$VERSION/g" komsi/release-notes.md > notes.md
+          else
+            echo "**K-OMSI $VERSION** (openOMSI based)" > notes.md
           fi
-          prev=$(git tag -l "v${VERSION%.*}.*" --sort=-v:refname | grep -vx "v$VERSION" | head -1)
-          if [ -n "$prev" ] && ! git merge-base --is-ancestor "$prev" "$GITHUB_SHA"; then
-            echo "::error::$GITHUB_SHA is older than $prev: only a newer commit of main is released"
-            exit 1
-          fi
-          if ! git tag "v$VERSION" "$GITHUB_SHA" 2>/dev/null && [ "$(git rev-parse "v$VERSION^{commit}")" != "$GITHUB_SHA" ]; then
-            echo "::error::the tag v$VERSION already names another commit"
-            exit 1
-          fi
-          git push origin "v$VERSION"
-          sh scripts/release-notes.sh "$VERSION" > notes.md
+          git tag -f "v$VERSION" "$GITHUB_SHA"
+          git push -f origin "v$VERSION"
           cd out
           files=$(ls *.zip *.apk *.dmg *.exe 2>/dev/null || true)
           sha256sum $files > SHA256SUMS
-          gh release create "v$VERSION" $files SHA256SUMS \
-            --verify-tag \
-            --prerelease \
-            --title "openOMSI $VERSION" \
-            --notes-file ../notes.md
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            # the same version built again: the release stays, with this build's files and notes
+            gh release upload "v$VERSION" $files SHA256SUMS --clobber
+            gh release edit "v$VERSION" --title "K-OMSI $VERSION" --notes-file ../notes.md
+          else
+            gh release create "v$VERSION" $files SHA256SUMS \
+              --verify-tag \
+              --title "K-OMSI $VERSION" \
+              --notes-file ../notes.md
+          fi
