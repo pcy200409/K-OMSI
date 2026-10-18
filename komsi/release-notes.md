@@ -1,4 +1,4 @@
-**K-OMSI** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.35를 바탕으로 K-OMSI 수정을 얹은 빌드입니다.
+**K-OMSI** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.36을 바탕으로 K-OMSI 수정을 얹은 빌드입니다.
 
 > **비공식 포크입니다.** K-OMSI는 공식 openOMSI(openOMSI.org)와 관계없는 독립 프로젝트이며, openOMSI의 이름·로고는 원작자의 것입니다([TRADEMARKS.md](https://github.com/pcy200409/K-OMSI/blob/release/TRADEMARKS.md)). 문제는 공식 저장소가 아니라 [K-OMSI 이슈](https://github.com/pcy200409/K-OMSI/issues)로 알려 주세요.
 >
@@ -17,9 +17,17 @@
 - **HTML 페이지 한글 글꼴 지정**: `openomsi.exe` 옆 `fonts/html_fallback.ttf`(굵은 글씨는 `html_fallback_bold.ttf`)가 있으면 HTML 페이지(정류장 안내기, 단말기 화면 등)의 한글을 그 글꼴로 그립니다(없으면 기존대로 맑은 고딕). 업데이트해도 이 파일은 지워지지 않습니다.
 - **하이거 Auto 화면 (시험 기능)**: 하이거 1611P 문 CCTV 화면을 눌러 여는 안드로이드 오토 풍 차량 화면입니다. 게임 도로 지도·노선·차량 위치, 다음 정류장 3곳과 운행표 시각, 정류장 접근·문 열림 표시, YouTube 링크 재생을 보여 줍니다. 설치된 Edge 또는 Chrome이 필요하고, 차량 옆에 `HigerHypers1611P.android-auto.cfg`(예시: `docs/examples/android-auto`)를 두어야 켜집니다. 자세한 내용과 한계: [docs/android-auto.md](https://github.com/pcy200409/K-OMSI/blob/release/docs/android-auto.md)
 - **맵 규칙 존중**: AI 차량의 희망 속도가 맵의 `[rule] speedlimit`을 넘지 않고(최대 제한속도의 100%), 보행자가 맵에서 `trafficdensity 0`으로 둔 보도는 갈 곳이 따로 없을 때가 아니면 걷지 않습니다.
+- **AI 버스 하차벨**: AI가 모는 버스에서 승객이 하차벨을 누르면 차량의 int_haltewunsch 트리거가 한 번 울립니다(기존에는 플레이어 버스만 해당).
 - **한국어 번역 보완**: 공식 번역에도 아직 없던 인터페이스 문구 977개(런처, 설정, 날씨, 컨트롤러, LAN 등)를 기계 번역으로 채웠습니다. 어색한 표현은 이슈로 알려 주세요.
 
 
+## openOMSI 0.3.36 공식 변경사항 (요약)
+
+0.3.35 이후의 변경입니다(공식 CHANGELOG의 'Unreleased'). 이 외에 작은 수정이 많이 들어와 있지만 공식 CHANGELOG에는 아래 두 항목만 새로 올라왔습니다.
+
+### 새 기능
+- **전용 서버 관리**: 관리자·중재자 역할, 게임 안 메뉴와 같은 기능을 쓰는 웹 패널(`/admin/`), 감사 로그, `passengers`와 별도의 승객 밀도(`passenger_density`)([docs/SERVER.md](https://github.com/pcy200409/K-OMSI/blob/release/docs/SERVER.md)). 기존 서버 주의: 12자 미만의 `admin_password`·`moderator_password`는 이제 아무도 들이지 않고(로그에 표시, 시작 스크립트가 새 암호를 물음), `server.cfg`에 `admin_web`이 없으면 `admin_web = local`이라고 쓸 때까지 웹 패널이 꺼져 있습니다.
+- **플레이어 버스를 내용으로 서버에 전달**: 게임이 쓰는 파일의 지문으로 어느 버스를 모는지 알리고, 서버에 없으면 그 파일(모는 변형과 도색만, 팩 전체가 아님)을 보냅니다. 전용 서버는 플레이어가 보낸 모든 버전을 보관하고(`accept_uploads`, `uploads_keep_days`) 맵은 플레이어가 직접 설치하도록 둘 수 있습니다(`share_maps`: 새 `server.cfg`는 0, 키가 없으면 예전처럼 맵을 전달).
 ## openOMSI 0.3.34 ~ 0.3.35 공식 변경사항 (요약)
 
 0.3.34와 0.3.35의 변경입니다(공식 CHANGELOG의 'Unreleased'). 0.3.31~0.3.33 때 이미 정리한 항목은 아래 해당 섹션에 있습니다.
