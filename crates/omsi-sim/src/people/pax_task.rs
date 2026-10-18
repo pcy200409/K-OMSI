@@ -114,8 +114,9 @@ impl PeopleSim {
                 let bus = self.pax(i).unwrap().bus.or(self.pax(i).unwrap().inside);
                 let Some(bn) = bus.and_then(|b| bus_ix.get(&b).map(|k| &buses[*k])) else { return };
                 // the stop button
-                if bn.id == BusId::Player {
-                    self.stop_request = true;
+                match bn.id {
+                    BusId::Player => self.stop_request = true,
+                    BusId::Ai(id) => { self.ai_stop_requests.insert(id); }
                 }
                 let seat = self.pax(i).unwrap().seat;
                 let all = bn.cabin.all_points();
