@@ -44,6 +44,14 @@ APPLESCRIPT
 cp assets/icons/app/openomsi.icns "$tmp/mnt/.VolumeIcon.icns"
 xattr -wx com.apple.FinderInfo "0000000000000000040000000000000000000000000000000000000000000000" "$tmp/mnt"
 sync
-hdiutil detach "$tmp/mnt" >/dev/null || { sleep 5; hdiutil detach -force "$tmp/mnt" >/dev/null; }
+# K-OMSI: on the macOS x64 runner the first detach is often "Resource busy" (Finder or Spotlight still holds
+# the volume) and the forced one then finds the mount point already gone; try again and go on once the image is detached
+for try in 1 2 3 4 5 6; do
+  hdiutil detach "$tmp/mnt" >/dev/null 2>&1 && break
+  sleep 5
+  hdiutil detach -force "$tmp/mnt" >/dev/null 2>&1 && break
+  hdiutil info | grep -qF "$tmp/rw.dmg" || break
+done
+if hdiutil info | grep -qF "$tmp/rw.dmg"; then echo "the disk image is still attached" >&2; exit 1; fi
 mkdir -p "$(dirname "$out")"
 hdiutil convert "$tmp/rw.dmg" -format UDZO -imagekey zlib-level=9 -ov -o "$out" >/dev/null
