@@ -289,6 +289,8 @@ pub struct PeopleSim {
     pub under_bus: hashbrown::HashSet<u32>,
     /// A rider pressed the stop button for the next stop (the app fires the vehicle trigger `int_haltewunsch`).
     pub stop_request: bool,
+    /// AI buses whose riders pressed the stop button since the last people step.
+    pub ai_stop_requests: HashSet<u64>,
     /// Tickets sold at the cash desk this session and what they were worth.
     pub tickets_sold: u32,
     pub ticket_cash: f32,

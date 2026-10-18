@@ -298,6 +298,11 @@ pub(crate) fn humans_after_step(
         }
     }
     if let Some(t) = traffic {
+        for id in h.take_ai_stop_requests() {
+            if let Some(c) = t.cars.iter_mut().find(|c| c.id == id) {
+                c.vehicle.trigger("int_haltewunsch");
+            }
+        }
         let (alighting, waiting) = h.stop_wishes();
         t.set_stop_wishes(alighting, waiting);
         t.bus_loads = h.bus_loads();
