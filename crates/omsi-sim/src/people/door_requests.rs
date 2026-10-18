@@ -103,8 +103,15 @@ impl PeopleSim {
                 .manual_door_requests
                 .get(&source)
                 .is_none_or(|(old, _)| *old != request);
-            if new && request.exit && request.bus == BusId::Player {
-                self.stop_request = true;
+            if new && request.exit {
+                match request.bus {
+                    BusId::Player => self.stop_request = true,
+                    BusId::Ai(id) => {
+                        if !self.ai_stop_requests.contains(&id) {
+                            self.ai_stop_requests.push(id);
+                        }
+                    }
+                }
             }
             self.manual_door_requests
                 .insert(source, (request, lease.min(2.0)));
@@ -281,5 +288,8 @@ mod tests {
             people.stop_wishes().0.contains(&7),
             "a human rider asks the AI to serve the next stop"
         );
+        assert_eq!(people.take_ai_stop_requests(), vec![7]);
+        people.set_manual_door_request(3, ai_request, 1.0);
+        assert!(people.take_ai_stop_requests().is_empty(), "renewing the lease does not ring again");
     }
 }
