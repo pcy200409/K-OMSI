@@ -167,6 +167,11 @@ impl PeopleSim {
         std::mem::take(&mut self.ai_requests)
     }
 
+    /// AI buses whose stop request trigger must be fired once this frame.
+    pub fn take_ai_stop_requests(&mut self) -> HashSet<u64> {
+        std::mem::take(&mut self.ai_stop_requests)
+    }
+
     /// A line for the HUD about something that just happened.
     pub fn take_message(&mut self) -> Option<String> {
         self.message.take()
