@@ -264,6 +264,8 @@ impl omsi_lan::host::LanHost for AppLanHost<'_> {
         scheme: Option<usize>,
         clock: omsi_sim::SimClock,
         fonts: Option<omsi_lan::mods::vehicles::SharedFonts>,
+        number: &str,
+        ident: &str,
     ) -> (omsi_sim::VehicleInstance, Option<std::sync::Arc<omsi_vehicle::Hof>>) {
         let world = self.world.expect("another player's vehicle is made with a world loaded");
         let mut host = omsi_sim::VehicleHost::new(clock);
@@ -274,6 +276,8 @@ impl omsi_lan::host::LanHost for AppLanHost<'_> {
         host.paint_scheme = Some(scheme);
         host.remote_script_textures = true;
         host.remote_sound_triggers = true;
+        host.initial_number = Some(number.to_string()).filter(|n| !n.is_empty());
+        host.initial_ident = Some(ident.to_string()).filter(|n| !n.is_empty());
         let mut vehicle = omsi_sim::VehicleInstance::new(ty.clone(), host);
         vehicle.ground = None;
         if !ty.model.text_textures.is_empty() {
