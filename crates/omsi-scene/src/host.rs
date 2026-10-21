@@ -111,5 +111,5 @@ pub fn install_sim_decoder() {
             .map(|i| omsi_sim::image_decode::DecodedImage { width: i.width, height: i.height, rgba: i.rgba, has_alpha: i.has_alpha })
             .map_err(|e| e.to_string())
     });
-    omsi_sim::htmltex::set_backend(|width, height, html, api| Box::new(omsi_htmlengine::EngineRenderer::with_api(width, height, html, api)));
+    omsi_sim::htmltex::set_backend(omsi_htmlengine::vehicle_renderer);
 }
