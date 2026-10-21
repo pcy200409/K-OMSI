@@ -4204,6 +4204,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "tungstenite",
  "wasmi",
  "windows-sys 0.61.2",
 ]
