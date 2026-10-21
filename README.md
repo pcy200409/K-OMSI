@@ -1,3 +1,5 @@
+> **K-OMSI** is an unofficial, independent fork of [openOMSI](https://github.com/openOMSI-org/openOMSI) with a few extra fixes, kept in step with the upstream releases. It is not affiliated with or endorsed by openOMSI.org; the openOMSI name and logos belong to their owner (see [TRADEMARKS.md](TRADEMARKS.md)). Report K-OMSI problems in [this repository's issues](https://github.com/pcy200409/K-OMSI/issues), not upstream. Like openOMSI, K-OMSI is licensed under the GNU AGPL v3 only (see [LICENSE](LICENSE); it was MIT before openOMSI changed its licence). The text below is the upstream README.
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/logos/openomsi-wordmark-light.svg">
