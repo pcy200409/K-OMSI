@@ -3881,6 +3881,7 @@ dependencies = [
  "mlua",
  "omsi-cfg",
  "oop-format",
+ "tungstenite",
  "wasmi",
 ]
 
