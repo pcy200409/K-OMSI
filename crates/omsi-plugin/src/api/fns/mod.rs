@@ -13,6 +13,7 @@ pub(crate) mod hof;
 pub(crate) mod map;
 pub(crate) mod media;
 pub(crate) mod object;
+pub(crate) mod net;
 pub(crate) mod plugin;
 pub(crate) mod process;
 pub(crate) mod scene;
@@ -38,6 +39,7 @@ pub static GROUPS: &[&[ApiFn]] = &[
     plugin::FNS,
     process::FNS,
     storage::FNS,
+    net::FNS,
     util::FNS,
 ];
 
