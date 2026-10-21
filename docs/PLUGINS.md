@@ -908,6 +908,10 @@ On macOS, helpers extracted from ZIP files may need their executable bit restore
 | Function | Returns | What it does | Since |
 | --- | --- | --- | --- |
 | `omsi.send(port, data)` | true, or false and the reason | Sends `data` as one UDP datagram to `127.0.0.1:port`: to another program on this computer, never over the network. Not sent when the port is below 1024 or one of the game's multiplayer ports (27015-27024), the message is longer than 8 KB, or the plugin sent 100 in the last second. *Permission: `network_local`.* | 0.2.21 |
+| `omsi.ws.close()` | nil | Ends the connection. *Permission: `network_remote`.* | 0.2.22 |
+| `omsi.ws.open(url)` | true, or false and the reason | Starts listening to a public live feed over a WebSocket, read-only: the plugin never sends. Only `wss://obis.kr/...` (OBIS, the buses of the other players) is allowed, no port and no other host. The connection runs in the background and is opened again every 5 seconds after a break; opening again replaces the old one. Read what came in with `omsi.ws.poll`. *Permission: `network_remote`.* | 0.2.22 |
+| `omsi.ws.poll()` | list of strings | The text messages that came in since the last call, oldest first (at most the last 4: a feed sends whole snapshots). Empty without a connection. *Permission: `network_remote`.* | 0.2.22 |
+| `omsi.ws.state()` | string | `"connecting"`, `"open"`, `"waiting"` (broken, opened again soon) or `"closed"` (never opened, or `omsi.ws.close`). *Permission: `network_remote`.* | 0.2.22 |
 
 #### LAN games
 

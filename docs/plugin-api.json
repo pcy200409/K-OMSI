@@ -4433,6 +4433,52 @@
       "returns": "number or nil",
       "multi": false,
       "permission": null
+    },
+    {
+      "name": "ws.close",
+      "group": "network",
+      "since": "0.2.22",
+      "doc": "Ends the connection.",
+      "params": [],
+      "returns": "nil",
+      "multi": false,
+      "permission": "network_remote"
+    },
+    {
+      "name": "ws.open",
+      "group": "network",
+      "since": "0.2.22",
+      "doc": "Starts listening to a public live feed over a WebSocket, read-only: the plugin never sends. Only `wss://obis.kr/...` (OBIS, the buses of the other players) is allowed, no port and no other host. The connection runs in the background and is opened again every 5 seconds after a break; opening again replaces the old one. Read what came in with `omsi.ws.poll`.",
+      "params": [
+        {
+          "name": "url",
+          "type": "string",
+          "optional": false
+        }
+      ],
+      "returns": "true, or false and the reason",
+      "multi": true,
+      "permission": "network_remote"
+    },
+    {
+      "name": "ws.poll",
+      "group": "network",
+      "since": "0.2.22",
+      "doc": "The text messages that came in since the last call, oldest first (at most the last 4: a feed sends whole snapshots). Empty without a connection.",
+      "params": [],
+      "returns": "list of strings",
+      "multi": false,
+      "permission": "network_remote"
+    },
+    {
+      "name": "ws.state",
+      "group": "network",
+      "since": "0.2.22",
+      "doc": "`\"connecting\"`, `\"open\"`, `\"waiting\"` (broken, opened again soon) or `\"closed\"` (never opened, or `omsi.ws.close`).",
+      "params": [],
+      "returns": "string",
+      "multi": false,
+      "permission": "network_remote"
     }
   ],
   "events": [
