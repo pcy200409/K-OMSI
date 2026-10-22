@@ -55,7 +55,7 @@ fn vs_motion(in: VsIn) -> MotionOut {
     let local = vec4<f32>(in.pos, 1.0);
     let wp = m * local + vec4<f32>(tree_sway(in.pos, m), 0.0);
     var out: MotionOut;
-    out.clip = scene_clip(e, wp);
+    out.clip = scene_clip(e, wp, (m * vec4<f32>(in.normal, 0.0)).xyz);
     out.world = wp.xyz;
     out.normal = safe_normal((m * vec4<f32>(in.normal, 0.0)).xyz);
     let pr = inst_params[e * 2u];
