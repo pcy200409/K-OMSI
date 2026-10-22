@@ -101,6 +101,8 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_DEBUG_WALLS` | bool | off | use | sim | Log the walls a walking player slides along. |
 | `OMSI_DEBUG_WARP` | bool | off | use | scene | Log crossings whose ground was moved by more than a metre. |
 | `OMSI_DEBUG_WHEELS` | bool | off | use | app | Log where the wheel meshes of every vehicle type turn. |
+| `OMSI_DLSS_JITTER_SIGN` | num | 1 | use | render | Tell DLSS the sub-pixel jitter the other way round (-1), for a driver that reads it so (a picture that shimmers or smears with DLSS). |
+| `OMSI_DLSS_VERBOSE` | bool | off | use | render | All of Streamline's own log (eVerbose). |
 | `OMSI_DUMP_CLASSES` | bool | off | use | scene | mapgen_dump example: paint the paving by class (road, footway, yard) in telling colours. |
 | `OMSI_DUMP_CUT` | text | - | use | scene | Directory: write each tile's road-cut alpha masks as images. |
 | `OMSI_DUMP_GROUND` | text | - | use | scene | File: every loaded tile's final terrain and road cut as text. |
@@ -386,6 +388,8 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_CLOUDFLARED` | text | - | use | net | Path of the cloudflared binary for the LAN tunnel (searched after the game's folder, before the PATH). |
 | `OMSI_CONTENT` | text | beside the game | use | app, cfg, launcher-core, sim | The content folder (mods, archives, screenshots). Set at runtime on Android and iOS. |
 | `OMSI_CONTENT_ZIP` | text | - | use | cfg | Extra content archives, separated like PATH (as --content-zip). |
+| `OMSI_DLSS` | text | settings | use | app | dlaa, quality, balanced, performance or ultra_performance (or off): DLSS whatever the settings say. Windows only. |
+| `OMSI_DLSS_PROJECT_ID` | text | - | use | render | Streamline's project id for the DLSS runtime (its own default when unset). |
 | `OMSI_GUARD_STATE` | text | - | use | guard, launcher-api | Set by the start guard for the process it notes: <pid>:<its state file> (what the watcher reads). |
 | `OMSI_HEALTH_URL` | text | built-in | use | platform | Another list of broken releases (URL or file:///...json) for the start guard instead of release/health.json on GitHub. |
 | `OMSI_INSTANCE` | text | - | use | app, lan, launcher-core | The id of a game instance started by the launcher (set for the child process). |
@@ -398,6 +402,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_SAFE_GPU` | num | 0 | use | app | Restarts after a lost graphics device: lighter on the card each time. Set at runtime on Android and by the restart. |
 | `OMSI_SAFE_MODE` | bool | off | use | guard, launcher-api, render | Safe mode, set by the start guard after failed starts: the basic render pipelines and no plugins. |
 | `OMSI_SCREEN_AT` | text | - | once | app, launcher-core | x,y: the screen (a point on the desktop, pixels) the game window opens on; the launcher sets it to where it stands. |
+| `OMSI_STREAMLINE_DIR` | text | - | use | render | The folder Streamline's DLLs are looked for in (the game's folder by default). |
 | `OMSI_TOMORROW_API_KEY` | text | private key file | use | app, platform | Private Tomorrow.io API key for map-selected weather; never include it in map configs or logs. |
 | `OMSI_TOMORROW_CACHE_DIR` | text | settings/weather-cache | use | platform | Private Tomorrow.io response cache and shared request-budget directory. |
 | `OMSI_TOMORROW_KEY_FILE` | text | settings/tomorrow-api-key.txt | use | app, platform | Private text file containing the player's Tomorrow.io API key. |
