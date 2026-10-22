@@ -1,4 +1,4 @@
-**K-OMSI** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.39를 바탕으로 K-OMSI 수정을 얹은 빌드입니다.
+**K-OMSI** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.40을 바탕으로 K-OMSI 수정을 얹은 빌드입니다.
 
 > **비공식 포크입니다.** K-OMSI는 공식 openOMSI(openOMSI.org)와 관계없는 독립 프로젝트이며, openOMSI의 이름·로고는 원작자의 것입니다([TRADEMARKS.md](https://github.com/pcy200409/K-OMSI/blob/release/TRADEMARKS.md)). 문제는 공식 저장소가 아니라 [K-OMSI 이슈](https://github.com/pcy200409/K-OMSI/issues)로 알려 주세요.
 >
@@ -14,12 +14,32 @@
 - **LAN 차량번호·번호판**: 멀티플레이에서 다른 플레이어의 버스가 그 플레이어 화면과 같은 차량번호와 번호판으로 보입니다.
 - **AI 차량 차선 변경 신호**: AI 차량이 다른 차선으로 옮기기 2초 전에 방향지시등을 켭니다(기존 1.2초).
 - **ReShade 호환**: 게임이 ReShade를 넣으면 창이 뜨기 전에 꺼지던 문제를 고쳤습니다(wgpu의 `IDXGIFactoryMedia` 생성 제거, Criisko/openOMSI 방식). ReShade는 `openomsi.exe`에 DirectX 10/11/12로 설치하세요.
+- **NVIDIA DLSS / DLAA (시험 기능)**: 설정 → 그래픽 → 안티에일리어싱 아래 **DLSS** 칸(끔·DLAA·품질·균형·성능·울트라 성능). 기본은 꺼짐입니다. Windows + DirectX 12(켜면 자동 선택) + GeForce RTX가 필요하고, NVIDIA Streamline의 `sl.interposer.dll`, `sl.common.dll`, `sl.dlss.dll`, `nvngx_dlss.dll`을 [Streamline SDK](https://github.com/NVIDIA-RTX/Streamline) `bin/x64`에서 받아 `openomsi.exe` 옆에 넣어야 합니다(NVIDIA 파일은 포함하지 않음). 없으면 이유를 로그에 남기고 평소대로 그립니다. openOMSI PR #942(Nussaccino)를 옮겨 온 것입니다.
 - **HTML 페이지 한글 글꼴 지정**: `openomsi.exe` 옆 `fonts/html_fallback.ttf`(굵은 글씨는 `html_fallback_bold.ttf`)가 있으면 HTML 페이지(정류장 안내기, 단말기 화면 등)의 한글을 그 글꼴로 그립니다(없으면 기존대로 맑은 고딕). 업데이트해도 이 파일은 지워지지 않습니다.
 - **하이거 Auto 화면 (시험 기능)**: 하이거 1611P 문 CCTV 화면을 눌러 여는 안드로이드 오토 풍 차량 화면입니다. 게임 도로 지도·노선·차량 위치, 다음 정류장 3곳과 운행표 시각, 정류장 접근·문 열림 표시, YouTube 링크 재생을 보여 줍니다. 설치된 Edge 또는 Chrome이 필요하고, 차량 옆에 `HigerHypers1611P.android-auto.cfg`(예시: `docs/examples/android-auto`)를 두어야 켜집니다. 자세한 내용과 한계: [docs/android-auto.md](https://github.com/pcy200409/K-OMSI/blob/release/docs/android-auto.md)
 - **맵 규칙 존중**: AI 차량의 희망 속도가 맵의 `[rule] speedlimit`을 넘지 않고(최대 제한속도의 100%), 보행자가 맵에서 `trafficdensity 0`으로 둔 보도는 갈 곳이 따로 없을 때가 아니면 걷지 않습니다.
 - **AI 버스 하차벨**: AI가 모는 버스에서 승객이 하차벨을 누르면 차량의 int_haltewunsch 트리거가 한 번 울립니다(기존에는 플레이어 버스만 해당).
 - **한국어 번역 보완**: 공식 번역에도 아직 없던 인터페이스 문구 977개(런처, 설정, 날씨, 컨트롤러, LAN 등)를 기계 번역으로 채웠습니다. 어색한 표현은 이슈로 알려 주세요.
 
+
+## openOMSI 0.3.40 공식 변경 (요약)
+
+0.3.39 이후 main에 들어온 변경입니다(공식 CHANGELOG 'Unreleased' 기준 요약).
+
+### 새 기능
+- **LAN 프로토콜 15**: 이전 버전 게임과는 같은 세션에 들어갈 수 없습니다. 모든 컴퓨터가 이 버전이어야 합니다. AI 교통은 차량 표로 전달됩니다(대역 절약, 멀리 있는 차는 덜 자주).
+- **트롤리버스**: 지도의 가공선(`trolley.txt`)과 차량의 집전대·구동(`[trolley_pole]`, `[trolley_rheostat]`, `[trolley_async]`), 전류가 있어야만 달리고 집전대가 선에서 벗겨지며 분기기·불꽃·소리까지 구현. 마우스로 집전대를 잡아 올리고, 기존 OMSI 2 트롤리버스 애드온도 그대로 작동([docs/TROLLEYBUS.md](https://github.com/pcy200409/K-OMSI/blob/release/docs/TROLLEYBUS.md)).
+- **내장 음성 채팅**(기본 꺼짐): V는 가까운 사람에게, B는 무전으로 전 세션에. GreenTeaSpeak 플러그인은 제거되었습니다.
+- **멀티플레이**: 공개 서버 목록(`public_server = 1`), 게임 메뉴의 플레이어 목록, 기기 단위 차단(`bans.json`).
+- **헤드램프 빔 그림자**(Enhanced): 안개·비·눈에 퍼진 전조등 빛이 기둥·차·벽에 가려집니다.
+- **걷기**: 사람처럼 걷는 속도·가감속·시선.
+- **휴대폰·태블릿**: 터치 자유 카메라와 사진 모드 전용 버튼, 런처 버스 미리보기 속도 개선.
+
+### 수정
+- 도로 표시가 다가갈 때 사라졌다 나타나던 문제, 거울에 태양 그림자·연기 복원(설정 `mirror_shadows`/`mirror_particles`), 창문 빗방울이 비의 세기를 따름, 유리 눈이 줄무늬로 나오던 문제와 김서림이 버스 자체의 실내 공기를 따르도록 수정.
+- 이름이 ASCII가 아닌 모드 버스(ZiU-682G 등)의 창문이 다시 투명, 에어 압력 변수만 선언한 버스의 "공기압 낮음" 오경고 제거, 버스 안에서 걷는 승객 시점, 윈센부르크 신호 교차로, `[worldcoordinates]` 맵의 스플라인 오브젝트 위치.
+- 승객이 좌석 등받이를 뚫고 앉던 문제, 폰에서 게임 메뉴 페이지 폭, 사진 모드 겹침.
+- 그 밖에 Rust 2024 전환, 보안 의존성(rustls-webpki) 갱신, 비·눈 셰이더 OpenGL/ANGLE 복구, 도시 지도 GPU 메모리 부족, Windows 패키지에 32비트 플러그인 호스트 포함, 번역(조지아어 신규, 독·스·불·포·러 보완).
 
 ## openOMSI 0.3.39 변경 (요약)
 
