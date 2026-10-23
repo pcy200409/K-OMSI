@@ -244,6 +244,11 @@ permission `network_remote`, and ships the `komsi_obis` and `komsi_taco` plugins
 * `omsi.obis.prefs()` / `set_prefs(table)`: the vehicle settings OBIS keeps for the device
   (`nickname`, `crowdType`, `seatCapacity`, `showStandCrowd`, `lowFloor`, `vehicleBody`), as the
   OBIS client's "차량 설정" edits them; read once `start` has the token, saved in the background.
+* `omsi.komsi.original(name)`: whether the player has the original a part stands in for:
+  `"obis"` (the OBIS client, `OBIS-client/OBIS-client.exe` in the OMSI folder) or `"taco"`
+  (Light-TACO, `OMSI2_Scheduler.exe` under `OMSI Addon Patch`). Without the OBIS client
+  `omsi.ws` and `omsi.obis` do nothing; the edition's plugins switch themselves off without
+  their original (`OMSI_ORIGINALS=obis,taco` decides for a test).
 
 #### Between plugins and between players
 

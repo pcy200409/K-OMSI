@@ -9,6 +9,10 @@
 //! plugin: it is read here from the OBIS client's `config.local.json` (next to the game) or
 //! from `~/.openomsi/obis_device.json`, or the device is registered once and kept there.
 //! Only this one address, only the latest snapshot the plugin gave, at most twice a second.
+//!
+//! The OBIS edition's parts work only for a player who has the originals: OBIS (`omsi.ws`,
+//! `omsi.obis`) with the OBIS client installed, the tachograph plugin with Light-TACO
+//! (`omsi.komsi.original`).
 
 use super::{def, multi, p};
 use crate::api::fns::core::ok_or_reason;
@@ -67,6 +71,9 @@ impl WsClient {
     }
 
     fn open(&mut self, url: &str) -> Result<(), String> {
+        if !has_original("obis") {
+            return Err(NO_OBIS.into());
+        }
         check_url(url)?;
         self.close();
         let shared = Arc::new(Shared { stop: AtomicBool::new(false), state: AtomicU8::new(CONNECTING), queue: Mutex::new(VecDeque::new()) });
@@ -91,6 +98,66 @@ impl WsClient {
         }
     }
 }
+
+// ------------------------------------------------------------------ the originals
+
+/// Where an original program lies, relative to an OMSI folder: OBIS's client, Light-TACO
+/// (its scheduler, `OmsiLightTaco`), in the OMSI folder or in one folder below
+/// `OMSI Addon Patch` (where its packages put it).
+fn original_files(name: &str) -> &'static [&'static str] {
+    match name {
+        "obis" => &["OBIS-client/OBIS-client.exe"],
+        "taco" => &["OMSI Addon Patch/OMSI2_Scheduler.exe", "OMSI2_Scheduler.exe"],
+        _ => &[],
+    }
+}
+
+/// The OMSI folders to look in: the one `--root` names, and the game's folder and those above
+/// it (the game is `<OMSI>/OMSI Addon Patch/openOMSI/openomsi.exe`).
+fn omsi_roots() -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(r) = args.iter().position(|a| a == "--root").and_then(|i| args.get(i + 1)) {
+        roots.push(PathBuf::from(r));
+    }
+    if let Some(dir) = std::env::current_exe().ok().and_then(|p| p.parent().map(|p| p.to_path_buf())) {
+        roots.extend(dir.ancestors().take(4).map(|p| p.to_path_buf()));
+    }
+    roots
+}
+
+fn find_original(name: &str) -> bool {
+    let files = original_files(name);
+    for root in omsi_roots() {
+        if files.iter().any(|f| root.join(f).is_file()) {
+            return true;
+        }
+        // (Light-TACO also comes in a folder of its own under OMSI Addon Patch)
+        if name == "taco" {
+            if let Ok(dirs) = std::fs::read_dir(root.join("OMSI Addon Patch")) {
+                if dirs.flatten().any(|d| d.path().join("OMSI2_Scheduler.exe").is_file()) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+/// Whether the player has the original (`"obis"`, `"taco"`); looked for once a session.
+pub fn has_original(name: &str) -> bool {
+    static FOUND: Mutex<Vec<(String, bool)>> = Mutex::new(Vec::new());
+    let mut f = FOUND.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((_, v)) = f.iter().find(|(n, _)| n == name) {
+        return *v;
+    }
+    let v = std::env::var("OMSI_ORIGINALS").map(|s| s.split(',').any(|x| x.trim() == name)).unwrap_or_else(|_| find_original(name));
+    log::info!("K-OMSI: the original {name} is {}", if v { "installed: its plugin parts are on" } else { "not installed: its plugin parts are off" });
+    f.push((name.to_string(), v));
+    v
+}
+
+const NO_OBIS: &str = "the OBIS client (OBIS-client\\OBIS-client.exe in the OMSI folder) is not installed";
 
 /// `wss://<allowed host>/<path>`: no other scheme, no port, no user info.
 fn check_url(url: &str) -> Result<(), String> {
@@ -213,6 +280,9 @@ impl ObisSender {
     }
 
     fn start(&mut self) -> Result<(), String> {
+        if !has_original("obis") {
+            return Err(NO_OBIS.into());
+        }
         if self.shared.is_some() {
             return Ok(());
         }
@@ -459,6 +529,10 @@ fn run_sender(s: Arc<SendShared>) {
 }
 
 pub static FNS: &[ApiFn] = &[
+    def!("komsi.original", "network", [p("name", "string")], "boolean", "Whether the player has the original program a part of K-OMSI's OBIS edition stands in for: `\"obis\"` (the OBIS client, `OBIS-client\\OBIS-client.exe` in the OMSI folder: without it `omsi.ws` and `omsi.obis` do nothing) or `\"taco\"` (Light-TACO, `OMSI2_Scheduler.exe` under `OMSI Addon Patch`: the tachograph plugin works only with it).", NEW, None, false, |c, a| {
+        let name = a.str(0)?;
+        Ok::<_, ApiError>(Value::Bool(has_original(&name)))
+    }),
     def!("ws.open", "network", [p("url", "string")], "true, or false and the reason", "Starts listening to a public live feed over a WebSocket, read-only: the plugin never sends. Only `wss://obis.kr/...` (OBIS, the buses of the other players) is allowed, no port and no other host. The connection runs in the background and is opened again every 5 seconds after a break; opening again replaces the old one. Read what came in with `omsi.ws.poll`.", NEW, NetworkRemote, true, |c, a| {
         let url = a.str(0)?;
         Ok::<_, ApiError>(ok_or_reason(c.state().ws.open(&url)))
