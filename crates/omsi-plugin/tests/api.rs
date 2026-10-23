@@ -44,6 +44,8 @@ fn every_entry_is_well_formed() {
 /// docs/plugin-api.json is the registry's manifest, and docs/PLUGINS.md's reference its
 /// tables (`OMSI_API_BLESS=1` writes both).
 #[test]
+// (the docs are the plain edition's: the OBIS edition adds omsi.ws / omsi.obis)
+#[cfg_attr(feature = "obis", ignore)]
 fn api_manifest() {
     let manifest = json::encode_pretty(&api::manifest()) + "\n";
     let path = repo().join("docs/plugin-api.json");
