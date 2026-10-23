@@ -3,7 +3,8 @@
 -- · 녹화(REC)는 게임 안에서: 플러그인 data\rec\*.jsonl 에 샘플을 적음 (TACO 분석기 실시간 저장과 같은 줄 형식)
 -- · 채점·리포트는 하지 않음 → 외부 TACO 분석기(taco_gui.py / taco_score.py replay)가 이 파일을 읽어 채점
 --   (램프는 운전 중 알림일 뿐, 횟수·점수는 화면에도 파일에도 남기지 않음)
--- 단축키: Ctrl+Shift+T 패널 보이기/숨기기. 버튼은 마우스로 바로 누름(grab), 설정은 패널의 톱니바퀴.
+-- 단축키: Ctrl+Shift+T 운행기록계 켜기/끄기(끄면 녹화도 저장하고 멈춤, 다음 실행에도 유지). 설정은 패널의 톱니바퀴.
+-- Light-TACO(OMSI2_Scheduler.exe, OMSI Addon Patch 아래)가 설치돼 있을 때만 작동 (omsi.komsi.original)
 
 local PANEL = "dtg"
 local DETECT_DT = 0.1          -- 램프 판정 간격(초)
@@ -32,9 +33,12 @@ local settings = omsi.plugin.settings({
   { key = "route", type = "text", label = "노선", default = "" },
   { key = "dir", type = "choice", label = "방향", choices = { "상행", "하행" }, default = "상행" },
   { key = "period", type = "number", label = "샘플링 주기(초)", min = 0.1, max = 1.0, step = 0.1, default = 0.2 },
+  { key = "enabled", type = "bool", label = "운행기록계 켜기 (Ctrl+Shift+T)", default = true },
 }, "디지털 운행기록계")
 
-local shown = true
+-- Light-TACO 오리지널이 있어야 켜짐
+local owns = omsi.komsi ~= nil and omsi.komsi.original("taco")
+local shown = settings.enabled
 local rec = nil                -- 녹화 중: { file, lines = {}, n, t0 }
 local trip_km, last_odo, last_x, last_y = 0, nil, nil, nil
 local odo_km = 0
@@ -271,9 +275,27 @@ end
 -- ------------------------------------------------------------ 이벤트
 local cur = nil
 
+local function set_enabled(on)
+  omsi.plugin.set_setting("enabled", on)
+  settings.enabled = on
+  shown = on
+  if on then
+    build(); refresh(cur)
+  else
+    rec_stop()
+    omsi.ui.remove(PANEL)
+  end
+  omsi.ui.toast(on and "운행기록계 켬" or "운행기록계 끔", { title = "TACO", icon = "speed", seconds = 3 })
+end
+
 function on_start()
-  build()
+  if not owns then
+    omsi.log("taco: Light-TACO(OMSI2_Scheduler.exe)가 없어 운행기록계를 끔")
+    return
+  end
+  if settings.enabled then build() end
   omsi.every(DETECT_DT, function()
+    if not settings.enabled then return end
     cur = read()
     if not cur then hist, cand = {}, {}; last_x = nil; return end
     detect(omsi.time(), cur.vel_kmh, cur.heading)
@@ -284,10 +306,7 @@ function on_start()
   end)
   omsi.every(0.25, function() if shown then refresh(cur) end end)
   omsi.every(FLUSH_EVERY, flush)
-  omsi.input.hotkey("Ctrl+Shift+KeyT", function()
-    shown = not shown
-    if shown then build(); refresh(cur) else omsi.ui.remove(PANEL) end
-  end)
+  omsi.input.hotkey("Ctrl+Shift+KeyT", function() set_enabled(not settings.enabled) end)
 end
 
 omsi.on("ui_click", function(panel, el)
@@ -305,6 +324,7 @@ omsi.on("ui_click", function(panel, el)
 end)
 
 omsi.on("setting", function(key, value)
+  if key == "enabled" and owns and value ~= settings.enabled then set_enabled(value); return end
   settings[key] = value
   if key == "period" then omsi.ui.update(PANEL, "period", { text = string.format("%.1f 초", value) }) end
 end)

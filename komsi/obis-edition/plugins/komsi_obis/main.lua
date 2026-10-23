@@ -4,9 +4,9 @@
 --   "송신 중"은 보내는 연결이 열려 있고 OBIS 서버 실시간 피드에 내 버스가 보일 때 켜짐
 -- · 노선 띠(지도 (가)안): 세로형(왼쪽/내비게이터) 또는 가로형(위쪽), 같은 trip 의 OBIS 유저·AI 버스 위치와 앞차·뒷차
 --   위치 = 다음 정류장 + 남은 거리 비율 (좌표계가 달라도 같은 방식, project_omsi_bis 와 동일)
--- 필요: omsi.ws (K-OMSI patch/lua-websocket). 없으면 AI 버스만 보임.
 -- · 차량 설정(OBIS Client 의 "차량 설정"): 닉네임·좌석형/입석형·좌석 수·저상·막차·입석 혼잡도 (omsi.obis.prefs)
--- 단축키: Ctrl+Shift+O 패널, Ctrl+Shift+B 노선 띠
+-- OBIS Client(OMSI 2\OBIS-client\OBIS-client.exe)가 설치돼 있을 때만 작동 (omsi.komsi.original)
+-- 단축키: Ctrl+Shift+O OBIS 켜기/끄기(받기·보내기·패널 전부, 다음 실행에도 유지), Ctrl+Shift+B 노선 띠
 
 local OBIS_URL = "wss://obis.kr/api/ws"
 local PANEL, BOARD = "obis", "line"
@@ -20,10 +20,13 @@ local settings = omsi.plugin.settings({
   { key = "board_style", type = "choice", label = "노선 띠 모양", choices = { "세로", "가로" }, default = "세로" },
   { key = "in_nav", type = "bool", label = "세로형 노선 띠를 내비게이터 안에 (끄면 왼쪽 패널)", default = false },
   { key = "auto_nick", type = "bool", label = "OBIS 닉네임을 게임 차량번호로 맞춤", default = true },
+  { key = "enabled", type = "bool", label = "OBIS 켜기 (Ctrl+Shift+O)", default = true },
 }, "OBIS")
 
-local has_ws = omsi.ws ~= nil
-local has_send = omsi.obis ~= nil      -- K-OMSI OBIS 판
+-- OBIS Client 오리지널이 있어야 켜짐 (없으면 받기·보내기 둘 다 못 함)
+local owns = omsi.komsi ~= nil and omsi.komsi.original("obis")
+local has_ws = owns and omsi.ws ~= nil
+local has_send = owns and omsi.obis ~= nil      -- K-OMSI OBIS 판
 local sender = has_send and require("sender") or nil
 local send_on = false
 local shown = true
@@ -236,7 +239,7 @@ local function build_panel(hint)
       { type = "row", gap = 6, children = {
         { type = "button", id = "b_board", text = "노선 띠", icon = "route", grow = true },
         { type = "button", id = "b_set", icon = "settings" },
-        { type = "button", id = "b_hide", icon = "close" },
+        { type = "button", id = "b_hide", icon = "power_settings_new" },
       } },
     },
   })
@@ -561,6 +564,7 @@ end
 
 -- ------------------------------------------------------------ 주기
 local function tick()
+  if not settings.enabled then return end
   if has_ws then
     local m = omsi.ws.poll()
     if m and #m > 0 then
@@ -594,22 +598,43 @@ local function tick()
   refresh_board(me)
 end
 
-function on_start()
-  ko = load_json("stop_names_ko.json") or {}
-  obis_maps = load_json("obis_names_ko.json") or {}
+-- 켜기: 받기 연결 + 패널 (보내기는 tick 이 설정 따라 시작) / 끄기: 받기·보내기 끊고 패널 모두 내림
+local function switch_on()
   if has_ws then
     local ok, why = omsi.ws.open(OBIS_URL)
-    if not ok then add_log("OBIS 연결 못 함: " .. tostring(why)); has_ws = false end
-  else
-    omsi.log("obis: omsi.ws 없음 (K-OMSI patch/lua-websocket 필요) — AI 버스만 표시")
+    if not ok then add_log("OBIS 연결 못 함: " .. tostring(why)) end
   end
+  shown = true
   build_panel()
+end
+
+local function switch_off()
+  if has_ws then pcall(omsi.ws.close) end
+  if send_on then pcall(omsi.obis.stop); send_on = false end
+  buses, my_id, last_msg_ms = {}, "", nil
+  for _, id in ipairs({ PANEL, BOARD, PREFS }) do omsi.ui.remove(id) end
+  draft = nil
+end
+
+local function set_enabled(on)
+  omsi.plugin.set_setting("enabled", on)
+  settings.enabled = on
+  if on then switch_on() else switch_off() end
+  omsi.ui.toast(on and "OBIS 켬" or "OBIS 끔 (받기·보내기 멈춤)", { title = "OBIS", icon = "directions_bus", seconds = 3 })
+end
+
+function on_start()
+  if not owns then
+    omsi.log("obis: OBIS Client(OBIS-client/OBIS-client.exe)가 없어 OBIS 기능을 끔")
+    return
+  end
+  ko = load_json("stop_names_ko.json") or {}
+  obis_maps = load_json("obis_names_ko.json") or {}
+  if settings.enabled then switch_on() end
   omsi.every(1, tick)
-  omsi.input.hotkey("Ctrl+Shift+KeyO", function()
-    shown = not shown
-    if shown then build_panel() else omsi.ui.remove(PANEL) end
-  end)
+  omsi.input.hotkey("Ctrl+Shift+KeyO", function() set_enabled(not settings.enabled) end)
   omsi.input.hotkey("Ctrl+Shift+KeyB", function()
+    if not settings.enabled then return end
     omsi.plugin.set_setting("board", not settings.board)
     settings.board = not settings.board
   end)
@@ -630,11 +655,14 @@ omsi.on("ui_click", function(panel, el)
   if el == "b_prefs" then open_prefs(); return end
   if el == "b_board" then omsi.plugin.set_setting("board", not settings.board); settings.board = not settings.board
   elseif el == "b_set" then omsi.plugin.show_settings(true); omsi.ui.focus(true)
-  elseif el == "b_hide" then shown = false; omsi.ui.remove(PANEL)
+  elseif el == "b_hide" then set_enabled(false)
   end
 end)
 
-omsi.on("setting", function(key, value) settings[key] = value end)
+omsi.on("setting", function(key, value)
+  if key == "enabled" and owns and value ~= settings.enabled then set_enabled(value); return end
+  settings[key] = value
+end)
 
 omsi.on("ui_change", function(panel, el, value)
   if panel ~= PREFS or not draft then return end
@@ -649,6 +677,7 @@ omsi.on("ui_change", function(panel, el, value)
 end)
 
 function on_stop()
+  if not owns then return end
   if has_ws then pcall(omsi.ws.close) end
   if send_on then pcall(omsi.obis.stop) end
 end
