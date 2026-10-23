@@ -171,6 +171,8 @@ fn run(s: Arc<Shared>, url: String) {
 /// Where the player's bus goes, and where a new device registers.
 const INGEST_URL: &str = "wss://obis.kr/api/ingest";
 const REGISTER_URL: &str = "https://obis.kr/api/register";
+/// The device's vehicle settings on OBIS (what the OBIS client's "차량 설정" edits).
+const PREFS_URL: &str = "https://obis.kr/api/me/prefs";
 /// Largest snapshot taken; the OBIS client's are a few kB (the route's stations).
 const MAX_SNAPSHOT: usize = 256 * 1024;
 /// Least time between two snapshots sent.
@@ -185,6 +187,10 @@ struct SendShared {
     latest: Mutex<Option<String>>,
     sent: AtomicU64,
     source: Mutex<&'static str>,
+    /// The vehicle settings as OBIS has them (JSON object text), once read.
+    prefs: Mutex<Option<String>>,
+    /// Settings to save (`{"prefs": {...}}` text), saved by the sending thread.
+    save: Mutex<Option<String>>,
 }
 
 /// A plugin's `omsi.obis` connection.
@@ -210,7 +216,7 @@ impl ObisSender {
         if self.shared.is_some() {
             return Ok(());
         }
-        let shared = Arc::new(SendShared { stop: AtomicBool::new(false), state: AtomicU8::new(CONNECTING), latest: Mutex::new(None), sent: AtomicU64::new(0), source: Mutex::new("") });
+        let shared = Arc::new(SendShared { stop: AtomicBool::new(false), state: AtomicU8::new(CONNECTING), latest: Mutex::new(None), sent: AtomicU64::new(0), source: Mutex::new(""), prefs: Mutex::new(None), save: Mutex::new(None) });
         let s = shared.clone();
         std::thread::Builder::new().name("plugin obis".into()).spawn(move || run_sender(s)).map_err(|e| e.to_string())?;
         self.shared = Some(shared);
@@ -234,6 +240,40 @@ impl ObisSender {
             NO_TOKEN => "no_token",
             _ => "closed",
         }
+    }
+
+    fn prefs(&self) -> Value {
+        let Some(s) = &self.shared else { return Value::Nil };
+        let text = s.prefs.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        text.and_then(|t| crate::api::json::decode(&t, false).ok()).unwrap_or(Value::Nil)
+    }
+
+    fn set_prefs(&self, v: &Value) -> Result<(), String> {
+        let Some(s) = &self.shared else { return Err("not started: call omsi.obis.start() first".into()) };
+        let Value::Map(m) = v else { return Err("the settings are a table".into()) };
+        let mut out: Vec<(String, Value)> = Vec::new();
+        for (k, v) in m {
+            let ok = match (k.as_str(), v) {
+                ("nickname", Value::Str(t)) => t.chars().count() <= 20,
+                ("crowdType", Value::Str(t)) => t == "seat" || t == "stand",
+                ("vehicleBody", Value::Str(t)) => t == "normal" || t == "night",
+                ("seatCapacity", Value::Int(n)) => (1..=80).contains(n),
+                ("seatCapacity", Value::Num(n)) => n.fract() == 0.0 && (1.0..=80.0).contains(n),
+                ("showStandCrowd" | "lowFloor", Value::Bool(_)) => true,
+                _ => return Err(format!("{k}: not a setting OBIS takes, or a wrong value")),
+            };
+            if !ok {
+                return Err(format!("{k}: a wrong value"));
+            }
+            let v = match v {
+                Value::Num(n) => Value::Int(*n as i64),
+                v => v.clone(),
+            };
+            out.push((k.clone(), v));
+        }
+        let body = crate::api::json::encode(&Value::Map(vec![("prefs".into(), Value::Map(out))]));
+        *s.save.lock().unwrap_or_else(|e| e.into_inner()) = Some(body);
+        Ok(())
     }
 
     fn info(&self) -> (f64, &'static str) {
@@ -326,6 +366,22 @@ fn new_device_id() -> String {
     format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
 }
 
+/// The settings OBIS has for the device (GET), or saves them (PUT `{"prefs": ...}`); the
+/// answer's `prefs` object as JSON text.
+fn prefs_call(token: &str, save: Option<&str>) -> Result<String, String> {
+    let url = std::env::var("OMSI_OBIS_PREFS_URL").unwrap_or_else(|_| PREFS_URL.to_string());
+    let req = |m: &str| ureq::request(m, &url).timeout(Duration::from_secs(10)).set("X-Device-Token", token);
+    let r = match save {
+        Some(body) => req("PUT").set("Content-Type", "application/json").send_string(body),
+        None => req("GET").call(),
+    };
+    let text = r.map_err(|e| e.to_string())?.into_string().map_err(|e| e.to_string())?;
+    match crate::api::json::decode(&text, false).map_err(|e| e.to_string())? {
+        Value::Map(m) => m.into_iter().find(|(k, _)| k == "prefs").map(|(_, v)| crate::api::json::encode(&v)).ok_or_else(|| "no prefs in the answer".into()),
+        _ => Err("not a JSON object".into()),
+    }
+}
+
 fn run_sender(s: Arc<SendShared>) {
     // (tests and debugging only: another server and token, e.g. a local stand-in of OBIS)
     let url = std::env::var("OMSI_OBIS_INGEST_URL").unwrap_or_else(|_| INGEST_URL.to_string());
@@ -347,6 +403,10 @@ fn run_sender(s: Arc<SendShared>) {
             }
         }
     };
+    match prefs_call(&token, None) {
+        Ok(p) => *s.prefs.lock().unwrap_or_else(|e| e.into_inner()) = Some(p),
+        Err(e) => log::warn!("plugin obis: reading the vehicle settings: {e}"),
+    }
     while !s.stop.load(Ordering::Relaxed) {
         s.state.store(CONNECTING, Ordering::Relaxed);
         match connect(&url, Some(&token)) {
@@ -355,6 +415,16 @@ fn run_sender(s: Arc<SendShared>) {
                 s.state.store(OPEN, Ordering::Relaxed);
                 let mut last: Option<Instant> = None;
                 while !s.stop.load(Ordering::Relaxed) {
+                    let save = s.save.lock().unwrap_or_else(|e| e.into_inner()).take();
+                    if let Some(body) = save {
+                        match prefs_call(&token, Some(&body)) {
+                            Ok(p) => {
+                                log::info!("plugin obis: vehicle settings saved");
+                                *s.prefs.lock().unwrap_or_else(|e| e.into_inner()) = Some(p);
+                            }
+                            Err(e) => log::warn!("plugin obis: saving the vehicle settings: {e}"),
+                        }
+                    }
                     if last.is_none_or(|t| t.elapsed() >= SEND_GAP) {
                         let next = s.latest.lock().unwrap_or_else(|e| e.into_inner()).take();
                         if let Some(text) = next {
@@ -416,6 +486,13 @@ pub static FNS: &[ApiFn] = &[
     }),
     def!("obis.stop", "network", [], "nil", "Stops sending (OBIS shows the bus as gone after a while).", NEW, NetworkRemote, false, |c, a| {
         c.state().obis.stop();
+    }),
+    def!("obis.prefs", "network", [], "table or nil", "The vehicle settings OBIS has for this device, as the OBIS client's \"차량 설정\" shows them: `nickname`, `crowdType` (`\"seat\"`, `\"stand\"`), `seatCapacity` (1 to 80), `showStandCrowd`, `lowFloor`, `vehicleBody` (`\"normal\"`, `\"night\"`: the last bus). `nil` before they are read (after `obis.start`).", NEW, NetworkRemote, false, |c, a| {
+        c.state().obis.prefs()
+    }),
+    def!("obis.set_prefs", "network", [p("prefs", "table")], "true, or false and the reason", "Saves vehicle settings on OBIS (the keys of `obis.prefs`, any of them), in the background; `obis.prefs` has them once OBIS took them.", NEW, NetworkRemote, false, |c, a| {
+        let v = a.get(0).clone();
+        Ok::<_, ApiError>(ok_or_reason(c.state().obis.set_prefs(&v)))
     }),
 ];
 
