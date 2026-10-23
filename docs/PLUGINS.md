@@ -227,6 +227,21 @@ end)
 
 `nc -lu 47800` in a terminal shows what arrives.
 
+#### OBIS (K-OMSI's OBIS edition)
+
+K-OMSI comes in two editions. The plain one has no OBIS. The OBIS edition (built with
+`--features omsi-app/obis`, see `komsi/obis-edition/`) adds two parts to the API, both with the
+permission `network_remote`, and ships the `komsi_obis` and `komsi_taco` plugins:
+
+* `omsi.ws.open(url)` / `poll()` / `state()` / `close()`: listens to a public live feed,
+  read-only; only `wss://obis.kr/...` (the buses of the other players).
+* `omsi.obis.start()` / `send(snapshot)` / `state()` / `stop()`: sends the player's bus to OBIS
+  (`wss://obis.kr/api/ingest`), as the OBIS client does: `send` takes the client's snapshot as
+  JSON text, only the newest goes, at most twice a second. The device's token is the OBIS
+  client's (`OBIS-client/config.local.json` of the OMSI folder) or K-OMSI's own
+  (`~/.openomsi/obis_device.json`, registered once when there is none); the plugin never sees
+  it. `state()` gives the state, how many snapshots went and where the token came from.
+
 #### Between plugins and between players
 
 `omsi.plugin.send(to, topic, data)` and `omsi.plugin.broadcast(topic, data)` reach other
@@ -908,10 +923,6 @@ On macOS, helpers extracted from ZIP files may need their executable bit restore
 | Function | Returns | What it does | Since |
 | --- | --- | --- | --- |
 | `omsi.send(port, data)` | true, or false and the reason | Sends `data` as one UDP datagram to `127.0.0.1:port`: to another program on this computer, never over the network. Not sent when the port is below 1024 or one of the game's multiplayer ports (27015-27024), the message is longer than 8 KB, or the plugin sent 100 in the last second. *Permission: `network_local`.* | 0.2.21 |
-| `omsi.ws.close()` | nil | Ends the connection. *Permission: `network_remote`.* | 0.2.22 |
-| `omsi.ws.open(url)` | true, or false and the reason | Starts listening to a public live feed over a WebSocket, read-only: the plugin never sends. Only `wss://obis.kr/...` (OBIS, the buses of the other players) is allowed, no port and no other host. The connection runs in the background and is opened again every 5 seconds after a break; opening again replaces the old one. Read what came in with `omsi.ws.poll`. *Permission: `network_remote`.* | 0.2.22 |
-| `omsi.ws.poll()` | list of strings | The text messages that came in since the last call, oldest first (at most the last 4: a feed sends whole snapshots). Empty without a connection. *Permission: `network_remote`.* | 0.2.22 |
-| `omsi.ws.state()` | string | `"connecting"`, `"open"`, `"waiting"` (broken, opened again soon) or `"closed"` (never opened, or `omsi.ws.close`). *Permission: `network_remote`.* | 0.2.22 |
 
 #### LAN games
 
