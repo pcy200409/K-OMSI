@@ -15,7 +15,11 @@ if errorlevel 1 (
   echo Install Rust from https://rustup.rs using the MSVC toolchain, then run this script again.
   exit /b 1
 )
-cargo build --locked --release --target %TARGET% -p omsi-app -p omsi-launcher-core
+rem K-OMSI: set KOMSI_EDITION=obis for the OBIS edition (OBIS sending and receiving for the
+rem plugins; komsi\obis-edition\package.ps1 then adds its plugins). Plain: no OBIS at all.
+set "FEATURES="
+if /i "%KOMSI_EDITION%"=="obis" set "FEATURES=--features omsi-app/obis"
+cargo build --locked --release --target %TARGET% -p omsi-app -p omsi-launcher-core %FEATURES%
 if errorlevel 1 goto :failed
 if not exist "dist\windows" mkdir "dist\windows"
 copy /y "target\%TARGET%\release\openomsi.exe" "dist\windows\openomsi.exe" >nul || goto :failed
