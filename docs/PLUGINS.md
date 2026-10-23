@@ -241,6 +241,9 @@ permission `network_remote`, and ships the `komsi_obis` and `komsi_taco` plugins
   client's (`OBIS-client/config.local.json` of the OMSI folder) or K-OMSI's own
   (`~/.openomsi/obis_device.json`, registered once when there is none); the plugin never sees
   it. `state()` gives the state, how many snapshots went and where the token came from.
+* `omsi.obis.prefs()` / `set_prefs(table)`: the vehicle settings OBIS keeps for the device
+  (`nickname`, `crowdType`, `seatCapacity`, `showStandCrowd`, `lowFloor`, `vehicleBody`), as the
+  OBIS client's "차량 설정" edits them; read once `start` has the token, saved in the background.
 
 #### Between plugins and between players
 
