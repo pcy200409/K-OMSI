@@ -2,9 +2,10 @@
 -- · 오른쪽 위 패널: 서버 연결·운행 상태·이번 정류장·내 버스 표시·접속자 목록
 --   OBIS 판 K-OMSI(omsi.obis)면 게임이 직접 내 버스를 보냄(sender.lua, OBIS Client 불필요),
 --   "송신 중"은 보내는 연결이 열려 있고 OBIS 서버 실시간 피드에 내 버스가 보일 때 켜짐
--- · 내비게이터 보드(노선 띠, 지도 (가)안): 내 trip 정류장 세로 레일 위에 OBIS 유저·AI 시간표 버스 위치
+-- · 노선 띠(지도 (가)안): 세로형(왼쪽/내비게이터) 또는 가로형(위쪽), 같은 trip 의 OBIS 유저·AI 버스 위치와 앞차·뒷차
 --   위치 = 다음 정류장 + 남은 거리 비율 (좌표계가 달라도 같은 방식, project_omsi_bis 와 동일)
 -- 필요: omsi.ws (K-OMSI patch/lua-websocket). 없으면 AI 버스만 보임.
+-- · 차량 설정(OBIS Client 의 "차량 설정"): 닉네임·좌석형/입석형·좌석 수·저상·막차·입석 혼잡도 (omsi.obis.prefs)
 -- 단축키: Ctrl+Shift+O 패널, Ctrl+Shift+B 노선 띠
 
 local OBIS_URL = "wss://obis.kr/api/ws"
@@ -16,7 +17,9 @@ local settings = omsi.plugin.settings({
   { key = "show_ai", type = "bool", label = "노선 띠에 AI 시간표 버스도 표시", default = true },
   { key = "board", type = "bool", label = "노선 띠 켜기", default = true },
   { key = "send", type = "bool", label = "게임이 직접 내 버스를 OBIS 로 보냄 (켜면 OBIS Client 는 끄세요)", default = true },
-  { key = "in_nav", type = "bool", label = "노선 띠를 내비게이터 안에 (끄면 왼쪽 패널)", default = false },
+  { key = "board_style", type = "choice", label = "노선 띠 모양", choices = { "세로", "가로" }, default = "세로" },
+  { key = "in_nav", type = "bool", label = "세로형 노선 띠를 내비게이터 안에 (끄면 왼쪽 패널)", default = false },
+  { key = "auto_nick", type = "bool", label = "OBIS 닉네임을 게임 차량번호로 맞춤", default = true },
 }, "OBIS")
 
 local has_ws = omsi.ws ~= nil
@@ -116,7 +119,11 @@ local function take(text)
         got = omsi.util.ms(),
       }
       if type(rt.stations) == "table" then
+        local names = {}
+        list[#list].stnames = names
         for _, s in ipairs(rt.stations) do
+          local sid = math.floor(tonumber(s.id) or 0)
+          names[sid] = has_hangul(s.name_ko) and s.name_ko or s.name
           if has_hangul(s.name_ko) then
             obis_ko[math.floor(tonumber(s.id) or 0)] = s.name_ko
             list[#list].names = list[#list].names or {}
@@ -177,11 +184,24 @@ end
 -- ------------------------------------------------------------ 패널
 local function chip(id, text) return { type = "badge", id = id, text = text, color = "#2A2D33" } end
 local panel_hint = nil         -- 지금 패널에 보이는 안내 (바뀌면 패널을 다시 만듦)
+local PREFS = "obis_prefs"
+local draft = nil              -- 차량 설정 창에서 고치는 중인 값
+
+-- OBIS 차량 설정(prefs) → 칩 글자 (Client 의 "내 버스 표시 설정"과 같은 순서)
+local function prefs_chips(p)
+  if type(p) ~= "table" then return "-" end
+  local t = { (p.nickname and p.nickname ~= "") and p.nickname or "닉네임 없음" }
+  t[#t + 1] = p.crowdType == "stand" and "입석형" or "좌석형"
+  if p.seatCapacity then t[#t + 1] = tostring(math.floor(p.seatCapacity)) .. "석" end
+  if p.lowFloor then t[#t + 1] = "저상" end
+  t[#t + 1] = p.vehicleBody == "night" and "막차" or "일반"
+  return table.concat(t, " · ")
+end
 
 local function build_panel(hint)
   panel_hint = hint
   omsi.ui.set(PANEL, {
-    anchor = "top_right", x = 16, y = 80, width = 380, draggable = true, grab = true, gap = 8,
+    anchor = "top_right", x = 16, y = 80, width = 400, draggable = true, grab = true, gap = 8,
     children = {
       { type = "row", children = {
         { type = "icon", name = "directions_bus", size = 26, color = BLUE },
@@ -204,13 +224,14 @@ local function build_panel(hint)
       } },
       { type = "row", gap = 6, children = {
         { type = "text", text = "내 버스 표시", size = 12, color = "#9AA0A6" },
-        { type = "badge", id = "nick", text = "-", color = "#2A2D33", text_color = "#D0D4DA" },
-        { type = "badge", id = "num", text = "-", color = "#2A2D33", text_color = "#D0D4DA" },
+        { type = "text", id = "prefs", text = "-", size = 12, weight = "medium", grow = true, wrap = false },
+        { type = "button", id = "b_prefs", text = "설정 변경", icon = "tune", color = BLUE },
       } },
       { type = "box", color = AMBER, visible = hint ~= nil, children = {
         { type = "text", size = 12, text = hint or "" },
       } },
-      { type = "table", id = "users", columns = { "닉네임", "노선", "다음 정류장" }, widths = { 0.28, 0.22, 0.5 }, size = 12, rows = {} },
+      { type = "table", id = "users", columns = { "닉네임", "노선", "다음 정류장", "남은 거리" },
+        widths = { 0.2, 0.17, 0.43, 0.2 }, aligns = { "left", "left", "left", "right" }, size = 12, rows = {} },
       { type = "text", id = "log", text = "", size = 11, color = "#9AA0A6" },
       { type = "row", gap = 6, children = {
         { type = "button", id = "b_board", text = "노선 띠", icon = "route", grow = true },
@@ -219,6 +240,82 @@ local function build_panel(hint)
       } },
     },
   })
+end
+
+-- 차량 설정 창 (OBIS Client 의 "차량 설정" 모달과 같은 항목)
+local function build_prefs()
+  local p = draft
+  omsi.ui.set(PREFS, {
+    anchor = "center", width = 380, draggable = true, gap = 10, accent = BLUE,
+    children = {
+      { type = "row", children = {
+        { type = "icon", name = "tune", color = BLUE },
+        { type = "text", text = "차량 설정", size = 17, weight = "bold", grow = true },
+        { type = "button", id = "p_close", icon = "close" },
+      } },
+      { type = "text", text = "닉네임", size = 12, color = "#9AA0A6" },
+      { type = "input", id = "p_nick", text = p.nickname or "", placeholder = "닉네임", max = 20 },
+      { type = "checkbox", id = "p_auto", text = "게임 차량번호를 닉네임으로 (" .. (omsi.bus.number() or "-") .. ")", checked = settings.auto_nick },
+      { type = "text", text = "차량 종류", size = 12, color = "#9AA0A6" },
+      { type = "tabs", id = "p_crowd", tabs = { "좌석형", "입석형" }, selected = p.crowdType == "stand" and 2 or 1 },
+      { type = "text", text = "총 좌석 수 (1~80)", size = 12, color = "#9AA0A6" },
+      { type = "input", id = "p_seats", text = tostring(math.floor(p.seatCapacity or 0)), max = 2 },
+      { type = "checkbox", id = "p_low", text = "저상 차량", checked = p.lowFloor and true or false },
+      { type = "checkbox", id = "p_night", text = "막차", checked = p.vehicleBody == "night" },
+      { type = "checkbox", id = "p_stand", text = "입석 혼잡도 표시", checked = p.showStandCrowd and true or false },
+      { type = "text", id = "p_msg", text = "", size = 12, color = AMBER },
+      { type = "row", gap = 8, children = {
+        { type = "button", id = "p_save", text = "저장", icon = "save", color = BLUE, grow = true },
+        { type = "button", id = "p_cancel", text = "닫기", grow = true },
+      } },
+    },
+  })
+  omsi.ui.focus(true)
+end
+
+local function open_prefs()
+  local p = has_send and send_on and omsi.obis.prefs() or nil
+  if type(p) ~= "table" then
+    omsi.ui.toast(has_send and "OBIS 차량 설정을 아직 못 읽었어요. 직접 송신이 켜져 있어야 합니다." or "이 게임 버전엔 OBIS 송신이 없습니다.",
+      { title = "OBIS", icon = "warning", color = AMBER })
+    return
+  end
+  draft = {}
+  for k, v in pairs(p) do draft[k] = v end
+  build_prefs()
+end
+
+local function save_prefs()
+  local n = tonumber(draft.seatCapacity)
+  if not n or n < 1 or n > 80 or n % 1 ~= 0 then
+    omsi.ui.update(PREFS, "p_msg", { text = "좌석 수는 1~80 사이 숫자여야 합니다." })
+    return
+  end
+  local ok, why = omsi.obis.set_prefs({ nickname = draft.nickname or "", crowdType = draft.crowdType or "seat",
+    seatCapacity = math.floor(n), lowFloor = draft.lowFloor and true or false,
+    vehicleBody = draft.vehicleBody == "night" and "night" or "normal", showStandCrowd = draft.showStandCrowd and true or false })
+  if not ok then omsi.ui.update(PREFS, "p_msg", { text = "저장 실패: " .. tostring(why) }); return end
+  add_log("차량 설정 저장")
+  omsi.ui.remove(PREFS)
+  draft = nil
+end
+
+-- 닉네임을 게임 차량번호로 맞춤 (켜 두면, 번호가 바뀔 때만 저장)
+local nick_try_at = -1e9
+local function auto_nickname()
+  if not (settings.auto_nick and send_on) or draft then return end
+  local num = omsi.bus.number()
+  local p = omsi.obis.prefs()
+  if not num or num == "" or type(p) ~= "table" or p.nickname == num then return end
+  local t = omsi.util.ms()
+  if t - nick_try_at < 30000 then return end
+  nick_try_at = t
+  if omsi.obis.set_prefs({ nickname = num }) then add_log("닉네임을 차량번호로: " .. num) end
+end
+
+local function km(d)
+  if type(d) ~= "number" or d >= 999999 then return "-" end
+  return d >= 1000 and string.format("%.1f km", d / 1000) or string.format("%d m", math.floor(d + 0.5))
 end
 
 local function refresh_panel(me, mine)
@@ -262,58 +359,49 @@ local function refresh_panel(me, mine)
     omsi.ui.update(PANEL, "stop", { text = "이번 정류장  -" })
     omsi.ui.update(PANEL, "stop_t", { text = "-" })
   end
-  omsi.ui.update(PANEL, "nick", { text = mine and mine.nick ~= "" and mine.nick or "-" })
-  omsi.ui.update(PANEL, "num", { text = omsi.bus.number() or "-" })
+  -- 내 버스 표시: OBIS 에 저장된 차량 설정 (직접 송신이 아니면 서버 피드에 보이는 닉네임)
+  local p = send_on and omsi.obis.prefs() or nil
+  if type(p) == "table" then
+    omsi.ui.update(PANEL, "prefs", { text = prefs_chips(p) })
+  else
+    omsi.ui.update(PANEL, "prefs", { text = mine and mine.nick ~= "" and mine.nick or (omsi.bus.number() or "-") })
+  end
 
   local rows = {}
   for _, b in ipairs(buses) do
     if fresh(b) and #rows < MAX_USERS then
-      local nm = b.names and b.names[b.next_id] or obis_ko[b.next_id] or tostring(b.next_id)
       local me_row = b.id == my_id
+      local raw = b.stnames and b.stnames[b.next_id]
+      local nm = raw and stop_name(b.next_id, raw) or obis_ko[b.next_id] or tostring(b.next_id)
       rows[#rows + 1] = {
         { text = (b.nick ~= "" and b.nick or "-") .. (me_row and " (나)" or ""), color = me_row and GREEN or nil },
-        b.line ~= "" and b.line or "-", nm,
+        b.line ~= "" and b.line or "-", nm, b.at and "정차 중" or km(b.dist),
       }
     end
   end
-  if #rows == 0 then rows[1] = { "-", "-", "접속한 유저 없음" } end
+  if #rows == 0 then rows[1] = { "-", "-", "접속한 유저 없음", "" } end
   omsi.ui.update(PANEL, "users", { rows = rows })
   omsi.ui.update(PANEL, "log", { text = table.concat(log, "\n") })
 end
 
--- ------------------------------------------------------------ 노선 띠 (내비게이터 보드)
+-- ------------------------------------------------------------ 노선 띠 (세로형 / 가로형)
 local function short(nick) local d = tostring(nick or ""):gsub("%D", ""); return #d > 4 and d:sub(-4) or (d ~= "" and d or tostring(nick or "")) end
 
-local function board_frame(children)
-  if settings.in_nav then
-    return { anchor = "navigator", padding = 10, gap = 6, children = children }
-  end
-  return { anchor = "left", x = 16, y = -60, width = 300, gap = 6, draggable = true, children = children }
+-- 시간표 시각 보간: 위치 p(0 = 첫 정류장)의 예정 시각(초)
+local function time_at(stops, p)
+  local i = math.max(0, math.min(math.floor(p), #stops - 1))
+  if i >= #stops - 1 then return stops[#stops].arrival or 0 end
+  local a, b = stops[i + 1].arrival or 0, stops[i + 2].arrival or 0
+  return a + (b - a) * (p - i)
 end
 
-local function refresh_board(me)
-  if not settings.board then omsi.ui.remove(BOARD); return end
-  if not me then
-    omsi.ui.set(BOARD, board_frame({
-      { type = "text", text = "노선 띠: 운행(시간표)을 시작하면 보여요", size = 13, color = "#9AA0A6" } }))
-    return
-  end
-  -- 다른 버스: 같은 trip, 위치 p → 그 버스가 막 지난 정류장 줄(floor(p)+1)에 표시
-  local idx = {}
+-- 같은 trip 의 다른 버스들: { p, label, user(OBIS 유저면 true) }
+local function others_of(me)
+  local idx, out = {}, {}
   for i, s in ipairs(me.stops) do if not idx[s.id] then idx[s.id] = i end end
-  local marks = {}           -- 줄 번호 → { 글자들 }, 색
-  local function mark(p, label, color)
-    local row = math.max(1, math.min(#me.stops, math.floor(p + 0.001) + 1))
-    local m = marks[row] or { t = {}, c = color }
-    m.t[#m.t + 1] = label
-    if color == GREEN then m.c = GREEN end
-    marks[row] = m
-  end
-  local n_obis, n_ai = 0, 0
   for _, b in ipairs(buses) do
     if fresh(b) and b.id ~= my_id and b.trip == me.trip and idx[b.next_id] then
-      mark(pos_of(me.stops, idx[b.next_id], b.dist, b.at), "▶" .. short(b.nick ~= "" and b.nick or b.id), GREEN)
-      n_obis = n_obis + 1
+      out[#out + 1] = { p = pos_of(me.stops, idx[b.next_id], b.dist, b.at), label = short(b.nick ~= "" and b.nick or b.id), user = true }
     end
   end
   if settings.show_ai then
@@ -322,40 +410,153 @@ local function refresh_board(me)
       if ni and a.x and not a.trip_done and trim(a.trip):lower() == me.trip then
         local s = me.stops[ni]
         local d = s.x and math.sqrt((a.x - s.x) ^ 2 + (a.y - s.y) ^ 2) or 0
-        mark(pos_of(me.stops, ni, d, a.at_stop), "▷" .. short(a.number ~= nil and a.number ~= "" and a.number or a.tour), "#9AA0A6")
-        n_ai = n_ai + 1
+        out[#out + 1] = { p = pos_of(me.stops, ni, d, a.at_stop), label = short(a.number ~= nil and a.number ~= "" and a.number or a.tour), user = false }
       end
     end
   end
-  local myrow = math.max(1, math.min(#me.stops, math.floor(me.p + 0.001) + 1))
-  local list = {}
-  local first, last = 1, #me.stops
-  if not settings.in_nav then
-    first = math.max(1, myrow - 3)
-    last = math.min(#me.stops, first + 15)
+  return out
+end
+
+-- 앞차·뒷차: 유저가 있으면 유저 중에서, 없으면 AI 중에서 가장 가까운 것
+local function neighbours(me, others)
+  local function pick(users_only)
+    local ahead, behind
+    for _, o in ipairs(others) do
+      if o.user or not users_only then
+        if o.p > me.p + 0.001 and (not ahead or o.p < ahead.p) then ahead = o end
+        if o.p < me.p - 0.001 and (not behind or o.p > behind.p) then behind = o end
+      end
+    end
+    return ahead, behind
   end
-  for i = first, last do
-    local s = me.stops[i]
-    if #list >= 128 then break end
-    local m = marks[i]
-    local st = i < me.next and "done" or (i == me.next and "now" or "ahead")   -- now = 향하는 정류장
-    list[#list + 1] = {
-      name = stop_name(s.id, s.name) .. (i == myrow and "  ◀ 내 버스" or ""),
-      time = s.arrival and omsi.fmt.clock(s.arrival) or "",
-      expected = m and table.concat(m.t, " ") or nil, expected_color = m and m.c or nil,
-      state = st, tag = i == #me.stops and "terminus" or nil,
-    }
-  end
-  omsi.ui.set(BOARD, board_frame({
+  local a, b = pick(true)
+  local a2, b2 = pick(false)
+  return a or a2, b or b2
+end
+
+local function gap_text(me, o, word)
+  if not o then return word .. " 없음" end
+  local stops = math.floor(math.abs(o.p - me.p) + 0.5)
+  local mins = math.floor(math.abs(time_at(me.stops, o.p) - time_at(me.stops, me.p)) / 60 + 0.5)
+  return string.format("%s %s%s · %d정류장 · %d분", word, o.label, o.user and "" or "(AI)", stops, mins)
+end
+
+local function header(me, others, n_obis, n_ai)
+  local ahead, behind = neighbours(me, others)
+  return {
     { type = "row", children = {
       { type = "badge", text = tostring(me.duty.line or "-"), color = BLUE, weight = "bold" },
       { type = "text", text = stop_name(nil, me.duty.terminus or "") .. " 행", weight = "bold", grow = true, wrap = false },
       { type = "badge", text = "유저 " .. n_obis, color = n_obis > 0 and GREEN or "#2A2D33" },
       { type = "badge", text = "AI " .. n_ai, color = "#2A2D33" },
+      { type = "button", id = "bd_style", icon = "sync_alt" },
     } },
-    { type = "stops", stops = list, size = 13, color = BLUE },
-    { type = "text", text = string.format("%d / %d 정류장", math.min(me.next, #me.stops), #me.stops), size = 11, color = "#9AA0A6", align = "right" },
-  }))
+    { type = "row", gap = 6, children = {
+      { type = "badge", text = "▲ " .. gap_text(me, ahead, "앞차"), color = ahead and (ahead.user and "#1F5136" or "#2A2D33") or "#2A2D33", grow = true },
+      { type = "badge", text = "▼ " .. gap_text(me, behind, "뒷차"), color = behind and (behind.user and "#1F5136" or "#2A2D33") or "#2A2D33", grow = true },
+    } },
+  }
+end
+
+local function marks_of(me, others)
+  local marks = {}           -- 정류장 줄 → { t = 글자들, c = 색 }
+  for _, o in ipairs(others) do
+    local row = math.max(1, math.min(#me.stops, math.floor(o.p + 0.001) + 1))
+    local m = marks[row] or { t = {}, c = "#9AA0A6" }
+    m.t[#m.t + 1] = (o.user and "▶" or "▷") .. o.label
+    if o.user then m.c = GREEN end
+    marks[row] = m
+  end
+  return marks
+end
+
+local function frame_vertical(children)
+  if settings.in_nav then
+    return { anchor = "navigator", padding = 10, gap = 6, children = children }
+  end
+  return { anchor = "left", x = 16, y = -60, width = 320, gap = 6, draggable = true, grab = true, children = children }
+end
+
+local function board_vertical(me, others, n_obis, n_ai)
+  local marks = marks_of(me, others)
+  local myrow = math.max(1, math.min(#me.stops, math.floor(me.p + 0.001) + 1))
+  local first, last = 1, #me.stops
+  if not settings.in_nav then
+    first = math.max(1, myrow - 3)
+    last = math.min(#me.stops, first + 15)
+  end
+  local list = {}
+  for i = first, last do
+    if #list >= 128 then break end
+    local s, m = me.stops[i], marks[i]
+    list[#list + 1] = {
+      name = stop_name(s.id, s.name) .. (i == myrow and "  ◀ 내 버스" or ""),
+      time = s.arrival and omsi.fmt.clock(s.arrival) or "",
+      expected = m and table.concat(m.t, " ") or nil, expected_color = m and m.c or nil,
+      state = i < me.next and "done" or (i == me.next and "now" or "ahead"),   -- now = 향하는 정류장
+      tag = i == #me.stops and "terminus" or nil,
+    }
+  end
+  local ch = header(me, others, n_obis, n_ai)
+  ch[#ch + 1] = { type = "stops", stops = list, size = 13, color = BLUE }
+  ch[#ch + 1] = { type = "text", text = string.format("%d / %d 정류장", math.min(me.next, #me.stops), #me.stops), size = 11, color = "#9AA0A6", align = "right" }
+  omsi.ui.set(BOARD, frame_vertical(ch))
+end
+
+-- 가로형: 위에 노선 전체 막대(내 버스·다른 버스 위치), 아래에 내 앞뒤 정류장 7칸
+local function board_horizontal(me, others, n_obis, n_ai)
+  local L = math.max(1, #me.stops - 1)
+  local w = L * 0.006                    -- 표시 하나의 폭
+  local pts = { { p = me.p, c = "#FFFFFF" } }
+  local shown_n = 0
+  for _, o in ipairs(others) do
+    if shown_n < 6 then pts[#pts + 1] = { p = o.p, c = o.user and GREEN or "#9AA0A6" }; shown_n = shown_n + 1 end
+  end
+  table.sort(pts, function(a, b) return a.p < b.p end)
+  local segs, at = {}, 0
+  for _, q in ipairs(pts) do
+    local s = math.max(at, math.min(L - w, q.p - w / 2))
+    if s > at then segs[#segs + 1] = { value = s - at, color = at < me.p and BLUE or "#3A3F47" } end
+    segs[#segs + 1] = { value = w, color = q.c }
+    at = s + w
+  end
+  if at < L then segs[#segs + 1] = { value = L - at, color = at < me.p and BLUE or "#3A3F47" } end
+
+  local marks = marks_of(me, others)
+  local myrow = math.max(1, math.min(#me.stops, math.floor(me.p + 0.001) + 1))
+  local first = math.max(1, math.min(myrow - 2, #me.stops - 6))
+  local cols = {}
+  for i = first, math.min(#me.stops, first + 6) do
+    local s, m = me.stops[i], marks[i]
+    local st = i < me.next and "done" or (i == me.next and "now" or "ahead")
+    cols[#cols + 1] = { type = "box", grow = true, gap = 2,
+      color = st == "now" and BLUE or (st == "done" and "#4A4F57" or "#2A2D33"),
+      children = {
+        { type = "text", text = stop_name(s.id, s.name), size = 12, weight = st == "now" and "bold" or "regular", wrap = true },
+        { type = "text", text = (s.arrival and omsi.fmt.clock(s.arrival) or "") .. (i == #me.stops and "  종점" or ""), size = 11, color = "#9AA0A6" },
+        { type = "text", text = (i == myrow and "◀ 내 버스 " or "") .. (m and table.concat(m.t, " ") or ""), size = 11,
+          color = (m and m.c == GREEN) and GREEN or "#FFFFFF" },
+      } }
+  end
+  local ch = header(me, others, n_obis, n_ai)
+  ch[#ch + 1] = { type = "bar", segments = segs, height = 8 }
+  ch[#ch + 1] = { type = "row", gap = 4, children = cols }
+  ch[#ch + 1] = { type = "text", text = string.format("%d / %d 정류장", math.min(me.next, #me.stops), #me.stops), size = 11, color = "#9AA0A6", align = "right" }
+  omsi.ui.set(BOARD, { anchor = "top", x = 0, y = 70, width = 1040, gap = 6, draggable = true, grab = true, children = ch })
+end
+
+local function refresh_board(me)
+  if not settings.board then omsi.ui.remove(BOARD); return end
+  if not me then
+    local msg = { { type = "text", text = "노선 띠: 운행(시간표)을 시작하면 보여요", size = 13, color = "#9AA0A6" } }
+    omsi.ui.set(BOARD, settings.board_style == "가로" and { anchor = "top", x = 0, y = 70, width = 420, children = msg } or frame_vertical(msg))
+    return
+  end
+  local others = others_of(me)
+  local n_obis, n_ai = 0, 0
+  for _, o in ipairs(others) do if o.user then n_obis = n_obis + 1 else n_ai = n_ai + 1 end end
+  if settings.board_style == "가로" then board_horizontal(me, others, n_obis, n_ai)
+  else board_vertical(me, others, n_obis, n_ai) end
 end
 
 -- ------------------------------------------------------------ 주기
@@ -385,6 +586,7 @@ local function tick()
         next_dist = me and me.dist or 0, passengers = (omsi.bus.passengers()), has_bus = bx ~= nil })
       local ok, why = omsi.obis.send(text)
       if not ok then omsi.log("obis: 보내기 못 함: " .. tostring(why)) end
+      auto_nickname()
     end
   end
   local mine = find_me(me)
@@ -414,7 +616,18 @@ function on_start()
 end
 
 omsi.on("ui_click", function(panel, el)
+  if panel == BOARD and el == "bd_style" then
+    local v = settings.board_style == "가로" and "세로" or "가로"
+    omsi.plugin.set_setting("board_style", v); settings.board_style = v
+    return
+  end
+  if panel == PREFS then
+    if el == "p_save" then save_prefs()
+    elseif el == "p_close" or el == "p_cancel" then omsi.ui.remove(PREFS); draft = nil end
+    return
+  end
   if panel ~= PANEL then return end
+  if el == "b_prefs" then open_prefs(); return end
   if el == "b_board" then omsi.plugin.set_setting("board", not settings.board); settings.board = not settings.board
   elseif el == "b_set" then omsi.plugin.show_settings(true); omsi.ui.focus(true)
   elseif el == "b_hide" then shown = false; omsi.ui.remove(PANEL)
@@ -422,6 +635,18 @@ omsi.on("ui_click", function(panel, el)
 end)
 
 omsi.on("setting", function(key, value) settings[key] = value end)
+
+omsi.on("ui_change", function(panel, el, value)
+  if panel ~= PREFS or not draft then return end
+  if el == "p_nick" then draft.nickname = value
+  elseif el == "p_auto" then omsi.plugin.set_setting("auto_nick", value); settings.auto_nick = value
+  elseif el == "p_crowd" then draft.crowdType = value == 2 and "stand" or "seat"
+  elseif el == "p_seats" then draft.seatCapacity = tonumber(value) or value
+  elseif el == "p_low" then draft.lowFloor = value
+  elseif el == "p_night" then draft.vehicleBody = value and "night" or "normal"
+  elseif el == "p_stand" then draft.showStandCrowd = value
+  end
+end)
 
 function on_stop()
   if has_ws then pcall(omsi.ws.close) end
