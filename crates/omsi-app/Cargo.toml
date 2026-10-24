@@ -18,11 +18,6 @@ path = "src/lib.rs"
 name = "openomsi"
 path = "src/main.rs"
 
-[features]
-# K-OMSI's OBIS edition (OBIS sending and receiving for the plugins; the edition ships the
-# komsi_obis and komsi_taco plugins). The plain edition is built without it.
-obis = ["omsi-plugin/obis"]
-
 [build-dependencies]
 winresource.workspace = true
 
