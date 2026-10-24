@@ -13,7 +13,6 @@ pub(crate) mod hof;
 pub(crate) mod map;
 pub(crate) mod media;
 pub(crate) mod object;
-#[cfg(feature = "obis")]
 pub(crate) mod net;
 pub(crate) mod plugin;
 pub(crate) mod process;
@@ -23,11 +22,7 @@ pub(crate) mod util;
 pub(crate) mod world;
 
 /// Every group's functions.
-#[cfg(feature = "obis")]
 pub static GROUPS: &[&[ApiFn]] = &[hof::FNS, data::FNS, core::FNS, bus::FNS, duty::FNS, map::FNS, object::FNS, traffic::FNS, world::FNS, media::FNS, game::FNS, plugin::FNS, process::FNS, storage::FNS, net::FNS, util::FNS];
-/// (the plain edition: no OBIS, `omsi.ws` and `omsi.obis` are not there)
-#[cfg(not(feature = "obis"))]
-pub static GROUPS: &[&[ApiFn]] = &[hof::FNS, data::FNS, core::FNS, bus::FNS, duty::FNS, map::FNS, object::FNS, traffic::FNS, world::FNS, media::FNS, game::FNS, plugin::FNS, process::FNS, storage::FNS, util::FNS];
 
 /// What a function body may give back: a value, something that becomes one, or an error.
 pub trait Ret {
