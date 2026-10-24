@@ -4,15 +4,14 @@
 //! connection. The connection lives on its own thread, so the game never waits for the
 //! network; a plugin drains the messages that came in with `omsi.ws.poll()`.
 //!
-//! `omsi.obis` (K-OMSI's OBIS edition): the player's own bus to OBIS, as the OBIS client
+//! `omsi.obis` (K-OMSI): the player's own bus to OBIS, as the OBIS client
 //! does - `wss://obis.kr/api/ingest` with the device's token. The token never reaches the
 //! plugin: it is read here from the OBIS client's `config.local.json` (next to the game) or
 //! from `~/.openomsi/obis_device.json`, or the device is registered once and kept there.
 //! Only this one address, only the latest snapshot the plugin gave, at most twice a second.
 //!
-//! The OBIS edition's parts work only for a player who has the originals: OBIS (`omsi.ws`,
-//! `omsi.obis`) with the OBIS client installed, the tachograph plugin with Light-TACO
-//! (`omsi.komsi.original`).
+//! These parts work only for a player who has the originals: OBIS (`omsi.ws`, `omsi.obis`)
+//! with the OBIS client installed, the tachograph plugin with TACO (`omsi.komsi.original`).
 
 use super::{def, multi, p};
 use crate::api::fns::core::ok_or_reason;
@@ -101,13 +100,13 @@ impl WsClient {
 
 // ------------------------------------------------------------------ the originals
 
-/// Where an original program lies, relative to an OMSI folder: OBIS's client, Light-TACO
-/// (its scheduler, `OmsiLightTaco`), in the OMSI folder or in one folder below
-/// `OMSI Addon Patch` (where its packages put it).
+/// An original program: OBIS's client (relative to an OMSI folder); TACO's programs - Light-TACO's
+/// scheduler (`OmsiLightTaco`) or the digital tachograph, either will do - by their file names,
+/// in the OMSI folder, in `OMSI Addon Patch` or one folder below it (where their packages put them).
 fn original_files(name: &str) -> &'static [&'static str] {
     match name {
         "obis" => &["OBIS-client/OBIS-client.exe"],
-        "taco" => &["OMSI Addon Patch/OMSI2_Scheduler.exe", "OMSI2_Scheduler.exe"],
+        "taco" => &["OMSI2_Scheduler.exe", "OmsiDTG_Personal.exe"],
         _ => &[],
     }
 }
@@ -132,12 +131,14 @@ fn find_original(name: &str) -> bool {
         if files.iter().any(|f| root.join(f).is_file()) {
             return true;
         }
-        // (Light-TACO also comes in a folder of its own under OMSI Addon Patch)
         if name == "taco" {
-            if let Ok(dirs) = std::fs::read_dir(root.join("OMSI Addon Patch")) {
-                if dirs.flatten().any(|d| d.path().join("OMSI2_Scheduler.exe").is_file()) {
-                    return true;
-                }
+            let addons = root.join("OMSI Addon Patch");
+            let mut dirs = vec![addons.clone()];
+            if let Ok(rd) = std::fs::read_dir(&addons) {
+                dirs.extend(rd.flatten().map(|d| d.path()).filter(|p| p.is_dir()));
+            }
+            if dirs.iter().any(|d| files.iter().any(|f| d.join(f).is_file())) {
+                return true;
             }
         }
     }
@@ -155,6 +156,104 @@ pub fn has_original(name: &str) -> bool {
     log::info!("K-OMSI: the original {name} is {}", if v { "installed: its plugin parts are on" } else { "not installed: its plugin parts are off" });
     f.push((name.to_string(), v));
     v
+}
+
+// ------------------------------------------------------------ the OBIS client's routes
+
+/// The OBIS client's folder (the one with `OBIS-client.exe`).
+fn obis_client_dir() -> Option<PathBuf> {
+    // (tests: OMSI_OBIS_CLIENT_DIR names it)
+    if let Some(d) = std::env::var_os("OMSI_OBIS_CLIENT_DIR").map(PathBuf::from).filter(|d| d.is_dir()) {
+        return Some(d);
+    }
+    omsi_roots().into_iter().map(|r| r.join("OBIS-client")).find(|d| d.join("OBIS-client.exe").is_file())
+}
+
+/// `routes/<file>` as the OBIS client keeps them: the name alone, a `.json` file.
+fn route_file_ok(name: &str) -> bool {
+    !name.is_empty() && name.len() <= 200 && name.to_ascii_lowercase().ends_with(".json") && !name.contains(['/', '\\', ':']) && !name.contains("..")
+}
+
+/// The trip file a route is for, as the OBIS client matches it: its name, lower case, no `.ttp`.
+fn norm_trip(name: &str) -> String {
+    let s = name.trim().replace('\\', "/");
+    let s = s.rsplit('/').next().unwrap_or("").to_lowercase();
+    s.strip_suffix(".ttp").map(str::to_string).unwrap_or(s)
+}
+
+fn field<'a>(m: &'a [(String, Value)], key: &str) -> Option<&'a Value> {
+    m.iter().find(|(k, _)| k == key).map(|(_, v)| v)
+}
+
+/// The index of the client's routes: `{default_map, routes = {key = {file, line, map, stops}},
+/// trips = {trip file = {keys}}}` (what the plugin needs to match a trip to a route).
+fn build_route_index(dir: &std::path::Path) -> Value {
+    let mut maps: Vec<String> = std::fs::read_dir(dir.join("maps")).map(|rd| rd.flatten().filter(|d| d.path().is_dir()).map(|d| d.file_name().to_string_lossy().into_owned()).collect()).unwrap_or_default();
+    maps.sort();
+    let mut files: Vec<String> = std::fs::read_dir(dir.join("data/routes")).map(|rd| rd.flatten().map(|d| d.file_name().to_string_lossy().into_owned()).filter(|n| route_file_ok(n)).collect()).unwrap_or_default();
+    files.sort();
+    let mut routes: Vec<(String, Value)> = Vec::new();
+    let mut trips: Vec<(String, Value)> = Vec::new();
+    for f in files {
+        let Ok(text) = std::fs::read_to_string(dir.join("data/routes").join(&f)) else { continue };
+        let Ok(Value::Map(r)) = crate::api::json::decode(&text, false) else { continue };
+        let s = |k: &str| match field(&r, k) {
+            Some(Value::Str(t)) => t.clone(),
+            Some(Value::Int(n)) => n.to_string(),
+            Some(Value::Num(n)) => n.to_string(),
+            _ => String::new(),
+        };
+        let key = Some(s("routeKey")).filter(|k| !k.is_empty()).unwrap_or_else(|| f.trim_end_matches(".json").to_string());
+        let stops: Vec<Value> = match field(&r, "stations") {
+            Some(Value::List(l)) => l.iter().filter_map(|st| match st {
+                Value::Map(m) => match field(m, "id") {
+                    Some(Value::Int(n)) => Some(Value::Int(*n)),
+                    Some(Value::Num(n)) => Some(Value::Int(*n as i64)),
+                    _ => None,
+                },
+                _ => None,
+            }).collect(),
+            _ => Vec::new(),
+        };
+        let trip = norm_trip(&s("fileName"));
+        if !trip.is_empty() {
+            match trips.iter_mut().find(|(t, _)| *t == trip) {
+                Some((_, Value::List(l))) => l.push(Value::Str(key.clone())),
+                _ => trips.push((trip, Value::List(vec![Value::Str(key.clone())]))),
+            }
+        }
+        routes.push((key, Value::Map(vec![
+            ("file".into(), Value::Str(f)),
+            ("line".into(), Value::Str(s("lineNumber"))),
+            ("map".into(), Value::Str(s("mapId"))),
+            ("stops".into(), Value::List(stops)),
+        ])));
+    }
+    log::info!("plugin obis: {} routes of the OBIS client read ({})", routes.len(), dir.display());
+    Value::Map(vec![
+        ("default_map".into(), maps.first().map(|m| Value::Str(m.clone())).unwrap_or(Value::Nil)),
+        ("routes".into(), Value::Map(routes)),
+        ("trips".into(), Value::Map(trips)),
+    ])
+}
+
+/// The index, read on a worker the first time it is asked for (`nil` until it is there).
+fn route_index() -> Value {
+    static INDEX: Mutex<Option<Option<Value>>> = Mutex::new(None);
+    let mut g = INDEX.lock().unwrap_or_else(|e| e.into_inner());
+    match &*g {
+        Some(Some(v)) => return v.clone(),
+        Some(None) => return Value::Nil,
+        None => {}
+    }
+    let Some(dir) = obis_client_dir() else { return Value::Nil };
+    *g = Some(None);
+    drop(g);
+    let _ = std::thread::Builder::new().name("plugin obis routes".into()).spawn(move || {
+        let v = build_route_index(&dir);
+        *INDEX.lock().unwrap_or_else(|e| e.into_inner()) = Some(Some(v));
+    });
+    Value::Nil
 }
 
 const NO_OBIS: &str = "the OBIS client (OBIS-client\\OBIS-client.exe in the OMSI folder) is not installed";
@@ -529,7 +628,7 @@ fn run_sender(s: Arc<SendShared>) {
 }
 
 pub static FNS: &[ApiFn] = &[
-    def!("komsi.original", "network", [p("name", "string")], "boolean", "Whether the player has the original program a part of K-OMSI's OBIS edition stands in for: `\"obis\"` (the OBIS client, `OBIS-client\\OBIS-client.exe` in the OMSI folder: without it `omsi.ws` and `omsi.obis` do nothing) or `\"taco\"` (Light-TACO, `OMSI2_Scheduler.exe` under `OMSI Addon Patch`: the tachograph plugin works only with it).", NEW, None, false, |c, a| {
+    def!("komsi.original", "network", [p("name", "string")], "boolean", "Whether the player has the original program a part of K-OMSI's OBIS edition stands in for: `\"obis\"` (the OBIS client, `OBIS-client\\OBIS-client.exe` in the OMSI folder: without it `omsi.ws` and `omsi.obis` do nothing) or `\"taco\"` (Light-TACO's `OMSI2_Scheduler.exe` or the tachograph's `OmsiDTG_Personal.exe`, in or under `OMSI Addon Patch`: the tachograph plugin works only with one of them).", NEW, None, false, |c, a| {
         let name = a.str(0)?;
         Ok::<_, ApiError>(Value::Bool(has_original(&name)))
     }),
@@ -560,6 +659,14 @@ pub static FNS: &[ApiFn] = &[
     }),
     def!("obis.stop", "network", [], "nil", "Stops sending (OBIS shows the bus as gone after a while).", NEW, NetworkRemote, false, |c, a| {
         c.state().obis.stop();
+    }),
+    def!("obis.routes", "network", [], "table or nil", "The OBIS client's routes, to match the player's trip to one: `{default_map, routes = {[key] = {file, line, map, stops}}, trips = {[trip file] = {keys}}}` (`stops` the stop object ids in order; a trip file lower case, without `.ttp`). Read from the client's `data\\routes` on a worker the first time: `nil` until then, and without the OBIS client.", NEW, NetworkRemote, false, |c, a| {
+        if has_original("obis") { route_index() } else { Value::Nil }
+    }),
+    def!("obis.route_text", "network", [p("file", "string")], "string or nil", "One route of the OBIS client (a `file` of `obis.routes`) as its JSON text.", NEW, NetworkRemote, false, |c, a| {
+        let name = a.str(0)?;
+        let text = (has_original("obis") && route_file_ok(&name)).then(obis_client_dir).flatten().and_then(|d| std::fs::read_to_string(d.join("data/routes").join(&name)).ok());
+        Ok::<_, ApiError>(text.map(Value::Str).unwrap_or(Value::Nil))
     }),
     def!("obis.prefs", "network", [], "table or nil", "The vehicle settings OBIS has for this device, as the OBIS client's \"차량 설정\" shows them: `nickname`, `crowdType` (`\"seat\"`, `\"stand\"`), `seatCapacity` (1 to 80), `showStandCrowd`, `lowFloor`, `vehicleBody` (`\"normal\"`, `\"night\"`: the last bus). `nil` before they are read (after `obis.start`).", NEW, NetworkRemote, false, |c, a| {
         c.state().obis.prefs()
