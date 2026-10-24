@@ -94476,3 +94476,33 @@ _version: 2
   sv: "Öppnar {site} i din webbläsare. Webbplatsen är inte en del av openOMSI."
   sr: "Otvara {site} u vašem pregledaču. Sajt nije deo openOMSI-ja."
   ka: "{site} გაიხსნება თქვენს ბრაუზერში. საიტი openOMSI-ის ნაწილი არ არის."
+"Average":
+  de: "Schnitt"
+  ko: "평균"
+"Advised":
+  de: "Empfohlen"
+  ko: "권장"
+"Prepare to stop":
+  de: "Anhalten"
+  ko: "정지 준비"
+"Red light ahead":
+  de: "Rote Ampel"
+  ko: "신호위반 주의"
+"Collision risk":
+  de: "Auffahrgefahr"
+  ko: "추돌 위험"
+"Car ahead":
+  de: "Vordermann"
+  ko: "앞차"
+"Sharp curve":
+  de: "Scharfe Kurve"
+  ko: "급커브"
+"Limit ahead":
+  de: "Tempolimit"
+  ko: "제한"
+"Signal":
+  de: "Ampel"
+  ko: "신호"
+"Section":
+  de: "Abschnitt"
+  ko: "구간"

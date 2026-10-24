@@ -70,7 +70,7 @@ impl Host for AppHost {
         crate::ios::previous_run_crash()
     }
     fn city_map(&self, root: &Path, tiles: &[(i32, i32, PathBuf)], chrono: &[PathBuf]) -> CityMap {
-        let crate::scene::NavigationMap { lanes, road_surfaces, places, signs: _, names: _ } = crate::scene::navigation_map_of(root, tiles, chrono);
+        let crate::scene::NavigationMap { lanes, road_surfaces, places, .. } = crate::scene::navigation_map_of(root, tiles, chrono);
         let (roads, net) = crate::navigator::city_roads(lanes, &road_surfaces);
         CityMap { roads: roads.into_iter().map(|r| MapRoad { points: r.points, width: r.width, main: r.main }).collect(), net, places: places.into_iter().collect() }
     }
