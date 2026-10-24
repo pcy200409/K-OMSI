@@ -151,6 +151,8 @@ jobs:
           $name = "openOMSI-$env:OPENOMSI_VERSION-windows-${{ matrix.arch }}"
           New-Item -ItemType Directory -Force out | Out-Null
           Copy-Item README.md, LICENSE dist/windows/
+          # K-OMSI: its plugins (OBIS, the tachograph), on only where their originals are installed
+          Copy-Item -Recurse komsi/plugins dist/windows/Plugins
           Compress-Archive -Path dist/windows/* -DestinationPath "out/$name.zip"
           # the dedicated server for Windows (Server 2016 and later): the same program
           # started with --server, start.cmd, and run-server.cmd that asks for the folder,

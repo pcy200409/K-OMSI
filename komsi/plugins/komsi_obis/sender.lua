@@ -2,7 +2,8 @@
 -- snapshot 을 게임 안에서 같은 모양으로 만듦. 보내기는 omsi.obis(토큰은 K-OMSI 가 쥠, 플러그인은 모름).
 -- 원본 대비: bridge/state.py AppState.snapshot + _route_key_for_trip_file + _update_obis_first_stop_gate_locked,
 --           bridge/route_projection.position_on_route, 호환판 omsi_memory._route_frame_xy
--- 노선 데이터 = obis_routes/ (tools/build_obis_routes.py 가 OBIS Client data/routes 에서 만듦)
+-- 노선 데이터 = 설치된 OBIS Client 의 data/routes (omsi.obis.routes / route_text 로 K-OMSI 가 읽어 줌)
+--   (개발용으로 플러그인 폴더에 obis_routes/ 가 있으면 그것도 씀: tools/build_obis_routes.py)
 
 local M = {}
 
@@ -41,11 +42,25 @@ local function norm_trip(name)
   return s
 end
 
+local EMPTY = { routes = {}, trips = {} }
+local local_copy = nil         -- 플러그인 폴더의 obis_routes (있을 때만)
+
 local function load_index()
   if idx then return idx end
-  local text = omsi.plugin.read("obis_routes/index.json")
-  idx = text and omsi.json.decode(text) or { routes = {}, trips = {} }
-  return idx
+  -- OBIS Client 의 노선 (처음 한 번 K-OMSI 가 따로 읽음: 다 읽기 전엔 nil → 다음에 다시)
+  local v = omsi.obis and omsi.obis.routes and omsi.obis.routes()
+  if type(v) == "table" then idx = v; local_copy = false; return idx end
+  if local_copy == nil then
+    local text = omsi.plugin.read("obis_routes/index.json")
+    local_copy = text ~= nil
+    if text then idx = omsi.json.decode(text); return idx end
+  end
+  return EMPTY
+end
+
+local function route_text(file)
+  if local_copy then return omsi.plugin.read("obis_routes/" .. file) end
+  return omsi.obis.route_text(file)
 end
 
 local function route(key)
@@ -54,7 +69,7 @@ local function route(key)
   if r then return r end
   local info = load_index().routes[key]
   if not info then return nil end
-  local raw = omsi.plugin.read("obis_routes/" .. info.file)
+  local raw = route_text(info.file)
   if not raw then return nil end
   local t = omsi.json.decode(raw)
   if type(t) ~= "table" then return nil end
