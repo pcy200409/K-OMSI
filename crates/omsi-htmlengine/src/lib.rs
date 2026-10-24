@@ -155,6 +155,14 @@ pub(crate) fn face_for<R>(font: &FontRef<'static>, bold: bool, ch: char, f: impl
 }
 
 pub(crate) const STEP_LIMIT: u32 = 400_000;
+/// A timer's first runs may do a page's one-off setup (`if (table === null) table = build()`
+/// over a large depot file): they get this much before they are stopped.
+pub(crate) const WARMUP_STEP_LIMIT: u32 = 4_000_000;
+/// How many first runs of a timer get [`WARMUP_STEP_LIMIT`].
+pub(crate) const WARMUP_RUNS: u32 = 3;
+/// A timer that runs too long this many times in a row is stopped: it would otherwise spend
+/// the whole limit again in every frame and hold the game up.
+pub(crate) const OVERRUN_STOP: u32 = 5;
 pub(crate) const DEPTH_LIMIT: u32 = 48;
 
 #[cfg(test)]

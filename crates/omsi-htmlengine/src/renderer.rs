@@ -107,9 +107,29 @@ impl EngineRenderer {
             }
         });
         for (id, f) in due {
+            let runs = self.js.timers.iter().find(|t| t.id == id).map_or(0, |t| t.runs);
             self.js.steps = 0;
-            if let Err(e) = self.js.call(f, Val::Undef, Vec::new()) {
-                log::warn!("htmltexture: timer {id} failed: {e}");
+            self.js.step_limit = if runs < WARMUP_RUNS { WARMUP_STEP_LIMIT } else { STEP_LIMIT };
+            let result = self.js.call(f, Val::Undef, Vec::new());
+            self.js.step_limit = STEP_LIMIT;
+            let too_long = matches!(&result, Err(e) if e == "script ran too long");
+            // (the timer may have stopped itself, or been a one-shot)
+            let mut stop = false;
+            let mut first_overrun = false;
+            if let Some(t) = self.js.timers.iter_mut().find(|t| t.id == id) {
+                t.runs = t.runs.saturating_add(1);
+                t.overruns = if too_long { t.overruns + 1 } else { 0 };
+                first_overrun = t.overruns == 1;
+                stop = t.overruns >= OVERRUN_STOP;
+            }
+            match result {
+                Err(_) if stop => {
+                    self.js.timers.retain(|t| t.id != id);
+                    log::warn!("htmltexture: timer {id} stopped: it ran too long {OVERRUN_STOP} times in a row");
+                }
+                // a timer that keeps running too long is reported once, not in every frame
+                Err(e) if !too_long || first_overrun => log::warn!("htmltexture: timer {id} failed: {e}"),
+                _ => {}
             }
         }
         true

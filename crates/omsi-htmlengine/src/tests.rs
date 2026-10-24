@@ -167,6 +167,32 @@ fn class_list_and_inner_html() {
 }
 
 #[test]
+fn a_timer_may_do_heavy_setup_in_its_first_runs() {
+    // a one-off table over a large depot file in the first tick, more than STEP_LIMIT
+    let html = "<body><p id=o></p><script>var table = null; var n = 0; setInterval(function () { n++;        if (table === null) { table = 0; for (var i = 0; i < 300000; i++) table += i % 7; }        document.getElementById('o').textContent = 'n' + n; }, 100);</script></body>";
+    let mut r = EngineRenderer::new(8, 8, html);
+    for k in 1..=3 {
+        r.js.now = 0.11 * k as f64;
+        r.run_timers();
+    }
+    assert_eq!(r.text_of("o").as_deref(), Some("n3"));
+    assert_eq!(r.js.timers.len(), 1);
+}
+
+#[test]
+fn a_timer_that_always_runs_too_long_is_stopped() {
+    let html = "<body><p id=o></p><script>var n = 0; setInterval(function () { n++; document.getElementById('o').textContent = 'n' + n;        for (var i = 0; ; i++) {} }, 100); setInterval(function () {}, 100);</script></body>";
+    let mut r = EngineRenderer::new(8, 8, html);
+    for k in 1..=(WARMUP_RUNS + OVERRUN_STOP + 3) {
+        r.js.now = 0.11 * k as f64;
+        r.run_timers();
+    }
+    // stopped after OVERRUN_STOP runs in a row; the other timer goes on
+    assert_eq!(r.text_of("o").as_deref(), Some(format!("n{}", OVERRUN_STOP).as_str()));
+    assert_eq!(r.js.timers.len(), 1);
+}
+
+#[test]
 fn timers_fire_when_due_and_can_be_cleared() {
     let html = "<body><p id=o></p><script>var n = 0; var once = 0; var id = setInterval(function () { n++; document.getElementById('o').textContent = 'n' + n;\
         if (n == 3) clearInterval(id); }, 100); setTimeout(function () { once++; omsi.setVar('once', once); }, 250);</script></body>";
