@@ -14,14 +14,10 @@ serde.workspace = true
 serde_json.workspace = true
 mlua = { version = "0.10", features = ["lua54", "vendored"] }
 wasmi = "2"
-# K-OMSI OBIS edition only (`--features obis`): omsi.ws / omsi.obis
-tungstenite = { version = "0.30", default-features = false, features = ["handshake", "rustls-tls-webpki-roots"], optional = true }
-ureq = { workspace = true, optional = true }
+# K-OMSI: omsi.ws / omsi.obis (on only with the OBIS client installed)
+tungstenite = { version = "0.30", default-features = false, features = ["handshake", "rustls-tls-webpki-roots"] }
+ureq.workspace = true
 oop-format = { git = "https://github.com/openOMSI-org/openOMSI-Development-Tools", rev = "496d9bd" }
-
-[features]
-# K-OMSI's OBIS edition: the plugins may listen to OBIS and send the player's bus to it
-obis = ["dep:tungstenite", "dep:ureq"]
 
 [[bin]]
 name = "omsi-plugin-host"
