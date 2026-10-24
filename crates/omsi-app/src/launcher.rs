@@ -102,8 +102,7 @@ impl Host for AppHost {
             lanes,
             road_surfaces,
             places,
-            signs: _,
-            names: _,
+            ..
         } = crate::scene::navigation_map_of(root, tiles, chrono);
         let (roads, net) = crate::navigator::city_roads(lanes, &road_surfaces);
         CityMap {
