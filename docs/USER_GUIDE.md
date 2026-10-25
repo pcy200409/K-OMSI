@@ -993,6 +993,7 @@ lists every switch.
 | `OMSI_PARKED_PULL_OUT=p` | the chance per population pass (about 2 s) that a parked car drives off (0.035 by default), with a log of why one does not |
 | `OMSI_NO_BRIDGE=1` | LAN play leaves the internet alone: no rendezvous, no UPnP, no tunnel (tests, LAN parties) |
 | `OMSI_NO_LAN_MODS=1` | a LAN host serves no mods and a joining game fetches none |
+| `OMSI_CLEAR_LAN_STORE=1` | a joining game deletes the sealed store of the mods it fetched (`~/.openomsi/lan-store`) when it ends and before the next join; the next join fetches them again |
 | `OMSI_BACKEND=vulkan\|dx12\|metal\|gl\|angle` | the graphics interface to ask first, over the setting (the log lists every adapter each one offers; `angle`, also `dx11`/`d3d11`: OpenGL ES on ANGLE over DirectX 11, Windows, with ANGLE's DLLs beside the game) |
 | `OMSI_DLSS=off\|dlaa\|quality\|balanced\|performance\|ultra_performance` | DLSS whatever the settings say |
 | `OMSI_STREAMLINE_DIR=dir`, `OMSI_DLSS_VERBOSE=1` | where Streamline's DLLs are (the game's folder by default), and all of Streamline's log |

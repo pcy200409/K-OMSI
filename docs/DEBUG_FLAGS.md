@@ -362,6 +362,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | Name | Type | Default | Read | Crates | Description |
 |---|---|---|---|---|---|
 | `OMSI_CHARACTER_MODELS` | text | settings | use | app | Override the character models for a game session: original (OMSI's people) or improved (the Microsoft Rocketbox avatars, drawn on this computer only). |
+| `OMSI_CLEAR_LAN_STORE` | bool | off | use | lan | LAN: a joining game deletes the sealed store of the mods it fetched (`~/.openomsi/lan-store`) when it ends and before the next join, so nothing of another player's mods stays on this machine (the next join fetches them again). |
 | `OMSI_ENHANCED` | bool | settings | use | app | Enhanced graphics for this run. |
 | `OMSI_ENHANCED_PLUS` | bool | settings | use | app | Enhanced+ (ray traced) graphics for this run. |
 | `OMSI_FOOT_RUN` | num | 3.8 | use | app | On foot: the pace of a run (Shift) in m/s. |
