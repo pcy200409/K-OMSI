@@ -99,13 +99,13 @@ fn fs_motion(in: MotionFsIn) -> @location(0) vec4<f32> {
 // (the depth prepass's cut-out and transmap tests: `fs_depth_test`, `fs_depth_transmap`)
 @fragment
 fn fs_motion_test(in: MotionFsIn) -> @location(0) vec4<f32> {
-    cutout_coverage(in.uv, in.params);
+    cutout_coverage(in.uv, in.params, camera.lod.x);
     return motion_pixels(in.cur, in.prev);
 }
 
 @fragment
 fn fs_motion_transmap(in: MotionFsIn) -> @location(0) vec4<f32> {
-    transmap_coverage(in.uv, in.params);
+    transmap_coverage(in.uv, in.params, camera.lod.x);
     return motion_pixels(in.cur, in.prev);
 }
 
