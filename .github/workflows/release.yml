@@ -145,6 +145,29 @@ jobs:
             Copy-Item (Join-Path $dir $dll) dist/windows/
           }
           Get-ChildItem dist/windows
+      # K-OMSI: openMapper (openOMSI-org/openMapper, AGPL-3.0, the map editor) beside the
+      # game in an `openMapper` folder: its own release, by tag and checked against the
+      # SHA-256 recorded here and the release's SHA256SUMS
+      - name: openMapper
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPENMAPPER_TAG: v0.1.5
+          OPENMAPPER_SHA256_X64: b110aad396091f26023e5680cbf490c51579940f8c2d3593cd42f7179031a898
+          OPENMAPPER_SHA256_ARM64: 5d7b391bd70c970b65dd9dcf5f10f16b678c32016cc3bd80e9364e802159121d
+        run: |
+          $ver = $env:OPENMAPPER_TAG.TrimStart("v")
+          $file = "openMapper-$ver-windows-${{ matrix.arch }}.zip"
+          gh release download $env:OPENMAPPER_TAG -R openOMSI-org/openMapper --pattern $file --pattern SHA256SUMS -D openmapper
+          $want = if ("${{ matrix.arch }}" -eq "arm64") { $env:OPENMAPPER_SHA256_ARM64 } else { $env:OPENMAPPER_SHA256_X64 }
+          $have = (Get-FileHash "openmapper/$file" -Algorithm SHA256).Hash.ToLower()
+          if ($have -ne $want) { throw "openMapper zip: SHA-256 $have, expected $want" }
+          $sums = Get-Content openmapper/SHA256SUMS | Where-Object { $_ -match [regex]::Escape($file) }
+          if (-not $sums -or ($sums -split '\s+')[0].ToLower() -ne $have) { throw "openMapper zip: not as its SHA256SUMS says" }
+          Expand-Archive "openmapper/$file" -DestinationPath openmapper/x
+          $dir = Get-ChildItem openmapper/x -Directory | Select-Object -First 1
+          Copy-Item -Recurse $dir.FullName dist/windows/openMapper
+          Get-ChildItem dist/windows/openMapper
       - name: Package
         shell: pwsh
         run: |
@@ -326,6 +349,23 @@ jobs:
         env:
           RUSTFLAGS: "-C linker=clang -C link-arg=-fuse-ld=lld"
         run: cargo test --locked --release -p omsi-render shaders_validate_and_match_the_uniforms
+      # K-OMSI: openMapper beside the game (see the Windows job)
+      - name: openMapper
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPENMAPPER_TAG: v0.1.5
+          OPENMAPPER_SHA256_X64: 4d28645f2c61bc4579a3148d513e0a739b44429c916fc20bd873d6650b70a0dc
+          OPENMAPPER_SHA256_ARM64: fb5d9b8666de86e195e812b459c6d8a74be364355082c8072433e690ff7436c8
+        run: |
+          ver="${OPENMAPPER_TAG#v}"
+          file="openMapper-$ver-linux-${{ matrix.arch }}.tar.gz"
+          gh release download "$OPENMAPPER_TAG" -R openOMSI-org/openMapper --pattern "$file" --pattern SHA256SUMS -D openmapper
+          want=$([ "${{ matrix.arch }}" = arm64 ] && echo "$OPENMAPPER_SHA256_ARM64" || echo "$OPENMAPPER_SHA256_X64")
+          echo "$want  openmapper/$file" | sha256sum -c -
+          (cd openmapper && grep " $file\$" SHA256SUMS | sha256sum -c -)
+          mkdir -p dist/linux/openMapper
+          tar -xzf "openmapper/$file" -C dist/linux/openMapper --strip-components=1
+          ls -la dist/linux/openMapper
       - name: Package
         run: |
           mkdir -p out
@@ -390,7 +430,7 @@ jobs:
 
   release:
     # (the platforms not built again are skipped, not failed)
-    if: ${{ !cancelled() && !failure() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+    if: ${{ !cancelled() && !failure() && github.event_name != 'pull_request' && github.ref == 'refs/heads/release' }}
     needs: [version, windows, windows-tests, macos, linux, android]
     runs-on: ubuntu-latest
     permissions:
@@ -406,32 +446,30 @@ jobs:
         with:
           path: out
           merge-multiple: true
-      - name: Publish v${{ needs.version.outputs.version }} (beta)
+      - name: Publish v${{ needs.version.outputs.version }}
         run: |
           ls -l out
           if [ "$(gh release view "v$VERSION" --json isDraft --jq .isDraft 2>/dev/null)" = true ]; then
             gh release delete "v$VERSION" --yes
           fi
-          if gh release view "v$VERSION" >/dev/null 2>&1; then
-            echo "::error::v$VERSION is already published and stays as it is: a fix is released as a new version"
-            exit 1
+          # K-OMSI: the notes are kept in the repository (komsi/release-notes.md); <버전> is the version
+          if [ -f komsi/release-notes.md ]; then
+            sed "s/<버전>/$VERSION/g" komsi/release-notes.md > notes.md
+          else
+            echo "**K-OMSI $VERSION** (openOMSI based)" > notes.md
           fi
-          prev=$(git tag -l "v${VERSION%.*}.*" --sort=-v:refname | grep -vx "v$VERSION" | head -1)
-          if [ -n "$prev" ] && ! git merge-base --is-ancestor "$prev" "$GITHUB_SHA"; then
-            echo "::error::$GITHUB_SHA is older than $prev: only a newer commit of main is released"
-            exit 1
-          fi
-          if ! git tag "v$VERSION" "$GITHUB_SHA" 2>/dev/null && [ "$(git rev-parse "v$VERSION^{commit}")" != "$GITHUB_SHA" ]; then
-            echo "::error::the tag v$VERSION already names another commit"
-            exit 1
-          fi
-          git push origin "v$VERSION"
-          sh scripts/release-notes.sh "$VERSION" > notes.md
+          git tag -f "v$VERSION" "$GITHUB_SHA"
+          git push -f origin "v$VERSION"
           cd out
           files=$(ls *.zip *.apk *.dmg *.exe 2>/dev/null || true)
           sha256sum $files > SHA256SUMS
-          gh release create "v$VERSION" $files SHA256SUMS \
-            --verify-tag \
-            --prerelease \
-            --title "openOMSI $VERSION" \
-            --notes-file ../notes.md
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            # the same version built again: the release stays, with this build's files and notes
+            gh release upload "v$VERSION" $files SHA256SUMS --clobber
+            gh release edit "v$VERSION" --title "K-OMSI $VERSION" --notes-file ../notes.md
+          else
+            gh release create "v$VERSION" $files SHA256SUMS \
+              --verify-tag \
+              --title "K-OMSI $VERSION" \
+              --notes-file ../notes.md
+          fi
