@@ -418,6 +418,10 @@ flags! {
     OMSI_NO_UPDATE: Bool, Switch, Use, "off", "No update check.";
     OMSI_NO_VAR_SYNC: Bool, Switch, Use, "off", "LAN: no variable sync.";
     OMSI_NO_WHEEL_SLIP: Bool, Switch, Use, "off", "Every wheel grips, as before wheels turned on their own (A/B).";
+    OMSI_OBIS_CLIENT_DIR: Text, Test, Use, "-", "K-OMSI: the OBIS client's folder (the one with OBIS-client.exe), instead of looking for it under the OMSI folders.";
+    OMSI_OBIS_INGEST_URL: Text, Test, Use, "-", "K-OMSI: another address the player's bus is sent to instead of OBIS (tests, a local stand-in).";
+    OMSI_OBIS_PREFS_URL: Text, Test, Use, "-", "K-OMSI: another address of the OBIS vehicle settings (tests, a local stand-in).";
+    OMSI_OBIS_TOKEN: Text, Test, Use, "-", "K-OMSI: the device token sent to OBIS instead of the OBIS client's own (tests).";
     OMSI_OFFICIAL_KEY: Text, Setup, Use, "-", "File of the official server's signing key.";
     OMSI_OLD_WORLD_GRID: Bool, Switch, Use, "off", "Maps with world coordinates take the one tile size of 371.9 m (comparison).";
     OMSI_ONLY_MESH: Text, Test, Use, "-", "a|b: draw only the meshes whose file names contain one of the parts.";
@@ -428,6 +432,7 @@ flags! {
     OMSI_OPENXR_SCALE: Num, Tuning, Use, "settings", "VR: render scale of the eyes.";
     OMSI_ORBIT_DIST: Num, Test, Use, "18", "Offscreen: the outside camera's distance from the vehicle in metres.";
     OMSI_ORIGINAL: Text, Test, Test, "-", "vehicle_vars example: the original OMSI folder.";
+    OMSI_ORIGINALS: Text, Test, Use, "-", "K-OMSI: obis,taco - the originals taken as installed (or not, when left out) instead of looking for them.";
     OMSI_PARKED_PULL_OUT: Num, Tuning, Use, "0.035", "Chance per step a parked car pulls out.";
     OMSI_PARK_IN: Num, Tuning, Use, "0.04", "Chance per step a car parks.";
     OMSI_PAX_ANIMATION: Text, Tuning, Use, "settings", "Override the passenger animation for a game session: original (OMSI) or enhanced (procedural IK).";
