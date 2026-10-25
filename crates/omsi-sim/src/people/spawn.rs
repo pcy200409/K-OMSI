@@ -109,6 +109,7 @@ impl PeopleSim {
             money: None,
             under_bus: hashbrown::HashSet::new(),
             stop_request: false,
+            ai_stop_requests: HashSet::new(),
             tickets_sold: 0,
             ticket_cash: 0.0,
             sales: Vec::new(),
