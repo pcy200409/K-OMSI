@@ -53,7 +53,7 @@ openOMSI는 버스 시뮬레이터 **OMSI 2**를 Rust로 처음부터 다시 만
 2. 실행합니다.
    * **Windows:** `openomsi.exe`. SmartScreen이 경고하면 *추가 정보* → *실행*을 누릅니다.
    * **macOS:** `openOMSI.app`을 엽니다. 처음에는 우클릭 → *열기*가 필요할 수 있습니다.
-   * **Linux:** `./openomsi`. Vulkan 또는 OpenGL 드라이버가 필요합니다.
+   * **Linux:** K-OMSI 릴리스에는 Linux 판이 없습니다. 소스에서 직접 빌드하면 `./openomsi`로 실행합니다(Vulkan 또는 OpenGL 드라이버 필요).
 3. **OMSI 2 폴더를 지정합니다.** 런처가 대개 설치 위치를 자동으로 찾습니다. 못 찾으면 **Setup**에서
    `Omsi.exe`, `maps`, `Vehicles`가 들어 있는 OMSI 2 폴더를 고르고 **Save**를 누르세요.
    Steam 버전은 보통 `…\Steam\steamapps\common\OMSI 2`에 있습니다.
