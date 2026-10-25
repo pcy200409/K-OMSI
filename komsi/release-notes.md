@@ -1,4 +1,4 @@
-**K-OMSI** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.40을 바탕으로 K-OMSI 수정을 얹은 빌드입니다.
+**K-OMSI 0.4** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.41을 바탕으로 K-OMSI 수정을 얹은 빌드입니다. 이번부터 K-OMSI 버전은 0.4.x로 따로 매기고, 맵 편집기 [openMapper](https://github.com/openOMSI-org/openMapper) 0.1.5를 함께 넣었습니다.
 
 > **비공식 포크입니다.** K-OMSI는 공식 openOMSI(openOMSI.org)와 관계없는 독립 프로젝트이며, openOMSI의 이름·로고는 원작자의 것입니다([TRADEMARKS.md](https://github.com/pcy200409/K-OMSI/blob/release/TRADEMARKS.md)). 문제는 공식 저장소가 아니라 [K-OMSI 이슈](https://github.com/pcy200409/K-OMSI/issues)로 알려 주세요.
 >
@@ -14,13 +14,39 @@
 - **LAN 차량번호·번호판**: 멀티플레이에서 다른 플레이어의 버스가 그 플레이어 화면과 같은 차량번호와 번호판으로 보입니다.
 - **AI 차량 차선 변경 신호**: AI 차량이 다른 차선으로 옮기기 2초 전에 방향지시등을 켭니다(기존 1.2초).
 - **ReShade 호환**: 게임이 ReShade를 넣으면 창이 뜨기 전에 꺼지던 문제를 고쳤습니다(wgpu의 `IDXGIFactoryMedia` 생성 제거, Criisko/openOMSI 방식). ReShade는 `openomsi.exe`에 DirectX 10/11/12로 설치하세요.
-- **NVIDIA DLSS / DLAA (시험 기능)**: 설정 → 그래픽 → 안티에일리어싱 아래 **DLSS** 칸(끔·DLAA·품질·균형·성능·울트라 성능). 기본은 꺼짐입니다. Windows + DirectX 12(켜면 자동 선택) + GeForce RTX가 필요하고, NVIDIA Streamline의 `sl.interposer.dll`, `sl.common.dll`, `sl.dlss.dll`, `nvngx_dlss.dll`을 [Streamline SDK](https://github.com/NVIDIA-RTX/Streamline) `bin/x64`에서 받아 `openomsi.exe` 옆에 넣어야 합니다(NVIDIA 파일은 포함하지 않음). 없으면 이유를 로그에 남기고 평소대로 그립니다. openOMSI PR #942(Nussaccino)를 옮겨 온 것입니다.
+- **NVIDIA DLSS / DLAA (시험 기능)**: 설정 → 그래픽 → 안티에일리어싱 아래 **DLSS** 칸(끔·DLAA·품질·균형·성능·울트라 성능). 기본은 꺼짐입니다. Windows + DirectX 12(켜면 자동 선택) + GeForce RTX가 필요하고, NVIDIA Streamline의 `sl.interposer.dll`, `sl.common.dll`, `sl.dlss.dll`, `nvngx_dlss.dll`을 [Streamline SDK](https://github.com/NVIDIA-RTX/Streamline) `bin/x64`에서 받아 `openomsi.exe` 옆에 넣어야 합니다(NVIDIA 파일은 포함하지 않음). 없으면 이유를 로그에 남기고 평소대로 그립니다. openOMSI PR #942(Nussaccino)를 옮겨 온 것입니다. DLSS를 켜면 openOMSI 0.3.41의 FSR 1 대신 DLSS가 화면을 키웁니다.
 - **HTML 페이지 한글 글꼴 지정**: `openomsi.exe` 옆 `fonts/html_fallback.ttf`(굵은 글씨는 `html_fallback_bold.ttf`)가 있으면 HTML 페이지(정류장 안내기, 단말기 화면 등)의 한글을 그 글꼴로 그립니다(없으면 기존대로 맑은 고딕). 업데이트해도 이 파일은 지워지지 않습니다.
 - **하이거 Auto 화면 (시험 기능)**: 하이거 1611P 문 CCTV 화면을 눌러 여는 안드로이드 오토 풍 차량 화면입니다. 게임 도로 지도·노선·차량 위치, 다음 정류장 3곳과 운행표 시각, 정류장 접근·문 열림 표시, YouTube 링크 재생을 보여 줍니다. 설치된 Edge 또는 Chrome이 필요하고, 차량 옆에 `HigerHypers1611P.android-auto.cfg`(예시: `docs/examples/android-auto`)를 두어야 켜집니다. 자세한 내용과 한계: [docs/android-auto.md](https://github.com/pcy200409/K-OMSI/blob/release/docs/android-auto.md)
 - **맵 규칙 존중**: AI 차량의 희망 속도가 맵의 `[rule] speedlimit`을 넘지 않고(최대 제한속도의 100%), 보행자가 맵에서 `trafficdensity 0`으로 둔 보도는 갈 곳이 따로 없을 때가 아니면 걷지 않습니다.
 - **AI 버스 하차벨**: AI가 모는 버스에서 승객이 하차벨을 누르면 차량의 int_haltewunsch 트리거가 한 번 울립니다(기존에는 플레이어 버스만 해당).
 - **한국어 번역 보완**: 공식 번역에도 아직 없던 인터페이스 문구 977개(런처, 설정, 날씨, 컨트롤러, LAN 등)를 기계 번역으로 채웠습니다. 어색한 표현은 이슈로 알려 주세요.
+- **LAN 받은 모드 지우기 (새)**: 환경변수 `OMSI_CLEAR_LAN_STORE=1`을 두면, 남의 세션에 들어간 게임이 끝날 때와 다음 접속 전에 받아 온 모드 저장소(`~/.openomsi/lan-store`)를 지웁니다. 다음 접속 때는 다시 받습니다. 호스트·서버의 저장소는 건드리지 않습니다.
+- **OBIS 연동 (새)**: OBIS 클라이언트(`OBIS-client\OBIS-client.exe`)가 설치되어 있을 때만 켜집니다. 플러그인용 `omsi.ws`(OBIS 실시간 피드 `wss://obis.kr`만 읽기 전용으로 받음, 권한 `network_remote`)와 `omsi.obis`(내 버스를 OBIS로 보냄, 차량 설정 읽기·저장, OBIS 클라이언트의 노선 읽기)를 더했고, 동봉 플러그인 `komsi_obis`가 패널·노선 띠(세로/가로, 앞·뒤 차)·한글 다음 정류장과 남은 거리를 보여 줍니다. Ctrl+Shift+O로 통째로 켜고 끕니다. OBIS 데이터는 포함하지 않습니다.
+- **TACO 운행기록계 (새)**: Light-TACO(`OMSI2_Scheduler.exe`, OMSI Addon Patch 아래)가 설치되어 있을 때만 켜지는 동봉 플러그인 `komsi_taco`입니다. 게임 화면에 디지털 운행기록계 모양 패널(상태·속도·RPM·페달·주행거리·방향·G, 급출발·급가속 등 램프 8개)을 띄우고, 녹화는 플러그인 `data\rec\*.jsonl`에 적습니다. 채점·리포트는 하지 않고 외부 TACO 분석기가 이 파일을 읽습니다. Ctrl+Shift+T로 켜고 끕니다.
+- **C-ITS 경고 (새)**: 내비게이터의 속도 옆에 국내 차량용 C-ITS 단말기·단속 카메라 알림처럼 작은 배지를 띄웁니다. 앞 신호등의 현시와 바뀔 때까지 남은 초, 녹색에 맞춰 지날 수 있는 속도, 앞차와 간격이 너무 빨리 줄 때 추돌 경고, 급커브나 낮은 제한속도 앞에서 너무 빠를 때, 맵의 단속 카메라(1 km·500 m·300 m 전 안내, 구간 단속은 지금까지의 평균)를 알려 줍니다.
+- **openMapper 동봉 (새)**: Windows·Linux 묶음의 `openMapper` 폴더에 공식 [openMapper](https://github.com/openOMSI-org/openMapper) 0.1.5(AGPL-3.0, 도로 그리기·오브젝트 배치·지형 편집)를 그대로 넣었습니다. `openMapper\openmapper.exe`로 실행합니다. openMapper는 openOMSI 측 프로젝트이며 K-OMSI가 고치지 않았습니다. macOS 묶음에는 들어 있지 않습니다.
 
+
+## openOMSI 0.3.41 공식 변경사항 (요약)
+
+0.3.40 이후 main에 들어온 변경입니다(공식 CHANGELOG 'Unreleased'에 새로 추가된 항목 기준 요약).
+
+### 새 기능
+- **철도 차량 물리**: 차량을 트램·지하철·열차로 나누고(`[rail_class]`, 집전화·무게로 추정), 선로 종류를 맵의 `openomsi-rail.cfg`·스플라인 이름(`tram_*`·`metro_*`·`rail_*`)·위치로 정합니다. 주행·공기·곡선 저항, 구배, 점착(젖은 레일·낙엽·눈·얼음)과 공전·활주, 트램 자기 레일 브레이크로 달립니다. 팬터그래프를 올려야 달리고 Shift+P로 올리고 내립니다. 곡선 반경에 맞춰 선로 제한속도를 낮추고, 모드 대차(Tatra T6B5 등)의 위치와 곡선에서 차량이 몇 cm씩 튀던 문제를 고쳤습니다([docs/RAIL.md](https://github.com/pcy200409/K-OMSI/blob/release/docs/RAIL.md)).
+- **사실적 도로 물리 (새 설정, 기본 꺼짐)**: 바람이 버스를 기울이고 밀며, 공기 밀도로 저항이 바뀌고, 타이어마다 노면(포석·흙·풀·자갈·눈, 젖음/마름)에 따른 그립·구름저항, ISO 8608에 따른 노면 요철, 슬립각 기반 타이어 횡력이 들어갑니다. 철도에서는 팬터그래프가 가선에 실제로 닿고 이선 시 아크가 나며(`Panto_*` 변수), 차체가 스프링 위에서 흔들립니다(`rail_body_*` 변수). 기존 트롤리버스는 스크립트 견인을 그대로 씁니다.
+- **모든 조명이 그림자를 냄** (Enhanced·Enhanced+): 그림자를 내는 조명이 4개에서 44개로 늘었습니다(거리 조명 20, 전조등 8, 차내등 16). 손잡이·좌석이 차내 바닥과 패널에 그림자를 드리웁니다. `OMSI_NO_CABIN_SHADOWS=1`로 차내 그림자를 끕니다. Enhanced 모드의 거울에도 햇빛 그림자가 보입니다.
+- **날씨와 빛 (Enhanced)**: 어두운 운전석·지하차도에서 눈이 사람처럼 적응하고, 거리 규모(18 m)의 하늘 가림과 반사광이 들어갔습니다(설정 Street light, 기본 꺼짐). 구름 물리를 보강했고, 뇌우에는 번개와 거리만큼 늦게 들리는 천둥이 생겼습니다. 집·나무 사이 햇살 줄기를 420 m까지 계산합니다.
+- **런처**: 도움말에 문제 해결(Troubleshooting) 페이지가 생겨 설치된 콘텐츠의 문제를 버스·팩별로 보여 줍니다. 모델 테스트는 그 두 번째 탭으로 옮겨졌습니다. 시간표 편집기가 지도 위에서 동작하고(정류장을 눌러 새 운행을 만들어 `.ttp`로 저장), 노선 미리보기가 두 줄로 겹치던 문제를 고쳤으며, 대문자 표기를 없앴습니다.
+- **기타**: Tobii 시선 추적기로 opentrack 없이 머리 추적을 지원하고, 다른 사람이 만든 openOMSI 애드온 링크 목록(Add-ons) 페이지가 생겼습니다.
+
+### 수정
+- Enhanced에서 행선 표시기가 밤에 켜집니다(Krueger 매트릭스를 유리로 보던 문제, #2927).
+- 런던 노면 표시와 빨간 버스차로가 카메라를 움직일 때 깜박이지 않습니다(#2853).
+- 도색의 `[setvar]`가 스크립트가 매 프레임 쓰는 값보다 우선합니다(#3183).
+- 모델이 요구한 `.dds`가 없으면 OMSI처럼 없는 것으로 보고 `.bmp` 등으로 대신하지 않습니다(MAN DN95가 거울처럼 보이던 문제).
+- Enhanced의 낮 프레임이 가벼워졌고(AI 차량 전조등을 어두울 때만), AI 차량에 LOD를 적용하며, 운행표 버스가 처음 나타날 때 120~300 ms 멈추던 문제를 고쳤습니다.
+- 먼 조명 때문에 눈·지면이 주황색으로 빛나던 문제(Enhanced), 트롤리버스 집전봉이 분기점에서 이탈하던 문제를 고쳤습니다.
+- DirectX 12·Vulkan에서 30분쯤 지나면 프레임이 무너지던 비디오 메모리 단편화 문제를 고쳤습니다(#2295).
 
 ## openOMSI 0.3.40 공식 변경 (요약)
 
