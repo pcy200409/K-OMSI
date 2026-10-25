@@ -325,7 +325,16 @@ impl PeopleSim {
                                 || !bn.cabin.entries.iter().any(|door| door.point.is_some()
                                     && door.group == seat.group && entry_on_platform(side, door.side))
                         }).collect();
-                        if let Some(k) = self.reserve_place(bn.id, &bn.cabin.seats, &off) {
+                        // (K-OMSI: the place by the ride, the age and the doors)
+                        let here = bn.to_local(p.pos);
+                        let entry = bn.cabin.entries.iter().map(|d| d.inside).min_by(|a, b| (*a - here).length().total_cmp(&(*b - here).length()));
+                        let rider = super::place_choice::Rider {
+                            ride_km: p.ride_km,
+                            age: self.people[i].age,
+                            entry,
+                            exits: bn.cabin.exits.iter().map(|d| d.inside).collect(),
+                        };
+                        if let Some(k) = self.reserve_place_for(bn.id, &bn.cabin.seats, &off, &rider) {
                             let (tk, id) = self.decide_pax_ticket(i, bn);
                             let price = self.tickets.as_ref().and_then(|t| t.tickets.get(id.saturating_sub(1) as usize)).map(|t| t.value).unwrap_or(0.0);
                             self.pax_mut(i).unwrap().seat = Some(k);
