@@ -309,6 +309,9 @@ pub fn run() -> Result<()> {
     let r = event_loop.run_app(&mut app);
     // the host's mods of this session go with it
     lan_mods::clean_up();
+    if app.args.lan_join.is_some() && app.args.server.is_none() {
+        lan_mods::clear_store();
+    }
     r?;
     Ok(())
 }
@@ -514,6 +517,10 @@ pub(crate) fn make_app(mut args: Args, server_cfg: Option<server::ServerCfg>) ->
     // the host's mods: served by the host, fetched by a joining player before its world is
     // made (see `lan_mods`)
     lan_mods::remove_stale();
+    // (a game that ended without cleaning up left its store: a joining game clears it first)
+    if args.lan_join.is_some() && args.server.is_none() {
+        lan_mods::clear_store();
+    }
     if let Some(l) = lan.as_mut() {
         let mut c = args.lan_config();
         lan::share_mods(&mut c, l);
