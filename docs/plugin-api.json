@@ -2402,6 +2402,22 @@
       "permission": "ui"
     },
     {
+      "name": "obis.map_names",
+      "group": "network",
+      "since": "0.2.22",
+      "doc": "A map's stop names as the OBIS client has them: the map's name of a stop -> the Korean one (its `maps\\<map>\\map.json`). `map` is a route's `map` of `obis.routes`. `nil` without the OBIS client or the map.",
+      "params": [
+        {
+          "name": "map",
+          "type": "string",
+          "optional": false
+        }
+      ],
+      "returns": "table or nil",
+      "multi": false,
+      "permission": "network_remote"
+    },
+    {
       "name": "obis.prefs",
       "group": "network",
       "since": "0.2.22",
