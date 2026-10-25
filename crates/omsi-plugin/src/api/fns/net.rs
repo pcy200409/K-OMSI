@@ -237,6 +237,33 @@ fn build_route_index(dir: &std::path::Path) -> Value {
     ])
 }
 
+/// A map's stop names as the OBIS client has them (`maps/<map>/map.json`, its `stations`:
+/// the map's name of a stop -> the Korean one): the folder named so, or the one whose
+/// `mapId` it is.
+fn map_names(map: &str) -> Value {
+    let Some(dir) = obis_client_dir() else { return Value::Nil };
+    let read = |p: &std::path::Path| -> Option<Vec<(String, Value)>> {
+        match crate::api::json::decode(&std::fs::read_to_string(p).ok()?, false).ok()? {
+            Value::Map(m) => Some(m),
+            _ => None,
+        }
+    };
+    let maps = dir.join("maps");
+    let mut found = None;
+    if !map.contains(['/', '\\', ':']) && !map.contains("..") {
+        found = read(&maps.join(map).join("map.json"));
+    }
+    if found.is_none() {
+        found = std::fs::read_dir(&maps).ok().and_then(|rd| {
+            rd.flatten().filter_map(|d| read(&d.path().join("map.json"))).find(|m| matches!(field(m, "mapId"), Some(Value::Str(id)) if id == map))
+        });
+    }
+    match found.and_then(|m| field(&m, "stations").cloned()) {
+        Some(v @ Value::Map(_)) => v,
+        _ => Value::Nil,
+    }
+}
+
 /// The index, read on a worker the first time it is asked for (`nil` until it is there).
 fn route_index() -> Value {
     static INDEX: Mutex<Option<Option<Value>>> = Mutex::new(None);
@@ -667,6 +694,10 @@ pub static FNS: &[ApiFn] = &[
         let name = a.str(0)?;
         let text = (has_original("obis") && route_file_ok(&name)).then(obis_client_dir).flatten().and_then(|d| std::fs::read_to_string(d.join("data/routes").join(&name)).ok());
         Ok::<_, ApiError>(text.map(Value::Str).unwrap_or(Value::Nil))
+    }),
+    def!("obis.map_names", "network", [p("map", "string")], "table or nil", "A map's stop names as the OBIS client has them: the map's name of a stop -> the Korean one (its `maps\\<map>\\map.json`). `map` is a route's `map` of `obis.routes`. `nil` without the OBIS client or the map.", NEW, NetworkRemote, false, |c, a| {
+        let map = a.str(0)?;
+        Ok::<_, ApiError>(if has_original("obis") { map_names(&map) } else { Value::Nil })
     }),
     def!("obis.prefs", "network", [], "table or nil", "The vehicle settings OBIS has for this device, as the OBIS client's \"차량 설정\" shows them: `nickname`, `crowdType` (`\"seat\"`, `\"stand\"`), `seatCapacity` (1 to 80), `showStandCrowd`, `lowFloor`, `vehicleBody` (`\"normal\"`, `\"night\"`: the last bus). `nil` before they are read (after `obis.start`).", NEW, NetworkRemote, false, |c, a| {
         c.state().obis.prefs()
