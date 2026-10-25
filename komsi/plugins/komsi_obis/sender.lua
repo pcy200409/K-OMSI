@@ -267,6 +267,13 @@ function M.snapshot(g)
   return enc(snap), st.key
 end
 
+-- 이 trip 의 OBIS 맵 (노선 자료의 mapId: 'NCC' 등). 노선을 아직 모르면 nil
+function M.map_of(trip, sid)
+  local key = key_for_trip(trip, sid) or nil
+  local info = key and load_index().routes[key]
+  return info and info.map ~= "" and info.map or nil
+end
+
 M.NULL = NULL
 M.position_on_route = position_on_route
 M.key_for_trip = key_for_trip
