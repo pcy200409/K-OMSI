@@ -166,7 +166,7 @@ impl World {
                 let (lo, hi) = bands.iter().find(|b| b.0 == f.level).map_or((0.0, f32::MAX), |b| b.1);
                 let i = renderer.add_instance(scene, f.mesh, DVec3::ZERO, Mat4::IDENTITY, f.mats.clone());
                 renderer.set_omsi_caster(scene, i, f.casts);
-                renderer.set_roof(scene, i, vt.def.bounding_box.map(|b| b[5] + b[2] * 0.5));
+                renderer.set_roof(scene, i, vt.roof_height());
                 renderer.set_lod_range(scene, i, lo, hi);
                 far.push(gpu.instance(renderer, scene, i));
             }
