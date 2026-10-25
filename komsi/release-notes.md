@@ -24,7 +24,7 @@
 - **OBIS 연동 (새)**: OBIS 클라이언트(`OBIS-client\OBIS-client.exe`)가 설치되어 있을 때만 켜집니다. 플러그인용 `omsi.ws`(OBIS 실시간 피드 `wss://obis.kr`만 읽기 전용으로 받음, 권한 `network_remote`)와 `omsi.obis`(내 버스를 OBIS로 보냄, 차량 설정 읽기·저장, OBIS 클라이언트의 노선 읽기)를 더했고, 동봉 플러그인 `komsi_obis`가 패널·노선 띠(세로/가로, 앞·뒤 차)·한글 다음 정류장과 남은 거리를 보여 줍니다. Ctrl+Shift+O로 통째로 켜고 끕니다. OBIS 데이터는 포함하지 않습니다. (0.4.1: 한글 정류장명이 같은 영문 이름을 쓰는 다른 맵의 이름과 섞이던 문제를 고쳤습니다. 이제 지금 노선의 OBIS 맵 이름만 씁니다. 예: 173번 첫 정류장 센텀버스환승센터)
 - **TACO 운행기록계 (새)**: Light-TACO(`OMSI2_Scheduler.exe`, OMSI Addon Patch 아래)가 설치되어 있을 때만 켜지는 동봉 플러그인 `komsi_taco`입니다. 게임 화면에 디지털 운행기록계 모양 패널(상태·속도·RPM·페달·주행거리·방향·G, 급출발·급가속 등 램프 8개)을 띄우고, 녹화는 플러그인 `data\rec\*.jsonl`에 적습니다. 채점·리포트는 하지 않고 외부 TACO 분석기가 이 파일을 읽습니다. Ctrl+Shift+T로 켜고 끕니다.
 - **C-ITS 경고 (새)**: 내비게이터의 속도 옆에 국내 차량용 C-ITS 단말기·단속 카메라 알림처럼 작은 배지를 띄웁니다. 앞 신호등의 현시와 바뀔 때까지 남은 초, 녹색에 맞춰 지날 수 있는 속도, 앞차와 간격이 너무 빨리 줄 때 추돌 경고, 급커브나 낮은 제한속도 앞에서 너무 빠를 때, 맵의 단속 카메라(1 km·500 m·300 m 전 안내, 구간 단속은 지금까지의 평균)를 알려 줍니다.
-- **openMapper 동봉 (새)**: Windows·Linux 묶음의 `openMapper` 폴더에 공식 [openMapper](https://github.com/openOMSI-org/openMapper) 0.1.5(AGPL-3.0, 도로 그리기·오브젝트 배치·지형 편집)를 그대로 넣었습니다. `openMapper\openmapper.exe`로 실행합니다. openMapper는 openOMSI 측 프로젝트이며 K-OMSI가 고치지 않았습니다. macOS 묶음에는 들어 있지 않습니다.
+- **openMapper 동봉 (새)**: Windows 묶음의 `openMapper` 폴더에 공식 [openMapper](https://github.com/openOMSI-org/openMapper) 0.1.5(AGPL-3.0, 도로 그리기·오브젝트 배치·지형 편집)를 그대로 넣었습니다. `openMapper\openmapper.exe`로 실행합니다. openMapper는 openOMSI 측 프로젝트이며 K-OMSI가 고치지 않았습니다. macOS 묶음에는 들어 있지 않습니다.
 
 
 ## openOMSI 0.3.41 공식 변경사항 (요약)
@@ -193,8 +193,9 @@
 | Windows x64 | `openOMSI-<버전>-windows-x64.zip` (`openomsi.exe` 실행) |
 | Windows ARM64 | `openOMSI-<버전>-windows-arm64.zip` |
 | macOS (Apple silicon / Intel) | `-macos-arm64.zip` / `-macos-x64.zip` |
-| Linux x64 / ARM64 | `-linux-x64.zip` / `-linux-arm64.zip` |
 | Android (arm64, 8.0+) | `-android-arm64.apk` |
-| 전용 서버 | `-server-linux-x64.zip`, `-server-linux-arm64.zip`, `-server-windows-x64.zip`, `-server-windows-arm64.zip` |
+| 전용 서버 | `-server-windows-x64.zip`, `-server-windows-arm64.zip` |
 
+> K-OMSI는 Linux 판(게임·전용 서버)을 만들지 않습니다. Linux에서는 소스로 직접 빌드해 주세요.
+>
 > 파일 이름이 `openOMSI-…`로 되어 있는 것은 자동 업데이트가 이 이름 형식으로 파일을 찾기 때문입니다.
