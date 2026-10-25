@@ -543,7 +543,20 @@ pub(crate) fn dress_lighting(
     inside: Option<&omsi_sim::VehicleInstance>,
     settings: &crate::settings::Settings,
 ) {
-    lighting.inside = inside.and_then(|v| v.ty.def.bounding_box.map(|bb| (v.position, v.heading, bb)));
+    // (the box's top comes down to the body's roof when the `[boundingbox]` stands above it:
+    // the shaders take what lies within 0.35 m under the box's top for the roof's skin, and
+    // with a box 0.8 m too high the bus' own roof was "inside" and kept no snow nor rain;
+    // the bottom edge stays where it was)
+    lighting.inside = inside.and_then(|v| {
+        v.ty.def.bounding_box.map(|mut bb| {
+            let bottom = bb[5] - bb[2] * 0.5;
+            if let Some(roof) = v.ty.roof_height().filter(|r| *r > bottom + 1.0 && *r < bb[5] + bb[2] * 0.5) {
+                bb[2] = roof - bottom;
+                bb[5] = bottom + bb[2] * 0.5;
+            }
+            (v.position, v.heading, bb)
+        })
+    });
     lighting.inside_rotation = inside.filter(|v| v.ty.def.bounding_box.is_some()).map(|v| v.body_rotation());
     let puddle_surface = lighting.inside.and_then(|(o, _, _)| world.and_then(|w| w.puddle_surface(o)));
     lighting.puddle_ground = puddle_surface.map(|(h, _)| h);
