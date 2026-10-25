@@ -255,6 +255,9 @@ pub struct Scene {
     /// The object whose meshes are being added, for `Instance::slot_levels`.
     pub(crate) object_run: overlay::ObjectRun,
     pub(crate) uploaded_entries: u32,
+    /// Counts the times every entry was laid out anew (`prepare`): last frame's matrices of
+    /// an entry are only its own while this stays (DLSS's motion vectors).
+    pub(crate) model_epoch: u64,
     /// Instances whose transform or parameters changed since the last `prepare`: only
     /// their entries are rewritten. Rebuilding the whole per-draw buffer for 17 000 objects
     /// because one bus moved was the biggest single CPU cost of a frame.

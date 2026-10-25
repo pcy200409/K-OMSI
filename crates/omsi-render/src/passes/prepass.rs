@@ -5,7 +5,7 @@ use super::*;
 
 impl Renderer {
     // --- depth prepass + ambient occlusion (single-sampled, camera projection)
-    pub(crate) fn encode_depth_prepass(&self, prepass_encoder: &mut wgpu::CommandEncoder, scene: &Scene, f: &FrameCtx, prepass_batches: &[Batch], timers: &mut PassTimers) {
+    pub(crate) fn encode_depth_prepass(&self, prepass_encoder: &mut wgpu::CommandEncoder, scene: &Scene, f: &FrameCtx, prepass_batches: &[Batch], rain_batches: &[Batch], timers: &mut PassTimers) {
         let (camera, aspect, width, height, ao_on) = (f.camera, f.aspect, f.width, f.height, f.ao_on);
         if f.prepass_on {
             let proj = f.projection.unwrap_or_else(|| {
@@ -28,10 +28,12 @@ impl Renderer {
             self.queue
                 .write_buffer(&self.ao_buf, 0, bytemuck::bytes_of(&u));
             let ao = self.targets.ao.as_ref().unwrap();
+            // DLSS: the prepass writes each pixel's motion beside its depth
+            let dlss_colors = self.dlss_prepass_targets(f);
             {
                 let mut pass = prepass_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("depth prepass"),
-                    color_attachments: &[],
+                    color_attachments: dlss_colors.as_ref().map_or(&[][..], |c| &c[..]),
                     depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                         view: &ao.depth_view,
                         depth_ops: Some(wgpu::Operations {
@@ -44,10 +46,12 @@ impl Renderer {
                     occlusion_query_set: None,
                     multiview_mask: None,
                 });
-                pass.set_bind_group(0, scene.camera_bind_group.as_ref().unwrap(), &[]);
-                encode_batches(&mut pass, scene, prepass_batches, |pipe| {
-                    &self.prepass_pipelines[pipe as usize]
-                });
+                if !self.encode_dlss_prepass(&mut pass, scene, f, prepass_batches, rain_batches) {
+                    pass.set_bind_group(0, scene.camera_bind_group.as_ref().unwrap(), &[]);
+                    encode_batches(&mut pass, scene, prepass_batches, |pipe| {
+                        &self.prepass_pipelines[pipe as usize]
+                    });
+                }
             }
             for (pipe, bg, target, pass_label) in [
                 (if ao.bounce { &self.ssao_pipeline } else { &self.plain_ssao_pipeline }, &ao.ssao_bg, &ao.ao_view, "ssao"),
