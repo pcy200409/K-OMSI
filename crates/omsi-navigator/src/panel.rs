@@ -286,6 +286,7 @@ impl Navigator {
         let units = omsi_ui::units::Units::now();
         // --- top left: the next turn, or the street the bus is on
         let mut left_w = 0.0;
+        let mut left_h = 0.0;
         if let Some((dir, angle, dist, street)) = self.next_turn.clone() {
             let icon = match dir {
                 2 => "u_turn_left",
@@ -312,6 +313,7 @@ impl Navigator {
                 ui.text_in(&mut self.atlas, &self.fonts, n, 12.0 * s, Weight::Medium, Rect::new(tx, b.y + 30.0 * s, w - 54.0 * s, 18.0 * s), Align::Left, BANNER_DIM);
             }
             left_w = w;
+            left_h = h;
         } else if let Some(n) = self.street_here.clone() {
             let px = 12.5 * s;
             let n = self.fonts.fit(&n, px, Weight::Bold, map.w * 0.55);
@@ -322,6 +324,7 @@ impl Navigator {
             ui.icon(&mut self.atlas, "straight", Vec2::new(b.x + 14.0 * s, b.center().y), 16.0 * s, BANNER_TEXT);
             ui.text_in(&mut self.atlas, &self.fonts, &n, px, Weight::Bold, Rect::new(b.x + 26.0 * s, b.y, w - 28.0 * s, b.h), Align::Left, BANNER_TEXT);
             left_w = w;
+            left_h = b.h;
         }
         // --- top right: the time, the day and the temperatures (and the line)
         let hh = (f.time / 3600.0) as i32 % 24;
@@ -444,15 +447,102 @@ impl Navigator {
         let sp = format!("{speed:.0}");
         ui.text(&mut self.atlas, &self.fonts, &sp, 17.0 * s, Weight::Bold, Vec2::new(c.x, c.y + 3.0 * s), Align::Center, if over { style::TRAFFIC[2] } else { pal.card_text });
         ui.text(&mut self.atlas, &self.fonts, unit, 7.5 * s, Weight::Medium, Vec2::new(c.x, c.y + 12.0 * s), Align::Center, pal.card_dim);
-        if let Some(v) = limit {
+        // the limit beside it: the camera's ahead, with a small red tab of the distance (the
+        // average so far through an average speed check), flashing red while too fast
+        let cam = self.cits.camera.clone();
+        let avg = self.cits.average;
+        let blink = self.cits.blink();
+        let sign = cam.as_ref().and_then(|c| c.limit).or(avg.and_then(|a| a.limit)).or(limit);
+        if let Some(v) = sign {
+            let tab = cam
+                .as_ref()
+                .map(|c| {
+                    let d = units.distance(c.dist);
+                    (c.tag.map(|t| format!("{} {d}", omsi_ui::tr(t))).unwrap_or(d), c.flash)
+                })
+                .or_else(|| avg.map(|a| (format!("{} {:.0}", omsi_ui::tr("Average"), units.speed(a.kmh).0), a.over)));
             let lc = Vec2::new(c.x + r * 2.0 + 2.0 * s, c.y);
             let lr = 15.0 * s;
-            ui.circle(lc, lr, Color::rgba(214, 38, 38, 1.0));
-            ui.circle(lc, lr * 0.78, Color::WHITE);
+            let red = Color::rgba(214, 38, 38, 1.0);
+            let lit = tab.as_ref().is_some_and(|t| t.1) && blink;
+            ui.circle(lc, lr, red);
+            ui.circle(lc, lr * 0.78, if lit { red } else { Color::WHITE });
             let t = format!("{:.0}", units.speed_limit(v));
             let px = if t.len() > 2 { 9.5 } else { 12.0 } * s;
-            ui.text(&mut self.atlas, &self.fonts, &t, px, Weight::Black, Vec2::new(lc.x, lc.y + self.fonts.cap_height(px, Weight::Black) * 0.5), Align::Center, Color::rgba(15, 15, 15, 1.0));
+            ui.text(&mut self.atlas, &self.fonts, &t, px, Weight::Black, Vec2::new(lc.x, lc.y + self.fonts.cap_height(px, Weight::Black) * 0.5), Align::Center, if lit { Color::WHITE } else { Color::rgba(15, 15, 15, 1.0) });
+            if let Some((text, _)) = tab {
+                let px = 9.5 * s;
+                let w = self.fonts.width(&text, px, Weight::Bold) + 10.0 * s;
+                let b = Rect::new(lc.x - w * 0.5, lc.y + lr - 3.0 * s, w, 13.0 * s);
+                ui.rounded(b, 3.0 * s, red);
+                ui.text_in(&mut self.atlas, &self.fonts, &text, px, Weight::Bold, b, Align::Center, Color::WHITE);
+            }
         }
+        self.draw_cits_signal(ui, map, pad, s, pal);
+        self.draw_cits_band(ui, map, pad, left_h, s, pal);
+    }
+
+    /// The traffic light ahead in a card under the clock: its three lamps (the one lit in
+    /// its colour), the seconds to its next change, and the advised speed or to stop under them.
+    fn draw_cits_signal(&mut self, ui: &mut Painter, map: Rect, pad: f32, s: f32, pal: &Palette) {
+        use omsi_sim::traffic::Aspect;
+        let Some(l) = self.cits.light.clone() else { return };
+        let red = Color::rgba(222, 44, 40, 1.0);
+        let amber = Color::rgba(232, 150, 0, 1.0);
+        let green = Color::rgba(34, 160, 74, 1.0);
+        let off = pal.card_dim.alpha(0.25);
+        let (r_on, y_on, g_on) = match l.aspect {
+            Aspect::Red => (true, false, false),
+            Aspect::RedYellow => (true, true, false),
+            Aspect::Yellow => (false, true, false),
+            Aspect::Green => (false, false, true),
+            Aspect::GreenYellow => (false, true, true),
+            Aspect::Dark => (false, false, false),
+        };
+        let lit = if g_on { green } else if y_on { amber } else { red };
+        let alarm = l.advice == cits::LightAdvice::Violation && self.cits.blink();
+        let secs = l.secs.map(|n| n.to_string()).unwrap_or_default();
+        let px = 14.0 * s;
+        let lamp = 5.0 * s;
+        let lamps_w = 3.0 * lamp * 2.0 + 2.0 * 3.0 * s;
+        let tw = if secs.is_empty() { 0.0 } else { self.fonts.width(&secs, px, Weight::Bold) + 6.0 * s };
+        let note_px = 10.5 * s;
+        let nw = l.note.as_deref().map(|n| self.fonts.width(n, note_px, Weight::Medium)).unwrap_or(0.0);
+        let w = (lamps_w + tw).max(nw) + 20.0 * s;
+        let h = if l.note.is_some() { 40.0 } else { 26.0 } * s;
+        let b = Rect::new(map.right() - pad - w, map.y + pad + 46.0 * s, w, h);
+        ui.shadow(b, 12.0 * s, 6.0 * s, Color::rgba(0, 0, 0, 0.12));
+        ui.rounded(b, 12.0 * s, if alarm { red } else { pal.card });
+        let row = b.y + 13.0 * s;
+        let mut x = b.right() - 10.0 * s - tw - lamps_w + lamp;
+        for (on, col) in [(r_on, red), (y_on, amber), (g_on, green)] {
+            ui.circle(Vec2::new(x, row), lamp, if alarm { Color::WHITE.alpha(if on { 1.0 } else { 0.35 }) } else if on { col } else { off });
+            x += lamp * 2.0 + 3.0 * s;
+        }
+        if !secs.is_empty() {
+            ui.text_in(&mut self.atlas, &self.fonts, &secs, px, Weight::Bold, Rect::new(b.right() - 10.0 * s - tw + 6.0 * s, b.y, tw, 26.0 * s), Align::Left, if alarm { Color::WHITE } else { lit });
+        }
+        if let Some(note) = l.note.as_deref() {
+            let col = if alarm { Color::WHITE } else if l.advice == cits::LightAdvice::Stop { amber } else { pal.card_dim };
+            ui.text(&mut self.atlas, &self.fonts, note, note_px, Weight::Medium, Vec2::new(b.right() - 10.0 * s, b.y + 33.0 * s), Align::Right, col);
+        }
+    }
+
+    /// The most urgent other warning (the car ahead, a red light it cannot stop for, a sharp
+    /// curve, a lower limit) in a card under the turn; red and flashing for a danger, nothing
+    /// while all is well.
+    fn draw_cits_band(&mut self, ui: &mut Painter, map: Rect, pad: f32, below: f32, s: f32, pal: &Palette) {
+        let Some(a) = self.cits.alerts.first().cloned() else { return };
+        let alarm = a.level == cits::Level::Danger && (!a.flash || self.cits.blink());
+        let red = Color::rgba(214, 38, 38, 1.0);
+        let px = 12.0 * s;
+        let text = self.fonts.fit(&a.text, px, Weight::Bold, map.w * 0.55);
+        let w = self.fonts.width(&text, px, Weight::Bold) + 38.0 * s;
+        let b = Rect::new(map.x + pad, map.y + pad + below + 6.0 * s, w, 26.0 * s);
+        ui.shadow(b, 12.0 * s, 6.0 * s, Color::rgba(0, 0, 0, 0.12));
+        ui.rounded(b, 12.0 * s, if alarm { red } else { pal.card });
+        ui.icon(&mut self.atlas, a.icon, Vec2::new(b.x + 15.0 * s, b.center().y), 16.0 * s, if alarm { Color::WHITE } else { a.icon_color });
+        ui.text_in(&mut self.atlas, &self.fonts, &text, px, Weight::Bold, Rect::new(b.x + 28.0 * s, b.y, w - 32.0 * s, b.h), Align::Left, if alarm { Color::WHITE } else { pal.card_text });
     }
 
     /// The next stops with their planned and expected times, under the map.
