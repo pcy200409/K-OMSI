@@ -62,18 +62,32 @@ local function base_name(n)
   return r:lower()
 end
 
-local function pick_obis_names(names, trip)
-  if obis_picked == trip then return end
-  obis_picked = trip
+-- 한글 정류장명은 지금 trip 의 OBIS 맵 하나에서만 (여러 맵을 섞으면 같은 영문명의 개인 맵
+-- 'NCC(A)' 이름 '센텀광역환승센터'가 'NCC' 의 '센텀버스환승센터' 자리에 들어갔음, 2026-10-25)
+-- 맵 = OBIS Client 노선 자료로 맞춘 노선의 mapId. 이름표 = Client 의 maps\<맵>\map.json, 없는 건 obis_names_ko.json
+local my_map = nil
+
+local function pick_obis_names(names, trip, sid)
+  local map = sender and sender.map_of(trip, sid) or nil
+  local key = trip .. "|" .. tostring(map)
+  if obis_picked == key then return end
+  obis_picked = key
   obis_use, obis_base = {}, {}
-  local ranked, top = {}, 0
-  for _, m in pairs(obis_maps) do
-    local hit = 0
-    for _, n in ipairs(names) do if m[n] then hit = hit + 1 end end
-    if hit > 0 then ranked[#ranked + 1] = { m = m, n = hit }; if hit > top then top = hit end end
+  if not map then
+    -- (노선을 아직 모를 때: 이름이 가장 많이 맞는 맵 하나, 같으면 이름이 짧은 쪽 = 원래 맵)
+    local best, top = nil, 0
+    for mid, m in pairs(obis_maps) do
+      local hit = 0
+      for _, n in ipairs(names) do if m[n] then hit = hit + 1 end end
+      if hit > top or (hit == top and hit > 0 and best and #mid < #best) then best, top = mid, hit end
+    end
+    map = best
   end
-  for _, r in ipairs(ranked) do
-    if r.n >= math.min(30, top) then for k, v in pairs(r.m) do obis_use[k] = v end end
+  my_map = map
+  if map then
+    local client = omsi.obis and omsi.obis.map_names and omsi.obis.map_names(map)
+    if type(client) == "table" then for k, v in pairs(client) do obis_use[k] = v end end
+    for k, v in pairs(obis_maps[map] or {}) do if obis_use[k] == nil then obis_use[k] = v end end
   end
   for k, v in pairs(obis_use) do
     local b = base_name(k)
@@ -85,7 +99,8 @@ local function stop_name(id, name)
   name = name or ""
   local k = ko[name]
   if k and k:match("%S") then return k end
-  if obis_ko[id] then return obis_ko[id] end
+  local live = my_map and obis_ko[my_map]
+  if live and live[id] then return live[id] end
   return obis_use[trim(name)] or obis_base[base_name(name)] or name
 end
 
@@ -120,6 +135,7 @@ local function take(text)
         at = truthy(lp.schedAtStation),
         age = tonumber(b.ageMs) or 0,
         got = omsi.util.ms(),
+        map = rt.mapId and tostring(rt.mapId) or nil,
       }
       if type(rt.stations) == "table" then
         local names = {}
@@ -127,8 +143,9 @@ local function take(text)
         for _, s in ipairs(rt.stations) do
           local sid = math.floor(tonumber(s.id) or 0)
           names[sid] = has_hangul(s.name_ko) and s.name_ko or s.name
-          if has_hangul(s.name_ko) then
-            obis_ko[math.floor(tonumber(s.id) or 0)] = s.name_ko
+          if has_hangul(s.name_ko) and rt.mapId then
+            obis_ko[rt.mapId] = obis_ko[rt.mapId] or {}
+            obis_ko[rt.mapId][sid] = s.name_ko
             list[#list].names = list[#list].names or {}
             list[#list].names[math.floor(tonumber(s.id) or 0)] = s.name_ko
           end
@@ -159,7 +176,7 @@ local function my_state()
   if type(stops) ~= "table" or #stops < 2 then return nil end
   local names = {}
   for i, s in ipairs(stops) do names[i] = s.name end
-  pick_obis_names(names, duty.trip_name or "")
+  pick_obis_names(names, duty.trip_name or "", duty.next_stop.id)
   local bx, by = omsi.position()
   local ns = duty.next_stop
   local dist = (bx and ns.x) and math.sqrt((bx - ns.x) ^ 2 + (by - ns.y) ^ 2) or 0
@@ -375,7 +392,8 @@ local function refresh_panel(me, mine)
     if fresh(b) and #rows < MAX_USERS then
       local me_row = b.id == my_id
       local raw = b.stnames and b.stnames[b.next_id]
-      local nm = raw and stop_name(b.next_id, raw) or obis_ko[b.next_id] or tostring(b.next_id)
+      -- (그 버스 노선의 한글명 → 같은 맵이면 내 맵 이름표 → 영문)
+      local nm = (b.names and b.names[b.next_id]) or (raw and b.map == my_map and stop_name(b.next_id, raw)) or raw or tostring(b.next_id)
       rows[#rows + 1] = {
         { text = (b.nick ~= "" and b.nick or "-") .. (me_row and " (나)" or ""), color = me_row and GREEN or nil },
         b.line ~= "" and b.line or "-", nm, b.at and "정차 중" or km(b.dist),
