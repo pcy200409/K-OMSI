@@ -792,7 +792,7 @@ impl World {
                     .unwrap_or(false);
                 renderer.set_omsi_caster(scene, i, casts);
                 // (the floor and seats under the roof stay out of the snow and the rain)
-                renderer.set_roof(scene, i, vt.def.bounding_box.map(|b| b[5] + b[2] * 0.5));
+                renderer.set_roof(scene, i, vt.roof_height());
                 i
             };
             instances.push(if key.is_some() {
