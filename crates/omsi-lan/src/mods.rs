@@ -697,6 +697,22 @@ pub fn clean_up() {
     }
 }
 
+/// With `OMSI_CLEAR_LAN_STORE` a joining game forgets what it fetched: the store goes, so the
+/// next join fetches again. Only a joining game calls it (a host's or a server's store holds
+/// the buses it serves).
+pub fn clear_store() {
+    if !omsi_cfg::flags::OMSI_CLEAR_LAN_STORE.is_set() {
+        return;
+    }
+    let Some(dir) = store_dir() else { return };
+    if dir.exists() {
+        match std::fs::remove_dir_all(&dir) {
+            Ok(()) => log::info!("LAN mods: the store of fetched mods was deleted (OMSI_CLEAR_LAN_STORE)"),
+            Err(e) => log::warn!("LAN mods: could not delete the store {}: {e}", dir.display()),
+        }
+    }
+}
+
 /// Free room on the disk `dir` is on (Windows too).
 fn free_space(dir: &Path) -> Option<u64> {
     store::free_space(dir)
