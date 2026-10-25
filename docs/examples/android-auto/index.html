@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>K-OMSI Auto</title>
+<style>
+body { margin:0; background:#0c141c; color:#edf5fa; font-size:20px; line-height:26px; }
+#header { height:34px; padding:12px 20px; background:#132430; }
+#brand { display:inline-block; width:65vw; color:#91d5ed; font-weight:bold; }
+#clock { display:inline-block; width:24vw; text-align:right; }
+.page { height:330px; padding:0px 16px; }
+#nav, #music { display:none; }
+.kicker { color:#91adc0; font-size:14px; line-height:20px; }
+.title { font-size:30px; line-height:36px; font-weight:bold; }
+.card { background:#1a2d3a; border-radius:18px; padding:16px; margin:12px 6px 0px 0px; }
+.wide { display:inline-block; width:55vw; height:258px; }
+.side { display:inline-block; width:30vw; height:258px; }
+#speed { font-size:62px; line-height:74px; color:#9de6ff; font-weight:bold; }
+#stop { font-size:30px; line-height:36px; height:76px; }
+#route { color:#9de6ff; font-size:24px; line-height:30px; }
+.muted { color:#9ab1c1; font-size:16px; line-height:24px; }
+.row { padding:7px 0px; font-size:19px; line-height:24px; }
+#current { color:#9de6ff; font-weight:bold; }
+#coordinates { font-size:15px; line-height:22px; }
+.btn { display:inline-block; padding:12px; margin:8px 6px 0px 0px; background:#32566d; border-radius:12px; font-size:18px; line-height:24px; }
+#track { font-size:28px; line-height:36px; height:84px; }
+#mediaStatus { height:44px; }
+#dock { height:50px; padding:10px 16px; background:#132430; }
+.tab { display:inline-block; width:20vw; padding:10px 0px; margin:0px 6px 0px 0px; text-align:center; border-radius:14px; color:#a8bdcb; background:#1c3342; }
+.active { background:#a4e4f5; color:#102430; font-weight:bold; }
+#camera { background:#334658; color:#ffffff; }
+</style></head><body>
+<div id="header"><span id="brand">K-OMSI AUTO</span><span id="clock">--:--</span></div>
+<div id="home" class="page">
+ <div class="card wide"><div class="kicker">NEXT STOP</div><div id="stop">No active route</div><div id="route">Select a duty or IBIS route</div><div id="destination" class="muted">--</div><div class="btn" id="openNav">Open route guide</div></div>
+ <div class="card side"><div class="kicker">SPEED · KM/H</div><div id="speed">0</div><div id="doors" class="muted">Doors closed</div><div id="homeMedia" class="muted">Vehicle audio</div><div class="btn" id="openMusic">Open music</div></div>
+</div>
+<div id="nav" class="page">
+ <div class="card wide"><div class="kicker">ROUTE GUIDE · STOP SEQUENCE</div><div id="navLine" class="title">No active route</div><div id="current" class="row">--</div><div id="following1" class="row">--</div><div id="following2" class="row">--</div><div id="schedule" class="muted">Timetable unavailable</div><div class="muted">Stop guide · road map not connected</div></div>
+ <div class="card side"><div class="kicker">VEHICLE POSITION</div><div id="heading" class="title">--</div><div id="coordinates" class="muted">World coordinates unavailable</div><div id="source" class="row">No route data</div><div id="delay" class="muted">--</div></div>
+</div>
+<div id="music" class="page">
+ <div class="card wide"><div class="kicker">VEHICLE AUDIO</div><div id="track">No media information</div><div id="mediaStatus" class="muted">Controls unavailable on this vehicle</div><div class="btn" id="power">Audio power</div><div class="btn" id="quieter">Volume -</div><div class="btn" id="louder">Volume +</div></div>
+ <div class="card side"><div class="kicker">VEHICLE PLAYLISTS</div><div class="btn" id="playlist1">Playlist 1</div><div class="btn" id="playlist2">Playlist 2</div><div class="btn" id="playlist3">Playlist 3</div><div class="muted">Uses installed vehicle audio files</div></div>
+</div>
+<div id="dock"><div class="tab active" id="tabHome">Home</div><div class="tab" id="tabNav">Navigate</div><div class="tab" id="tabMusic">Music</div><div class="tab" id="camera">CCTV</div></div>
+<script>
+var media = {};
+function text(id, value) { document.getElementById(id).textContent = value; }
+function show(page) {
+ document.getElementById('home').style.display = page == 'home' ? 'block' : 'none';
+ document.getElementById('nav').style.display = page == 'nav' ? 'block' : 'none';
+ document.getElementById('music').style.display = page == 'music' ? 'block' : 'none';
+ document.getElementById('tabHome').className = page == 'home' ? 'tab active' : 'tab';
+ document.getElementById('tabNav').className = page == 'nav' ? 'tab active' : 'tab';
+ document.getElementById('tabMusic').className = page == 'music' ? 'tab active' : 'tab';
+}
+document.getElementById('tabHome').onclick = function () { show('home'); };
+document.getElementById('tabNav').onclick = function () { show('nav'); };
+document.getElementById('tabMusic').onclick = function () { show('music'); };
+document.getElementById('openNav').onclick = function () { show('nav'); };
+document.getElementById('openMusic').onclick = function () { show('music'); };
+document.getElementById('camera').onclick = function () { omsi.setVar('k_omsi_android_auto', 0); };
+document.getElementById('power').onclick = function () { if (media.powerTrigger) omsi.trigger(media.powerTrigger); };
+function volume(delta) { if (media.volumeVar && media.volume != null) omsi.setVar(media.volumeVar, Math.max(0, Math.min(10, media.volume + delta))); }
+document.getElementById('quieter').onclick = function () { volume(-1); };
+document.getElementById('louder').onclick = function () { volume(1); };
+function playlist(i) { if (media.playlists && media.playlists[i]) omsi.trigger(media.playlists[i]); }
+document.getElementById('playlist1').onclick = function () { playlist(0); };
+document.getElementById('playlist2').onclick = function () { playlist(1); };
+document.getElementById('playlist3').onclick = function () { playlist(2); };
+omsi.update = function (d) {
+ var v = omsi.vehicle || {};
+ var motion = v.motion || {};
+ var route = v.route || {};
+ var info = v.info || {};
+ var current = route.current || {};
+ var vars = omsi.vars || {};
+ var n = vars.num || {};
+ var s = vars.str || {};
+ text('brand', s.k_omsi_browser_error ? 'K-OMSI AUTO · Browser unavailable' : 'K-OMSI AUTO');
+ var next = current.name || info.nextStop || s.act_busstop || '';
+ var line = route.line || info.route || s.act_route || '';
+ text('speed', Math.round(Math.abs(motion.speedKmh != null ? motion.speedKmh : n.velocity || 0)));
+ text('clock', omsi.time ? omsi.time.asString.slice(0, 5) : '--:--');
+ text('stop', next || 'No active route');
+ text('route', line || 'Select a duty or IBIS route');
+ text('destination', route.destination || '--');
+ text('navLine', line || 'No active route');
+ text('current', next ? 'NOW  ' + next : 'No stop selected');
+ var stops = route.stops || [];
+ var nextIndex = route.nextIndex != null ? route.nextIndex : -1;
+ if (nextIndex < 0 && next) {
+  for (var j = 0; j < stops.length; j++) { if (stops[j].name == next) { nextIndex = j; break; } }
+ }
+ var upcoming = [];
+ for (var i = 0; i < stops.length; i++) { if (nextIndex >= 0 && i > nextIndex && !stops[i].served) upcoming.push(stops[i]); }
+ text('following1', upcoming.length > 0 ? '01   ' + upcoming[0].name : 'No further stop data');
+ text('following2', upcoming.length > 1 ? '02   ' + upcoming[1].name : '');
+ text('schedule', current.arrival ? 'Scheduled arrival  ' + current.arrival : 'Timetable unavailable');
+ text('heading', motion.heading != null ? motion.heading.toFixed(0) + ' deg' : '--');
+ text('coordinates', motion.x != null && motion.y != null ? 'X  ' + motion.x.toFixed(1) + ' m   Y  ' + motion.y.toFixed(1) + ' m' : 'World coordinates unavailable');
+ text('source', route.source == 'timetable' ? 'Timetable route' : route.source == 'ibis' ? 'IBIS route' : 'No route data');
+ text('delay', route.delaySec != null && route.active ? 'Delay  ' + Math.round(route.delaySec) + ' s' : 'No timetable delay');
+ text('doors', v.doors && v.doors.anyOpen ? 'Doors open' : 'Doors closed');
+ media = v.media || {};
+ text('track', media.text || 'No media information');
+ text('homeMedia', media.text || 'Vehicle audio');
+ text('mediaStatus', media.powerTrigger ? (media.powered ? 'Audio on' : 'Audio off') + (media.volume != null ? ' · Volume ' + media.volume.toFixed(0) : '') : 'Controls unavailable on this vehicle');
+ document.getElementById('power').style.display = media.powerTrigger ? 'inline-block' : 'none';
+ document.getElementById('quieter').style.display = media.volumeVar ? 'inline-block' : 'none';
+ document.getElementById('louder').style.display = media.volumeVar ? 'inline-block' : 'none';
+ document.getElementById('playlist1').style.display = media.playlists && media.playlists[0] ? 'inline-block' : 'none';
+ document.getElementById('playlist2').style.display = media.playlists && media.playlists[1] ? 'inline-block' : 'none';
+ document.getElementById('playlist3').style.display = media.playlists && media.playlists[2] ? 'inline-block' : 'none';
+};
+</script></body></html>

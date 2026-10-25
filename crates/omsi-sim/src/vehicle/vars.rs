@@ -107,6 +107,11 @@ impl VehicleInstance {
     }
 
     pub fn trigger(&mut self, name: &str) -> bool {
+        if name.eq_ignore_ascii_case(android_auto::TOGGLE) {
+            if let Some(mode) = self.var(android_auto::MODE) {
+                return self.set_var(android_auto::MODE, if mode > 0.5 { 0.0 } else { 1.0 });
+            }
+        }
         let p = self.ty.program.clone();
         let rear_target_was_open = self.var("doorTarget_23").is_some_and(|target| target > 0.0);
         let rear_force_close_was_active = self.var("bdoor_embtn_cls").is_some_and(|close| close > 0.5);
