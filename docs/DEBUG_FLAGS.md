@@ -206,11 +206,16 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_NAV_PROBE` | text | - | use | mapdraw | x,y[,r]: the network lanes that start or end within r of that point. |
 | `OMSI_NAV_SCHEDULE` | bool | off | use | app | Navigation map shows the schedule. |
 | `OMSI_NO_MAP_CACHE` | bool | off | use | scene | Read the map's navigator layers (houses, ground, paving) again instead of from the cache. |
+| `OMSI_OBIS_CLIENT_DIR` | text | - | use | plugin | K-OMSI: the OBIS client's folder (the one with OBIS-client.exe), instead of looking for it under the OMSI folders. |
+| `OMSI_OBIS_INGEST_URL` | text | - | use | plugin | K-OMSI: another address the player's bus is sent to instead of OBIS (tests, a local stand-in). |
+| `OMSI_OBIS_PREFS_URL` | text | - | use | plugin | K-OMSI: another address of the OBIS vehicle settings (tests, a local stand-in). |
+| `OMSI_OBIS_TOKEN` | text | - | use | plugin | K-OMSI: the device token sent to OBIS instead of the OBIS client's own (tests). |
 | `OMSI_ONLY_MESH` | text | - | use | scene | a\|b: draw only the meshes whose file names contain one of the parts. |
 | `OMSI_ONLY_OBJECT` | text | - | use | scene | Load only the objects whose file name contains this text. |
 | `OMSI_ONLY_SURFACES` | bool | off | frame | render | Draw only the surfaces. |
 | `OMSI_ORBIT_DIST` | num | 18 | use | app | Offscreen: the outside camera's distance from the vehicle in metres. |
 | `OMSI_ORIGINAL` | text | - | test | sim | vehicle_vars example: the original OMSI folder. |
+| `OMSI_ORIGINALS` | text | - | use | plugin | K-OMSI: obis,taco - the originals taken as installed (or not, when left out) instead of looking for them. |
 | `OMSI_PAX_CAM` | num | - | use | app | Offscreen --view pax: the n-th passenger camera. |
 | `OMSI_PAX_CROSS` | text | - | use | sim | x,y: send pedestrians across the signalised crossing nearest that point. |
 | `OMSI_PAX_WAITING` | num | - | use | sim | Number of passengers waiting at each stop. |
