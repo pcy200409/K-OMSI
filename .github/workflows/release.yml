@@ -21,7 +21,7 @@ on:
         description: Platform to build and release alone
         type: choice
         default: all
-        options: [all, windows, macos, linux, android]
+        options: [all, windows, macos, android]
 
 concurrency:
   group: release-${{ github.event_name }}-${{ github.ref }}
@@ -291,7 +291,8 @@ jobs:
 
   linux:
     needs: version
-    if: ${{ !inputs.only || inputs.only == 'all' || inputs.only == 'linux' }}
+    # K-OMSI: no Linux builds (the user's decision, 2026-10-25); the release skips the job
+    if: false
     strategy:
       fail-fast: false
       matrix:
@@ -349,23 +350,6 @@ jobs:
         env:
           RUSTFLAGS: "-C linker=clang -C link-arg=-fuse-ld=lld"
         run: cargo test --locked --release -p omsi-render shaders_validate_and_match_the_uniforms
-      # K-OMSI: openMapper beside the game (see the Windows job)
-      - name: openMapper
-        env:
-          GH_TOKEN: ${{ github.token }}
-          OPENMAPPER_TAG: v0.1.5
-          OPENMAPPER_SHA256_X64: 4d28645f2c61bc4579a3148d513e0a739b44429c916fc20bd873d6650b70a0dc
-          OPENMAPPER_SHA256_ARM64: fb5d9b8666de86e195e812b459c6d8a74be364355082c8072433e690ff7436c8
-        run: |
-          ver="${OPENMAPPER_TAG#v}"
-          file="openMapper-$ver-linux-${{ matrix.arch }}.tar.gz"
-          gh release download "$OPENMAPPER_TAG" -R openOMSI-org/openMapper --pattern "$file" --pattern SHA256SUMS -D openmapper
-          want=$([ "${{ matrix.arch }}" = arm64 ] && echo "$OPENMAPPER_SHA256_ARM64" || echo "$OPENMAPPER_SHA256_X64")
-          echo "$want  openmapper/$file" | sha256sum -c -
-          (cd openmapper && grep " $file\$" SHA256SUMS | sha256sum -c -)
-          mkdir -p dist/linux/openMapper
-          tar -xzf "openmapper/$file" -C dist/linux/openMapper --strip-components=1
-          ls -la dist/linux/openMapper
       - name: Package
         run: |
           mkdir -p out
