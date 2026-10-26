@@ -17,3 +17,4 @@ patch/obis-taco
 patch/c-its
 patch/roof-snow
 patch/flood
+patch/weather
