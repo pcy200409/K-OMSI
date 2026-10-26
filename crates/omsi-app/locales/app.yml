@@ -97516,3 +97516,7 @@ _version: 2
   ko: "젖은 도로가 영하에서 얼어붙습니다. 다리·고가가 먼저, 나머지는 군데군데 얼고 타이어가 거의 미끄러집니다. 다른 차량도 속도를 줄입니다"
 "Black ice: the road is frozen here - the tyres hardly grip":
   ko: "블랙아이스: 이곳 노면이 얼어 있습니다. 타이어가 거의 미끄러집니다"
+"Potholes":
+  ko: "포트홀"
+"Holes in the paved roads that jolt the bus, more of them as the rain of the run adds up":
+  ko: "포장도로에 패인 구멍이 생겨 버스가 덜컹거립니다. 비가 많이 올수록 늘어납니다"

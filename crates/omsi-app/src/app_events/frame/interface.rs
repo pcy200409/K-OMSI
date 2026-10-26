@@ -36,6 +36,9 @@ impl App {
         // the water over the flooded low ground (`OMSI_FLOOD`)
         if let (Some(w), Some(r), Some(scene)) = (self.world.as_ref(), self.renderer.as_ref(), self.scene.as_mut()) {
             self.gfx.flood_water.sync(w, r, scene, &self.session.flood.flood);
+            if let Some(cam) = self.camera.as_ref() {
+                self.gfx.pothole_view.sync(w, r, scene, cam.position, self.session.potholes.field.as_deref());
+            }
         }
         if let Some(msg) = self.session.flood.notice.take().or_else(|| self.session.ice.notice.take()) {
             self.service_msg = Some((msg, 10.0));
