@@ -163,16 +163,17 @@ jobs:
           OPENMAPPER_TAG: v0.1.8
           OPENMAPPER_COMMIT: bcc77231813fb5106b96a8e5c8676bb5e6574c67
         run: |
-          git clone --quiet -c core.autocrlf=false --depth 1 --branch $env:OPENMAPPER_TAG https://github.com/openOMSI-org/openMapper.git openmapper-src
-          $have = (git -C openmapper-src rev-parse HEAD).Trim()
+          $src = Join-Path $env:RUNNER_TEMP "openmapper-src"
+          git clone --quiet -c core.autocrlf=false --depth 1 --branch $env:OPENMAPPER_TAG https://github.com/openOMSI-org/openMapper.git $src
+          $have = (git -C $src rev-parse HEAD).Trim()
           if ($have -ne $env:OPENMAPPER_COMMIT) { throw "openMapper $env:OPENMAPPER_TAG is commit $have, expected $env:OPENMAPPER_COMMIT" }
           foreach ($p in Get-ChildItem komsi/openmapper/*.patch | Sort-Object Name) {
-            git -C openmapper-src apply --whitespace=nowarn $p.FullName
+            git -C $src apply --whitespace=nowarn $p.FullName
             if ($LASTEXITCODE -ne 0) { throw "openMapper: $($p.Name) does not apply" }
           }
-          pwsh -File openmapper-src/tools/package-windows.ps1 -Target $env:TARGET
+          pwsh -File "$src/tools/package-windows.ps1" -Target $env:TARGET
           if ($LASTEXITCODE -ne 0) { throw "openMapper: packaging failed" }
-          $zip = Get-ChildItem openmapper-src/target/package/*.zip | Select-Object -First 1
+          $zip = Get-ChildItem "$src/target/package/*.zip" | Select-Object -First 1
           Expand-Archive $zip.FullName -DestinationPath openmapper/x
           $dir = Get-ChildItem openmapper/x -Directory | Select-Object -First 1
           Copy-Item -Recurse $dir.FullName dist/windows/openMapper
