@@ -21,7 +21,7 @@ on:
         description: Platform to build and release alone
         type: choice
         default: all
-        options: [all, windows, macos, linux, android]
+        options: [all, windows, macos, android]
 
 concurrency:
   group: release-${{ github.event_name }}-${{ github.ref }}
@@ -145,6 +145,31 @@ jobs:
             Copy-Item (Join-Path $dir $dll) dist/windows/
           }
           Get-ChildItem dist/windows
+      # K-OMSI: openMapper (openOMSI-org/openMapper, AGPL-3.0, the map editor) beside the
+      # game in an `openMapper` folder. Its source of the release tag (the commit is pinned
+      # here) with K-OMSI's patches (komsi/openmapper/*.patch: Korean texts, the objects'
+      # drawing, lines on the map, the line map export, no update from the official
+      # releases) built with openMapper's own packaging script.
+      - name: openMapper
+        shell: pwsh
+        env:
+          OPENMAPPER_TAG: v0.1.8
+          OPENMAPPER_COMMIT: bcc77231813fb5106b96a8e5c8676bb5e6574c67
+        run: |
+          git clone --quiet -c core.autocrlf=false --depth 1 --branch $env:OPENMAPPER_TAG https://github.com/openOMSI-org/openMapper.git openmapper-src
+          $have = (git -C openmapper-src rev-parse HEAD).Trim()
+          if ($have -ne $env:OPENMAPPER_COMMIT) { throw "openMapper $env:OPENMAPPER_TAG is commit $have, expected $env:OPENMAPPER_COMMIT" }
+          foreach ($p in Get-ChildItem komsi/openmapper/*.patch | Sort-Object Name) {
+            git -C openmapper-src apply --whitespace=nowarn $p.FullName
+            if ($LASTEXITCODE -ne 0) { throw "openMapper: $($p.Name) does not apply" }
+          }
+          pwsh -File openmapper-src/tools/package-windows.ps1 -Target $env:TARGET
+          if ($LASTEXITCODE -ne 0) { throw "openMapper: packaging failed" }
+          $zip = Get-ChildItem openmapper-src/target/package/*.zip | Select-Object -First 1
+          Expand-Archive $zip.FullName -DestinationPath openmapper/x
+          $dir = Get-ChildItem openmapper/x -Directory | Select-Object -First 1
+          Copy-Item -Recurse $dir.FullName dist/windows/openMapper
+          Get-ChildItem dist/windows/openMapper
       - name: Package
         shell: pwsh
         run: |
@@ -268,7 +293,8 @@ jobs:
 
   linux:
     needs: version
-    if: ${{ !inputs.only || inputs.only == 'all' || inputs.only == 'linux' }}
+    # K-OMSI: no Linux builds (the user's decision, 2026-10-25); the release skips the job
+    if: false
     strategy:
       fail-fast: false
       matrix:
@@ -390,7 +416,7 @@ jobs:
 
   release:
     # (the platforms not built again are skipped, not failed)
-    if: ${{ !cancelled() && !failure() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+    if: ${{ !cancelled() && !failure() && github.event_name != 'pull_request' && github.ref == 'refs/heads/release' }}
     needs: [version, windows, windows-tests, macos, linux, android]
     runs-on: ubuntu-latest
     permissions:
@@ -406,32 +432,30 @@ jobs:
         with:
           path: out
           merge-multiple: true
-      - name: Publish v${{ needs.version.outputs.version }} (beta)
+      - name: Publish v${{ needs.version.outputs.version }}
         run: |
           ls -l out
           if [ "$(gh release view "v$VERSION" --json isDraft --jq .isDraft 2>/dev/null)" = true ]; then
             gh release delete "v$VERSION" --yes
           fi
-          if gh release view "v$VERSION" >/dev/null 2>&1; then
-            echo "::error::v$VERSION is already published and stays as it is: a fix is released as a new version"
-            exit 1
+          # K-OMSI: the notes are kept in the repository (komsi/release-notes.md); <버전> is the version
+          if [ -f komsi/release-notes.md ]; then
+            sed "s/<버전>/$VERSION/g" komsi/release-notes.md > notes.md
+          else
+            echo "**K-OMSI $VERSION** (openOMSI based)" > notes.md
           fi
-          prev=$(git tag -l "v${VERSION%.*}.*" --sort=-v:refname | grep -vx "v$VERSION" | head -1)
-          if [ -n "$prev" ] && ! git merge-base --is-ancestor "$prev" "$GITHUB_SHA"; then
-            echo "::error::$GITHUB_SHA is older than $prev: only a newer commit of main is released"
-            exit 1
-          fi
-          if ! git tag "v$VERSION" "$GITHUB_SHA" 2>/dev/null && [ "$(git rev-parse "v$VERSION^{commit}")" != "$GITHUB_SHA" ]; then
-            echo "::error::the tag v$VERSION already names another commit"
-            exit 1
-          fi
-          git push origin "v$VERSION"
-          sh scripts/release-notes.sh "$VERSION" > notes.md
+          git tag -f "v$VERSION" "$GITHUB_SHA"
+          git push -f origin "v$VERSION"
           cd out
           files=$(ls *.zip *.apk *.dmg *.exe 2>/dev/null || true)
           sha256sum $files > SHA256SUMS
-          gh release create "v$VERSION" $files SHA256SUMS \
-            --verify-tag \
-            --prerelease \
-            --title "openOMSI $VERSION" \
-            --notes-file ../notes.md
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            # the same version built again: the release stays, with this build's files and notes
+            gh release upload "v$VERSION" $files SHA256SUMS --clobber
+            gh release edit "v$VERSION" --title "K-OMSI $VERSION" --notes-file ../notes.md
+          else
+            gh release create "v$VERSION" $files SHA256SUMS \
+              --verify-tag \
+              --title "K-OMSI $VERSION" \
+              --notes-file ../notes.md
+          fi
