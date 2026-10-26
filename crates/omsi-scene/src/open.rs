@@ -989,8 +989,16 @@ fn signal_heads(parts: Vec<LampObject>) -> Vec<SignalHead> {
 pub enum CameraKind {
     /// The speed.
     Speed,
-    /// The speed and the red light (a camera on a traffic light's mast).
+    /// The red light.
+    Signal,
+    /// The speed and the red light.
     SignalSpeed,
+    /// A camera that does not say: Korea's camera boxes (`KOR_Photoemergyzone\camera`, a
+    /// traffic light mast with one) tell what they watch by the plate put by them (`speedcctv`
+    /// "과속 단속 장비", `trafficlight_speedcctv` "신호.과속 단속장비", `areacctvstart`...);
+    /// one without a plate watches the red light at a junction, else the speed (the
+    /// navigator decides, by the stop line beside it).
+    Unspecified,
     /// Where an average speed check begins and ends (Korea's 구간단속); `SectionPoint` is a
     /// pole that does not say which (the first passed begins it).
     SectionStart,
@@ -1027,10 +1035,16 @@ pub fn camera_kind(file: &str) -> Option<CameraKind> {
     if name.contains("interval") && (name.contains("cam") || name.contains("cctv")) {
         return Some(CameraKind::SectionPoint);
     }
-    if name.contains("tflcam") || name.contains("trafficlightspeedcctv") || name.contains("redlightcam") || (name.contains("amplemast") && name.contains("camera")) {
+    if name.contains("spd+tfl") || name.contains("trafficlightspeedcctv") {
         return Some(CameraKind::SignalSpeed);
     }
-    let speed = ["speedcctv", "speedcam", "blitzer", "fotoradar", "radarcam", "radarfalle"].iter().any(|k| name.contains(k)) || (f.contains("photoemergyzone") && name == "camera");
+    if name.contains("redlightcam") || name.contains("signalcam") || (name.contains("tflcam") && !name.contains("spd")) {
+        return Some(CameraKind::Signal);
+    }
+    if (f.contains("photoemergyzone") && name == "camera") || (name.contains("amplemast") && name.contains("camera")) {
+        return Some(CameraKind::Unspecified);
+    }
+    let speed = ["speedcctv", "speedcam", "blitzer", "fotoradar", "radarcam", "radarfalle"].iter().any(|k| name.contains(k));
     speed.then_some(CameraKind::Speed)
 }
 
