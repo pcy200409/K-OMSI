@@ -8763,3 +8763,7 @@ _version: 2
   en: "Folders of objects and splines that another map still uses stay: {n}."
 "The bus is flooded: water got into the engine, it will not start again":
   en: "The bus is flooded: water got into the engine, it will not start again"
+"Low ground floods":
+  en: "Low ground floods"
+"Heavy rain fills the hollows - underpasses, dips in the road, fields - beyond what the drains carry; a bus whose air intake goes under has a drowned engine":
+  en: "Heavy rain fills the hollows - underpasses, dips in the road, fields - beyond what the drains carry; a bus whose air intake goes under has a drowned engine"
