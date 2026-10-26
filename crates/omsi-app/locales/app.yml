@@ -8773,3 +8773,5 @@ _version: 2
   en: "Use for {bus}"
 "Profile {name} in use":
   en: "Profile {name} in use"
+"The bus is flooded: water got into the engine, it will not start again":
+  en: "The bus is flooded: water got into the engine, it will not start again"
