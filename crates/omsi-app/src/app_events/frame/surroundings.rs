@@ -137,6 +137,11 @@ pub(super) fn lights(cx: LightsCx, dt: f32, daylight: omsi_sim::Daylight, behind
             // puddles and the wet asphalt the renderer draws (the same wetness:
             // none under snow, OMSI_WETNESS as the picture takes it)
             let wetness = puddles::road_wetness(*cx.weather.wetness, wt.snow);
+            // the spray of the vehicles just ahead, onto the player's windscreen
+            if let Some(p) = cx.player.player.as_mut() {
+                let others = cx.traffic.traffic.iter().flat_map(|t| t.cars.iter()).map(|c| (c.vehicle.position, c.state.speed, c.state.length));
+                p.vehicle.host.spray_ahead = crate::spray_screen::spray_ahead(&p.vehicle, others, if wt.snow || kind == 2 { 0.0 } else { wetness });
+            }
             // (the vehicles' own wheel spray goes with the same water: only through puddles -
             // in snow it keeps the scripts' own slush)
             let flood = cx.weather.flood.water_at();
