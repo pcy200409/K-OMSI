@@ -1,0 +1,15 @@
+diff --git a/src/updater.rs b/src/updater.rs
+index fed783e..1b26aed 100644
+--- a/src/updater.rs
++++ b/src/updater.rs
+@@ -323,6 +323,10 @@ pub fn pick(body: &str, current: &str, os: &str, arch: &str, ext: &str) -> Resul
+ }
+ 
+ fn latest() -> Result<Option<Release>, String> {
++    // K-OMSI: this build is replaced by K-OMSI's own releases; the official ones would overwrite it
++    if std::env::var_os("OPENMAPPER_OFFICIAL_UPDATES").is_none() {
++        return Ok(None);
++    }
+     let (os, arch, ext) = platform().ok_or_else(|| tr("No automatic updates for this system.", "Для этой системы нет автообновления.").to_string())?;
+     let mut r = agent().get(LATEST).header("Accept", "application/vnd.github+json").call().map_err(net)?;
+     let body = r.body_mut().read_to_string().map_err(net)?;
