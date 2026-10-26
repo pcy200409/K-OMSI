@@ -401,6 +401,7 @@ pub(super) fn toggle_now(app: &App, id: &str) -> Option<bool> {
         "flood" => s.flood,
         "black_ice" => s.black_ice,
         "potholes" => s.potholes,
+        "storm_outage" => s.storm_outage,
         "mouse" => app.input.mouse_drive,
         "mouse_right" => s.mouse_right_off,
         "mouse_smooth" => s.mouse_smooth,
@@ -581,6 +582,14 @@ pub(super) fn toggle_set(app: &mut App, id: &str, on: bool) -> Option<(&'static 
         "potholes" => {
             app.settings.potholes = on;
             Some(("potholes", bit))
+        }
+        "storm_outage" => {
+            app.settings.storm_outage = on;
+            if !on {
+                // (the power is back at once)
+                app.session.outage.tick(false, 0.0);
+            }
+            Some(("storm_outage", bit))
         }
         "realistic_road" => {
             app.settings.realistic_road_physics = on;
