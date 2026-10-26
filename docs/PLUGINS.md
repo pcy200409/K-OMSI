@@ -687,6 +687,7 @@ On macOS, helpers extracted from ZIP files may need their executable bit restore
 | `omsi.bus.triggers()` | list of strings | The names of the bus's script triggers (for `trigger`, `press`). | 0.2.22 |
 | `omsi.bus.velocity()` | number or nil | The bus's speed in km/h, negative backwards. | 0.2.22 |
 | `omsi.bus.velocity_vector()` | x, y, z | Its velocity in the world, m/s (x east, y north, z up). | 0.2.22 |
+| `omsi.bus.water()` | depth, flooded | K-OMSI: the flood water the bus stands in (m, 0 when dry or with flooding off) and whether it drowned the engine (it will not start again in this run). | 0.2.22 |
 | `omsi.bus.wheels()` | list of tables | Each wheel: `{axle, side, rpm, radius, suspension, driven}` (`side` 0 left, 1 right; `suspension` the spring's travel). | 0.2.22 |
 | `omsi.distance(x, y)` | number or nil | Metres from the bus to a map point, or `nil` on foot. | 0.1.10 |
 | `omsi.has_vehicle()` | boolean | `true` while the player drives a vehicle. | 0.1.5 |
