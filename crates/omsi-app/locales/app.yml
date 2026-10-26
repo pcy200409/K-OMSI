@@ -98759,3 +98759,7 @@ _version: 2
   tr: "El feneri kapalı"
 "The bus is flooded: water got into the engine, it will not start again":
   ko: "차량 침수: 엔진에 물이 들어가 다시 시동이 걸리지 않습니다"
+"Low ground floods":
+  ko: "저지대 침수"
+"Heavy rain fills the hollows - underpasses, dips in the road, fields - beyond what the drains carry; a bus whose air intake goes under has a drowned engine":
+  ko: "배수 능력을 넘는 폭우가 오면 지하차도·도로 저점·논밭 같은 저지대에 물이 찹니다. 흡기구까지 잠긴 버스는 엔진이 침수됩니다"

@@ -171,6 +171,10 @@ pub trait PluginIo {
     fn bus_engine(&self) -> Option<(bool, Option<f32>, bool)> {
         None
     }
+    /// K-OMSI: the flood water the bus stands in (m) and whether it drowned its engine.
+    fn bus_flood(&self) -> Option<(f32, bool)> {
+        None
+    }
     /// The automatic start-up (or shut-down) of the bus; what it says it does.
     fn bus_start_up(&mut self) -> Option<String> {
         None

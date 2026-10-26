@@ -751,6 +751,16 @@
       "permission": null
     },
     {
+      "name": "bus.water",
+      "group": "vehicle",
+      "since": "0.2.22",
+      "doc": "K-OMSI: the flood water the bus stands in (m, 0 when dry or with flooding off) and whether it drowned the engine (it will not start again in this run).",
+      "params": [],
+      "returns": "depth, flooded",
+      "multi": true,
+      "permission": null
+    },
+    {
       "name": "bus.wheels",
       "group": "vehicle",
       "since": "0.2.22",
