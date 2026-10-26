@@ -25,6 +25,7 @@ pub(super) fn options_pages(app: &App) -> Vec<Page> {
         switch_row(app, "coll_objects", "Collisions with objects", "Enables/disables collisions with objects such as buildings, streetlights, etc."),
         switch_row(app, "coll_vehicles", "Collisions with vehicles", "Enables/Disables Collisions with Other Vehicles"),
         switch_row(app, "realistic_road", "Realistic road physics", "Tyres that slip, grip and roughness by road surface, wind on the bus; trams and trains: pantograph on the wire, body on its springs; off, vehicles drive as in OMSI 2"),
+        switch_row(app, "flood", "Low ground floods", "Heavy rain fills the hollows - underpasses, dips in the road, fields - beyond what the drains carry; a bus whose air intake goes under has a drowned engine"),
         switch_row(app, "collision_pedestrians", "Collisions with people", "Enables/disables knocking down people"),
         switch_row(app, "timetable_win", "Timetable window (Insert)", "Displays a list of all stops (only when a tour is active)"),
         switch_row(app, "trip_summary", "Trip summary", "At the end of each trip: its stops with the times planned and driven, to copy or to save"),
