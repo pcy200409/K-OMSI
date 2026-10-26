@@ -16,6 +16,8 @@ use std::sync::Arc;
 pub struct GroundTiles {
     pub terrains: HashMap<(i32, i32), Arc<Terrain>>,
     pub surfaces: HashMap<(i32, i32), Arc<TileSurface>>,
+    /// The tiles' own water (`tile.map.water`): its height at the four corners.
+    pub waters: HashMap<(i32, i32), [f32; 4]>,
 }
 
 /// Faces this close over another road face are paint on it, not a step (m). Omsi.exe's
