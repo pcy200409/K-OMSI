@@ -98787,3 +98787,9 @@ _version: 2
 "Section":
   de: "Abschnitt"
   ko: "구간"
+"Speeding":
+  de: "Tempo"
+  ko: "과속"
+"Signal and speed":
+  de: "Ampel und Tempo"
+  ko: "신호과속"
