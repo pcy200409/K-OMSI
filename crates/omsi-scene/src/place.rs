@@ -237,7 +237,14 @@ impl World {
         let (tx, ty) = key;
         let first_load = self.seeded.lock().insert(key);
         let terrain: &Terrain = &res.terrain;
-        self.data.update(|d| Arc::make_mut(&mut d.ground).terrains.insert(key, res.terrain.clone()));
+        self.data.update(|d| {
+            let g = Arc::make_mut(&mut d.ground);
+            g.terrains.insert(key, res.terrain.clone());
+            match st.water {
+                Some(w) => g.waters.insert(key, w),
+                None => g.waters.remove(&key),
+            };
+        });
         let ground_at = |x: f64, y: f64| -> f64 {
             let lx = (x - st.origin.x).clamp(0.0, tile_size()) as f32;
             let ly = (y - st.origin.y).clamp(0.0, tile_size()) as f32;

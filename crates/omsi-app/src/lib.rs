@@ -153,6 +153,7 @@ mod startup;
 mod traffic_link;
 pub(crate) use omsi_content::tutorial;
 mod weather_setup;
+mod flood;
 mod weather_tomorrow;
 use omsi_weather::{weather_cycle, weather_model};
 mod world_load;
@@ -690,6 +691,7 @@ fn assemble_app(args: Args, settings: settings::Settings) -> App {
             career: Default::default(),
             journey: None,
             wetness: 0.0,
+            flood: Default::default(),
             cloud_drift: [0.0; 4],
             weather_blend: None,
             weather_cycle: None,

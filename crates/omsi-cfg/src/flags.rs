@@ -284,6 +284,7 @@ flags! {
     OMSI_FLASHLIGHT: Bool, Test, Use, "off", "Offscreen: the player's flashlight is on (in the window it is Alt+F).";
     OMSI_FLEET_AHEAD: Num, Test, Use, "FLEET_AHEAD", "Minutes ahead the timetable fleet is planned (for tests).";
     OMSI_FLEET_IDLE: Num, Test, Use, "FLEET_IDLE", "Seconds a fleet vehicle idles (shortened for tests).";
+    OMSI_FLOOD: Text, Tuning, Use, "-", "K-OMSI: low ground floods in heavy rain (first stage: the basins and their water written to the log). scale[,drain]: the water's time scale (10) and the drains' capacity in mm/h (30).";
     OMSI_FOLLOW_CAM: Text, Test, Use, "-", "right,ahead,up,yaw,pitch: a camera in the followed car's frame.";
     OMSI_FOOT_RUN: Num, Tuning, Use, "3.8", "On foot: the pace of a run (Shift) in m/s.";
     OMSI_FOOT_WALK: Num, Tuning, Use, "1.4", "On foot: the walking pace in m/s.";
