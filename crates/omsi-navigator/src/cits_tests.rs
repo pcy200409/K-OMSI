@@ -239,3 +239,62 @@ fn a_camera_alone_watches_the_light_it_stands_by() {
     n.update_cits(&at(0.0, 45.0));
     assert_eq!(n.cits.camera.as_ref().and_then(|c| c.tag), Some("Speeding"));
 }
+
+/// Korean crossing sets put a stop line's light on a path of its own, a metre long, beside
+/// the junction's path that goes on the same way. The way may take either: the light is the
+/// bus's all the same, and the left turn's light beside them is not while it goes straight.
+#[test]
+fn a_light_on_a_path_beside_the_way_is_the_ways() {
+    let p = |pts: &[(f64, f64)]| omsi_sim::traffic::LaneBuilder::polyline(pts.iter().map(|&(x, y)| DVec3::new(x, y, 0.0)).collect(), LaneKind::Street, 3.0);
+    let mut stop = p(&[(0.0, 100.0), (0.0, 101.0)]);
+    stop.traffic_light = Some((0, 0));
+    let mut left = p(&[(0.0, 100.0), (0.0, 104.0), (-6.0, 112.0), (-30.0, 115.0)]);
+    left.traffic_light = Some((0, 1));
+    let lanes = vec![p(&[(0.0, 0.0), (0.0, 100.0)]), p(&[(0.0, 100.0), (0.0, 130.0)]), stop, left, p(&[(0.0, 130.0), (0.0, 400.0)])];
+    let mut net = Network { lanes, ..Default::default() };
+    net.link(1.5);
+    // (the junction's path first: of two that turn as little, the way takes the first)
+    net.lanes[0].next = vec![1, 3, 2];
+    let way = path_along(&net, None, DVec3::new(0.0, 20.0, 0.0), 0.0, 300.0, &[]);
+    assert_eq!(way.iter().map(|w| w.0).take(2).collect::<Vec<_>>(), vec![0, 1]);
+    let lit = lights_on_way(&net, &way);
+    assert_eq!(lit.len(), 1, "{lit:?}");
+    assert_eq!(lit[0].0, 2);
+    assert!((lit[0].1 - 80.0).abs() < 0.01, "{lit:?}");
+    // the light on the way itself
+    net.lanes[0].next = vec![2, 1, 3];
+    let way = path_along(&net, None, DVec3::new(0.0, 20.0, 0.0), 0.0, 300.0, &[]);
+    assert_eq!(lights_on_way(&net, &way).first().map(|l| l.0), Some(2));
+}
+
+/// The head drawn for a light is the one by the bus's stop line, not another approach's
+/// showing the light too beside other arrows; of the heads there, one whose discs are the
+/// light rather than an arrow.
+#[test]
+fn the_head_drawn_is_the_one_by_the_stop_line() {
+    use omsi_scene::{Lens, LensColor, LensColor::*, LensShape, LensShape::*, SignalHead};
+    let head = |at: (f64, f64), lenses: &[(LensColor, LensShape, i64, usize)]| SignalHead {
+        crossing: 7,
+        lenses: lenses.iter().enumerate().map(|(k, &(color, shape, crossing, light))| Lens { slot: k as u8 + 1, color, shape, crossing, light }).collect(),
+        place: Some(DVec3::new(at.0, at.1, 0.0)),
+    };
+    // the stop line at (0, 100), the lane going north
+    let stop = (DVec3::new(0.0, 100.0, 0.0), 0.0);
+    let ours = [7, 8];
+    let mine = head((4.0, 125.0), &[(Red, Disc, 7, 0), (Yellow, Disc, 7, 0), (Green, Disc, 7, 0)]);
+    let theirs = head((-4.0, 95.0), &[(Red, Disc, 7, 0), (Yellow, Disc, 7, 0), (Green, Left, 7, 2), (Green, Disc, 7, 0)]);
+    let heads = [theirs.clone(), mine.clone()];
+    assert_eq!(pick_head(heads.iter(), &ours, 0, stop), Some(&mine));
+    // (seen from the other approach, the other head)
+    assert_eq!(pick_head(heads.iter(), &ours, 0, (DVec3::new(-4.0, 120.0, 0.0), 180.0)), Some(&theirs));
+    // a left turn's light: the head by the line whose discs show it, over the one where it is
+    // only the arrow beside another light's discs
+    let arrow = head((3.0, 120.0), &[(Red, Disc, 8, 0), (Yellow, Disc, 8, 0), (Green, Left, 7, 1), (Green, Disc, 8, 0)]);
+    let own = head((-3.0, 122.0), &[(Red, Disc, 7, 1), (Yellow, Disc, 7, 1), (Green, Left, 7, 1)]);
+    let heads = [arrow.clone(), own.clone()];
+    assert_eq!(pick_head(heads.iter(), &ours, 1, stop), Some(&own));
+    assert_eq!(pick_head([arrow.clone()].iter(), &ours, 1, stop), Some(&arrow));
+    // a head with no place known is drawn when no other shows the light
+    let unplaced = SignalHead { place: None, ..mine.clone() };
+    assert_eq!(pick_head([unplaced.clone()].iter(), &ours, 0, stop), Some(&unplaced));
+}
