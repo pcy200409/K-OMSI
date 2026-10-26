@@ -24,7 +24,12 @@ impl App {
             // (a preset picked in the paused menu: the change goes over in real time)
             self.tick_weather(dt);
         }
-        let daylight = omsi_sim::Daylight::compute(&self.clock, self.session.envir.as_ref());
+        let mut daylight = omsi_sim::Daylight::compute(&self.clock, self.session.envir.as_ref());
+        // (a thunderstorm's power cut puts the street lamps out)
+        self.session.outage.tick(self.settings.storm_outage, self.clock.run_time);
+        if self.session.outage.active() {
+            daylight.lamps_on = false;
+        }
         // (the avatars' faces yawn late in the evening)
         crate::view_sync::people::set_hour((self.clock.time / 3600.0).rem_euclid(24.0) as f32);
         let lamps = self.session.lamps_on != Some(daylight.lamps_on);
@@ -222,6 +227,7 @@ pub(super) fn lights(cx: LightsCx, dt: f32, daylight: omsi_sim::Daylight, behind
                     if let Some(r) = cx.gfx.renderer.as_mut() {
                         for (delay, distance, dir) in r.take_strikes() {
                             s.thunder(delay, distance, dir, cam.position);
+                            cx.weather.outage.strike(cx.common.settings.storm_outage, distance, cx.clock.clock.run_time);
                         }
                     }
                     s.update(
