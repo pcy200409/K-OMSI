@@ -42,6 +42,7 @@ pub mod road_dirt;
 pub mod road_paint;
 pub mod road_snow;
 pub mod route_arrows;
+pub mod flood_water;
 pub mod threads;
 pub mod trolley_derive;
 pub mod trolley_view;

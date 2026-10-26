@@ -33,6 +33,10 @@ impl App {
             self.frame_navigator(dt, [0.0, 0.0, 1.0, 1.0], vr_active, true, vr_nav_display);
             return vr_nav_display;
         }
+        // the water over the flooded low ground (`OMSI_FLOOD`)
+        if let (Some(w), Some(r), Some(scene)) = (self.world.as_ref(), self.renderer.as_ref(), self.scene.as_mut()) {
+            self.gfx.flood_water.sync(w, r, scene, &self.session.flood.flood);
+        }
         let (notes, tooltip) = self.frame_notes(dt, mirror_help);
         let __t = Instant::now();
         // (the frame's overlays start empty; the notes are the interface's, in
