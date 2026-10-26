@@ -211,6 +211,7 @@ mod startup;
 mod traffic_link;
 pub(crate) use omsi_content::tutorial;
 mod flood;
+mod road_ice;
 mod weather_setup;
 mod weather_tomorrow;
 use omsi_weather::{weather_cycle, weather_model};
@@ -788,6 +789,7 @@ fn assemble_app(args: Args, settings: settings::Settings) -> App {
             journey: None,
             wetness: 0.0,
             flood: Default::default(),
+            ice: Default::default(),
             cloud_drift: [0.0; 4],
             weather_blend: None,
             weather_cycle: None,
