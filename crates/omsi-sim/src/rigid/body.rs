@@ -841,6 +841,13 @@ impl RigidBody {
                 now
             };
         }
+        // K-OMSI: a pothole under a tyre (either road model): the road drops by its depth there
+        if let Some(holes) = crate::potholes::current() {
+            for w in self.wheels.iter_mut() {
+                let p = self.position + rot.mul_vec3(w.attach).as_dvec3();
+                w.rough -= holes.depth_at(p.x, p.y);
+            }
+        }
         (force, torque)
     }
 

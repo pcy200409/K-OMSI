@@ -577,6 +577,7 @@ pub(super) fn toggle_now(app: &App, id: &str) -> Option<bool> {
         "realistic_road" => s.realistic_road_physics,
         "flood" => s.flood,
         "black_ice" => s.black_ice,
+        "potholes" => s.potholes,
         "mouse" => app.input.mouse_drive,
         "mouse_right" => s.mouse_right_off,
         "mouse_smooth" => s.mouse_smooth,
@@ -824,6 +825,10 @@ fn toggle_set_gameplay(
         "black_ice" => {
             app.settings.black_ice = on;
             Some(("black_ice", bit))
+        }
+        "potholes" => {
+            app.settings.potholes = on;
+            Some(("potholes", bit))
         }
         "realistic_road" => {
             app.settings.realistic_road_physics = on;
