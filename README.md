@@ -2,8 +2,8 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/logos/openomsi-wordmark-light.svg">
-    <img alt="openOMSI" src="assets/logos/openomsi-wordmark-dark.svg" width="420">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logos/komsi-wordmark-light.svg">
+    <img alt="K-OMSI" src="assets/logos/komsi-wordmark-dark.svg" width="420">
   </picture>
 </p>
 
