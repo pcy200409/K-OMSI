@@ -318,6 +318,24 @@ pub struct Flood {
     pub cell_basin: std::sync::Arc<std::collections::HashMap<u32, (u32, f32)>>,
 }
 
+/// The flood water the AI traffic sees (the game sets it every frame; None: no flooding).
+static WATER: std::sync::RwLock<Option<WaterAt>> = std::sync::RwLock::new(None);
+
+/// What the AI traffic looks ahead into (see `ai_traffic`'s `flood_stop`).
+pub fn set_water(w: Option<WaterAt>) {
+    *WATER.write().unwrap_or_else(|e| e.into_inner()) = w;
+}
+
+/// The flood water at world (x, y) as the AI traffic sees it (m; 0 with no flooding).
+pub fn water_depth(x: f64, y: f64) -> f32 {
+    WATER.read().unwrap_or_else(|e| e.into_inner()).as_ref().map_or(0.0, |w| w.depth(x, y))
+}
+
+/// Whether there is flood water anywhere for the traffic to look out for.
+pub fn any_water() -> bool {
+    WATER.read().unwrap_or_else(|e| e.into_inner()).is_some()
+}
+
 /// Where the water stands, as a snapshot for another thread (the tyres' spray): the basins'
 /// cells and their levels now.
 #[derive(Clone)]
