@@ -3,8 +3,8 @@
 //! loaded map dark (the junctions left to the right of way, `traffic::set_outage`) and the
 //! street lamps out - before it comes back.
 
-/// A strike this close (m) may cut the power, at this chance.
-const NEAR: f32 = 1200.0;
+/// A strike this close (m) may cut the power (a line or a substation hit), at this chance.
+const NEAR: f32 = 2500.0;
 const CHANCE: f64 = 0.35;
 /// How long the power stays out (game seconds).
 const SHORTEST: f64 = 90.0;
@@ -36,6 +36,7 @@ impl Outage {
         if !on || distance > NEAR {
             return;
         }
+        log::debug!("storm: a strike {distance:.0} m away");
         if self.rng == 0 {
             self.rng = (now * 1000.0) as u64 ^ 0x9e37_79b9_7f4a_7c15;
         }
