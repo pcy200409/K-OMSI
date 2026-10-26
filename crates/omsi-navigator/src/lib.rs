@@ -344,7 +344,7 @@ pub struct Navigator {
     /// Street names of the map's lanes (from its street name signs).
     streets: Option<std::sync::Arc<Streets>>,
     #[allow(clippy::type_complexity)]
-    building: Option<std::sync::mpsc::Receiver<(Network, HashMap<i64, DVec3>, Streets, Option<omsi_map::package::Package>, NameHints, Vec<omsi_scene::SpeedCamera>)>>,
+    building: Option<std::sync::mpsc::Receiver<(Network, HashMap<i64, DVec3>, Streets, Option<omsi_map::package::Package>, NameHints, Vec<omsi_scene::SpeedCamera>, Vec<omsi_scene::SignalHead>)>>,
     /// What the street names were made from (signs and weaker hints), to make them again
     /// when the timetable's stop names add hints; and whether those were added.
     name_hints: NameHints,
@@ -661,7 +661,7 @@ impl Navigator {
                 confirm_road_surfaces(&mut net, &m.road_surfaces);
                 probe_lanes(&net);
                 let streets = build_streets(&net, &m.signs, &m.names);
-                let _ = tx.send((net, m.places, streets, surface, (m.signs, m.names), m.cameras));
+                let _ = tx.send((net, m.places, streets, surface, (m.signs, m.names), m.cameras, m.signal_heads));
             })
             .ok();
         self.building = Some(rx);
@@ -698,6 +698,7 @@ impl Navigator {
         self.global = Some(global);
         self.stop_pos = std::sync::Arc::new(map.places);
         self.cits.cameras = std::sync::Arc::new(map.cameras);
+        self.cits.set_heads(map.signal_heads);
         self.global_version += 1;
         self.reset_navigation_network();
     }
@@ -1212,9 +1213,10 @@ impl Navigator {
         self.date = f.date;
         self.day_clock = (f.time, f.weekday);
         if let Some(rx) = self.building.as_ref() {
-            if let Ok((net, pos, streets, surface, hints, cameras)) = rx.try_recv() {
+            if let Ok((net, pos, streets, surface, hints, cameras, heads)) = rx.try_recv() {
                 self.name_hints = hints;
                 self.cits.cameras = std::sync::Arc::new(cameras);
+                self.cits.set_heads(heads);
                 log::info!("navigator: the map's road network is there ({} lanes, {} streets named)", net.lanes.len(), streets.names.len());
                 self.streets = Some(std::sync::Arc::new(streets));
                 self.set_surface(surface);

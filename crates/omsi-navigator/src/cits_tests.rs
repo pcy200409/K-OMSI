@@ -60,7 +60,7 @@ fn a_camera_is_announced_from_a_kilometre_and_flashes_while_too_fast() {
     assert_eq!(n.cits.camera, None, "1.5 km away: not yet");
     n.update_cits(&at(700.0, 45.0));
     let c = n.cits.camera.clone().expect("800 m ahead");
-    assert!((c.dist - 800.0).abs() < 1.0 && c.limit == Some(50.0) && c.tag.is_none(), "{c:?}");
+    assert!((c.dist - 800.0).abs() < 1.0 && c.limit == Some(50.0) && c.tag == Some("Speeding"), "{c:?}");
     assert!(c.flash, "a new stage flashes a moment");
     // (the moment over: steady while within the limit)
     for _ in 0..8 {
@@ -88,7 +88,7 @@ fn a_camera_is_announced_from_a_kilometre_and_flashes_while_too_fast() {
 fn a_signal_camera_says_so_on_its_tab() {
     let mut n = nav(vec![cam(6.0, 400.0, CameraKind::SignalSpeed)]);
     n.update_cits(&at(0.0, 45.0));
-    assert_eq!(n.cits.camera.as_ref().and_then(|c| c.tag), Some("Signal"));
+    assert_eq!(n.cits.camera.as_ref().and_then(|c| c.tag), Some("Signal and speed"));
 }
 
 #[test]
@@ -161,12 +161,14 @@ fn curves_stages_and_the_way_ahead() {
 fn cameras_are_known_by_their_objects() {
     use omsi_scene::camera_kind;
     assert_eq!(camera_kind("Sceneryobjects\\KOR_Photoemergyzone\\speedcctv.sco"), Some(CameraKind::Speed));
-    assert_eq!(camera_kind("Sceneryobjects\\KOR_Photoemergyzone\\camera.sco"), Some(CameraKind::Speed));
+    assert_eq!(camera_kind("Sceneryobjects\\KOR_Photoemergyzone\\camera.sco"), Some(CameraKind::Unspecified));
+    assert_eq!(camera_kind("Sceneryobjects\\KOR_Photoemergyzone\\trafficlight_speedcctv.sco"), Some(CameraKind::SignalSpeed));
     assert_eq!(camera_kind("Sceneryobjects\\KOR_Photoemergyzone\\areacctvstart.sco"), Some(CameraKind::SectionStart));
     assert_eq!(camera_kind("Sceneryobjects\\KOR_Photoemergyzone\\areacctvend.sco"), Some(CameraKind::SectionEnd));
     assert_eq!(camera_kind("Sceneryobjects\\Korean Sceneryobject\\Speedcam_Pole\\Steel(Std Type)\\SteelGrey\\interval_spdcampole_6m.sco"), Some(CameraKind::SectionPoint));
     assert_eq!(camera_kind("Sceneryobjects\\Korean Sceneryobject\\Speedcam_Pole\\Steel(Std Type)\\SteelGrey\\spd+tflcampole_6m.sco"), Some(CameraKind::SignalSpeed));
-    assert_eq!(camera_kind("Sceneryobjects\\KOR_Standard Set\\Ampel Mast(Traffic light Pole)\\Gray(New)\\KOR_AmpleMast_Camera_S.sco"), Some(CameraKind::SignalSpeed));
+    assert_eq!(camera_kind("Sceneryobjects\\KOR_Standard Set\\Ampel Mast(Traffic light Pole)\\Gray(New)\\KOR_AmpleMast_Camera_S.sco"), Some(CameraKind::Unspecified));
+    assert_eq!(camera_kind("Sceneryobjects\\Korean Sceneryobject\\StreetFurniture\\speedcam_type3.sco"), Some(CameraKind::Speed));
     assert_eq!(camera_kind("Sceneryobjects\\Blitzer\\Blitzer_Saeule.sco"), Some(CameraKind::Speed));
     assert_eq!(camera_kind("Sceneryobjects\\Buildings_Freeman\\speedcamsign.sco"), None);
     assert_eq!(camera_kind("Sceneryobjects\\Buildings_Freeman\\speedcamerasign2.sco"), None);
@@ -198,4 +200,42 @@ fn a_camera_beside_the_right_hand_lane_counts_from_the_other_lanes() {
     let right = on_path(&net, &lanes, DVec3::new(19.0, 600.0, 0.0));
     assert!(right.is_some_and(|(d, l)| (d - 500.0).abs() < 0.5 && l != 0), "{right:?}");
     assert_eq!(on_path(&net, &lanes, DVec3::new(-11.0, 600.0, 0.0)), None);
+}
+
+/// At a junction every path starts the way the road ends: the right turn's light is not the
+/// bus's while it goes straight on, and is while its route turns right.
+#[test]
+fn the_way_at_a_junction_is_the_one_the_bus_takes() {
+    let road = omsi_sim::traffic::LaneBuilder::polyline(vec![DVec3::ZERO, DVec3::new(0.0, 100.0, 0.0)], LaneKind::Street, 3.0);
+    let straight = omsi_sim::traffic::LaneBuilder::polyline(vec![DVec3::new(0.0, 100.0, 0.0), DVec3::new(0.0, 130.0, 0.0)], LaneKind::Street, 3.0);
+    // (a right turn: on north a few metres, then east)
+    let right = omsi_sim::traffic::LaneBuilder::polyline(vec![DVec3::new(0.0, 100.0, 0.0), DVec3::new(0.0, 103.0, 0.0), DVec3::new(6.0, 112.0, 0.0), DVec3::new(30.0, 115.0, 0.0)], LaneKind::Street, 3.0);
+    let mut net = Network { lanes: vec![road, right, straight], ..Default::default() };
+    net.link(1.5);
+    net.lanes[0].next = vec![1, 2];
+    let way = path_along(&net, None, DVec3::new(0.0, 20.0, 0.0), 0.0, 200.0, &[]);
+    assert_eq!(way.iter().map(|w| w.0).collect::<Vec<_>>(), vec![0, 2]);
+    let guide = [DVec3::new(10.0, 113.0, 0.0), DVec3::new(25.0, 115.0, 0.0)];
+    let way = path_along(&net, None, DVec3::new(0.0, 20.0, 0.0), 0.0, 200.0, &guide);
+    assert_eq!(way.iter().map(|w| w.0).collect::<Vec<_>>(), vec![0, 1]);
+}
+
+/// A camera alone, with no plate by it, watches the red light where it stands by the way's
+/// stop line, else the speed; a plate says for itself.
+#[test]
+fn a_camera_alone_watches_the_light_it_stands_by() {
+    assert_eq!(camera_watches(CameraKind::Unspecified, 300.0, &[260.0]), CameraKind::Signal);
+    assert_eq!(camera_watches(CameraKind::Unspecified, 300.0, &[320.0]), CameraKind::Signal);
+    assert_eq!(camera_watches(CameraKind::Unspecified, 300.0, &[120.0, 600.0]), CameraKind::Speed);
+    assert_eq!(camera_watches(CameraKind::Unspecified, 300.0, &[]), CameraKind::Speed);
+    assert_eq!(camera_watches(CameraKind::SignalSpeed, 300.0, &[]), CameraKind::SignalSpeed);
+    assert_eq!(camera_watches(CameraKind::Speed, 300.0, &[300.0]), CameraKind::Speed);
+    // the plate by a camera box says what it watches
+    let mut n = nav(vec![cam(6.0, 400.0, CameraKind::Unspecified), cam(6.5, 401.0, CameraKind::SignalSpeed)]);
+    n.update_cits(&at(0.0, 45.0));
+    assert_eq!(n.cits.camera.as_ref().and_then(|c| c.tag), Some("Signal and speed"));
+    // alone (no traffic: no stop line known), the speed
+    let mut n = nav(vec![cam(6.0, 400.0, CameraKind::Unspecified)]);
+    n.update_cits(&at(0.0, 45.0));
+    assert_eq!(n.cits.camera.as_ref().and_then(|c| c.tag), Some("Speeding"));
 }

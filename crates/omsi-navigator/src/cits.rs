@@ -12,7 +12,7 @@
 //! Worked out a few times a second; drawn as small badges beside the speed and its limit.
 
 use super::*;
-use omsi_scene::{CameraKind, SpeedCamera};
+use omsi_scene::{CameraKind, LensColor, LensShape, SignalHead, SpeedCamera};
 use omsi_sim::traffic::{Aspect, TrafficLightController};
 
 /// How often the warnings are worked out (s).
@@ -142,6 +142,14 @@ pub(crate) fn camera_stage(dist: f64) -> Option<usize> {
 /// The lanes ahead of the bus with where each starts (m from the bus, the first negative):
 /// the route's while the bus is on it, else straight on (the gentlest way at each fork).
 pub(crate) fn path_ahead(net: &Network, route: Option<(&[usize], f32)>, bus: DVec3, heading: f64, reach: f64) -> Vec<(usize, f64)> {
+    path_along(net, route, bus, heading, reach, &[])
+}
+
+/// The way ahead as `path_ahead`, off the route following `guide` (the route's points, when
+/// the lanes are another network's: the traffic's) and else straight on. At a junction every
+/// path - left, straight, right - starts the way the road ends, so the way is told by where
+/// a path goes: the one that keeps nearest the guide, or that turns least end to end.
+pub(crate) fn path_along(net: &Network, route: Option<(&[usize], f32)>, bus: DVec3, heading: f64, reach: f64, guide: &[DVec3]) -> Vec<(usize, f64)> {
     let mut out = Vec::new();
     if let Some((lanes, s)) = route.filter(|r| !r.0.is_empty()) {
         let mut acc = -(s as f64);
@@ -162,12 +170,20 @@ pub(crate) fn path_ahead(net: &Network, route: Option<(&[usize], f32)>, bus: DVe
         let lane = &net.lanes[l];
         acc += lane.length() as f64;
         let end = lane.end_heading();
+        let near_guide = |n: usize| -> Option<f64> {
+            let nl = &net.lanes[n];
+            let (p, _) = nl.at((nl.length() * 0.6).min(25.0));
+            guide.iter().map(|g| (*g - p).truncate().length()).fold(None, |m: Option<f64>, d| Some(m.map_or(d, |m| m.min(d)))).filter(|d| *d < 8.0)
+        };
         let next = lane
             .next
             .iter()
             .filter(|&&n| net.lanes[n].kind == LaneKind::Street && !out.iter().any(|o| o.0 == n))
-            .map(|&n| (n, omsi_sim::traffic::wrap_deg(net.lanes[n].start_heading() - end).abs()))
-            .filter(|n| n.1 < 60.0)
+            .filter(|&&n| omsi_sim::traffic::wrap_deg(net.lanes[n].start_heading() - end).abs() < 60.0)
+            .map(|&n| {
+                let turn = omsi_sim::traffic::wrap_deg(net.lanes[n].end_heading() - end).abs() as f64;
+                (n, near_guide(n).map_or(1000.0 + turn, |d| d))
+            })
             .min_by(|a, b| a.1.total_cmp(&b.1));
         match next {
             Some((n, _)) => l = n,
@@ -264,6 +280,8 @@ struct Section {
 #[derive(Default)]
 pub(crate) struct Cits {
     pub cameras: std::sync::Arc<Vec<SpeedCamera>>,
+    /// The map's traffic light heads by their crossing object.
+    pub heads: std::sync::Arc<HashMap<i64, Vec<SignalHead>>>,
     t: f32,
     clock: f32,
     odometer: f64,
@@ -290,6 +308,9 @@ pub(crate) struct LightView {
     pub advice: LightAdvice,
     /// The line under it: the advised speed, or to stop.
     pub note: Option<String>,
+    /// The head's lenses as they are lit, left to right (a four-light head: red, yellow, the
+    /// left arrow, green); empty when the map's head is not known (drawn as three discs).
+    pub lenses: Vec<(LensColor, LensShape, bool)>,
 }
 
 /// The camera ahead: the speed sign grows and gets a red tab with the distance.
@@ -297,7 +318,7 @@ pub(crate) struct LightView {
 pub(crate) struct CameraView {
     pub dist: f64,
     pub limit: Option<f32>,
-    /// What else it watches (`Signal`, `Section`), on the tab.
+    /// What it watches (`Speeding`, `Signal`, `Signal and speed`, `Section`), on the tab.
     pub tag: Option<&'static str>,
     pub over: bool,
     /// Flashing: over its speed, or a moment at a new stage (1 km, 500 m, 300 m).
@@ -313,6 +334,20 @@ pub(crate) struct AverageView {
 }
 
 impl Cits {
+    pub fn set_heads(&mut self, heads: Vec<SignalHead>) {
+        let mut by: HashMap<i64, Vec<SignalHead>> = HashMap::new();
+        // (under each crossing a lens of it names)
+        for h in heads {
+            let mut crossings: Vec<i64> = h.lenses.iter().map(|l| l.crossing).collect();
+            crossings.sort_unstable();
+            crossings.dedup();
+            for c in crossings {
+                by.entry(c).or_default().push(h.clone());
+            }
+        }
+        self.heads = std::sync::Arc::new(by);
+    }
+
     /// Flashing now (twice a second).
     pub fn blink(&self) -> bool {
         (self.clock * 2.5).fract() < 0.55
@@ -323,6 +358,25 @@ const RED: Color = Color::rgba(226, 38, 38, 1.0);
 const AMBER: Color = Color::rgba(240, 160, 20, 1.0);
 
 impl Navigator {
+    /// Points along the route ahead (every lane's points, out to `reach` m), while the bus is on it.
+    fn route_points(&self, reach: f64) -> Vec<DVec3> {
+        let Some(net) = self.global.as_deref() else { return Vec::new() };
+        if !self.route.on_route || self.destination.is_some() {
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        let mut acc = -(self.route.s as f64);
+        for &l in self.route.lanes.iter().skip(self.route.progress) {
+            let Some(lane) = net.lanes.get(l) else { break };
+            out.extend(lane.points.iter().copied());
+            acc += lane.length() as f64;
+            if acc > reach {
+                break;
+            }
+        }
+        out
+    }
+
     pub(crate) fn update_cits(&mut self, f: &NavFrame) {
         let v = (f.speed_kmh.abs() / 3.6) as f64;
         self.cits.clock += f.dt;
@@ -339,12 +393,23 @@ impl Navigator {
         let mut light_view = None;
         let mut camera_view = None;
         let mut average = None;
+        let mut stop_lines: Vec<f64> = Vec::new();
         let limit_here = self.speed_limit;
 
         // --- the traffic light ahead and the vehicle ahead: the traffic's own network
         if let Some(t) = f.traffic {
             let lanes = t.lanes_ahead_of(f.bus, f.heading, LIGHT_REACH);
-            let light = lanes.iter().skip(1).filter(|(l, _)| t.net.lanes[*l].traffic_light.is_some()).min_by(|a, b| a.1.total_cmp(&b.1)).copied();
+            // (the light of the bus's own way: the junction's other paths have lights of
+            // their own - the right turn's green while the bus's way is red)
+            // (out to the cameras' reach: a camera standing by a stop line watches its light)
+            let guide = self.route_points(CAMERA_REACH + 50.0);
+            let way = path_along(&t.net, None, f.bus, f.heading, CAMERA_REACH, &guide);
+            stop_lines = way.iter().skip(1).filter(|(l, _)| t.net.lanes[*l].traffic_light.is_some()).map(|&(_, d)| d).collect();
+            let light = way.iter().skip(1).find(|(l, d)| t.net.lanes[*l].traffic_light.is_some() && *d <= LIGHT_REACH as f64).map(|&(l, d)| (l, d as f32));
+            if omsi_cfg::flags::OMSI_DEBUG_NAV.is_set() {
+                let lit: Vec<_> = lanes.iter().filter_map(|&(l, d)| t.net.lanes[l].traffic_light.map(|(c, li)| (l, d.round(), c, li, t.light_state(c, li).map(|s| s.0)))).collect();
+                log::info!("c-its: {} lanes ahead (on {:?}), with a light: {lit:?}; the way {:?}, its light {light:?}", lanes.len(), lanes.first(), way.iter().map(|w| w.0).collect::<Vec<_>>());
+            }
             if let Some((lane, dist)) = light {
                 if let Some((c, li)) = t.net.lanes[lane].traffic_light {
                     if let Some((state, _)) = t.light_state(c, li) {
@@ -352,7 +417,12 @@ impl Navigator {
                         let change_in = t.lights.get(c).and_then(|ctl| ctl.time_to_change(li)).unwrap_or(f32::INFINITY);
                         let until_go = t.light_until_go(c, li).unwrap_or(0.0);
                         if aspect != Aspect::Dark {
-                            let lv = light_view_of(aspect, change_in, until_go, dist as f64, v, limit_here.unwrap_or(50.0), units);
+                            let mut lv = light_view_of(aspect, change_in, until_go, dist as f64, v, limit_here.unwrap_or(50.0), units);
+                            lv.lenses = head_lenses(&self.cits.heads, t, c, li);
+                            if omsi_cfg::flags::OMSI_DEBUG_NAV.is_set() {
+                                let objs: Vec<(i64, usize)> = t.controller_of_object.iter().filter(|&(_, &k)| k == c).map(|(o, _)| (*o, self.cits.heads.get(o).map_or(0, Vec::len))).collect();
+                                log::info!("c-its: light {c}.{li} {aspect:?} in {change_in:.0} s, lenses {:?}, crossing objects (heads) {objs:?}", lv.lenses);
+                            }
                             if lv.advice == LightAdvice::Violation {
                                 alerts.push(Alert { level: Level::Danger, icon: "traffic", icon_color: RED, text: omsi_ui::tr("Red light ahead").into_owned(), flash: true });
                             }
@@ -454,11 +524,12 @@ impl Navigator {
             self.cits.stage = stage;
             if let Some(n) = near {
                 let over = n.limit.is_some_and(|l| kmh > l + 0.5);
-                let tag = match cams[n.camera].kind {
-                    CameraKind::Speed => None,
-                    CameraKind::SignalSpeed => Some("Signal"),
-                    _ => Some("Section"),
-                };
+                let tag = Some(match camera_watches(cams[n.camera].kind, n.dist, &stop_lines) {
+                    CameraKind::Speed | CameraKind::Unspecified => "Speeding",
+                    CameraKind::Signal => "Signal",
+                    CameraKind::SignalSpeed => "Signal and speed",
+                    _ => "Section",
+                });
                 camera_view = Some(CameraView { dist: n.dist, limit: n.limit, tag, over, flash: over || self.cits.pulse > 0.0 });
             }
         }
@@ -480,12 +551,28 @@ impl Navigator {
     }
 }
 
+/// What a camera `dist` m ahead watches: what its object or plate says, and a camera that
+/// does not say watches the red light where it stands by a stop line of the way (`stop_lines`,
+/// m ahead: from 30 m before it, a camera on the near side, to 60 m past it, on the mast
+/// across the junction), else the speed.
+pub(crate) fn camera_watches(kind: CameraKind, dist: f64, stop_lines: &[f64]) -> CameraKind {
+    match kind {
+        CameraKind::Unspecified if stop_lines.iter().any(|&s| (-30.0..=60.0).contains(&(dist - s))) => CameraKind::Signal,
+        CameraKind::Unspecified => CameraKind::Speed,
+        k => k,
+    }
+}
+
+/// Which of a camera, its plate and its mast standing together says most: a plate over a
+/// camera box that does not say.
 fn kind_rank(k: CameraKind) -> u8 {
     match k {
-        CameraKind::Speed => 0,
-        CameraKind::SignalSpeed => 1,
-        CameraKind::SectionPoint => 2,
-        CameraKind::SectionStart | CameraKind::SectionEnd => 3,
+        CameraKind::Unspecified => 0,
+        CameraKind::Speed => 1,
+        CameraKind::Signal => 2,
+        CameraKind::SignalSpeed => 3,
+        CameraKind::SectionPoint => 4,
+        CameraKind::SectionStart | CameraKind::SectionEnd => 5,
     }
 }
 
@@ -497,5 +584,35 @@ fn light_view_of(aspect: Aspect, change_in: f32, until_go: f32, dist: f64, v: f6
         LightAdvice::Stop => Some(omsi_ui::tr("Prepare to stop").into_owned()),
         _ => None,
     };
-    LightView { aspect, secs, advice, note }
+    LightView { aspect, secs, advice, note, lenses: Vec::new() }
+}
+
+/// The lenses of the head that shows light `li` of controller `c`, each lit as its own light
+/// is (an arrow part may name another crossing than the discs: its own controller): of the
+/// heads that show it, the one with the most lenses (a four-light head over the plain one on
+/// the near side; a pedestrian's red and green have no yellow).
+pub(crate) fn head_lenses(heads: &HashMap<i64, Vec<SignalHead>>, t: &TrafficSim, c: usize, li: usize) -> Vec<(LensColor, LensShape, bool)> {
+    let ours: Vec<i64> = t.controller_of_object.iter().filter(|&(_, &k)| k == c).map(|(obj, _)| *obj).collect();
+    let Some(head) = ours
+        .iter()
+        .filter_map(|obj| heads.get(obj))
+        .flatten()
+        .filter(|h| h.lenses.iter().any(|l| l.light == li && ours.contains(&l.crossing)))
+        .max_by_key(|h| (h.lenses.iter().any(|l| l.color == LensColor::Yellow), h.lenses.len()))
+    else {
+        return Vec::new();
+    };
+    head.lenses
+        .iter()
+        .map(|l| {
+            let state = t.controller_of_object.get(&l.crossing).and_then(|&k| t.light_state(k, l.light)).map_or(-1, |s| s.0);
+            let (r, y, g) = if state < 0 { (false, false, false) } else { TrafficLightController::lamps(state) };
+            let on = match l.color {
+                LensColor::Red => r,
+                LensColor::Yellow => y,
+                LensColor::Green => g,
+            };
+            (l.color, l.shape, on)
+        })
+        .collect()
 }

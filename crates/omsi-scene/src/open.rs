@@ -613,7 +613,7 @@ pub fn navigation_map_of(root: &Path, tiles: &[(i32, i32, PathBuf)], chrono_dirs
         .clone()
     };
     #[allow(clippy::type_complexity)]
-    let parts: Vec<(Vec<Lane>, Vec<(i64, DVec3)>, Vec<(DVec3, f64, String)>, Vec<(Vec<DVec3>, f32)>, Vec<(DVec3, String)>, Vec<SpeedCamera>)> = tiles
+    let parts: Vec<(Vec<Lane>, Vec<(i64, DVec3)>, Vec<(DVec3, f64, String)>, Vec<(Vec<DVec3>, f32)>, Vec<(DVec3, String)>, Vec<SpeedCamera>, Vec<LampObject>)> = tiles
         .par_iter()
         .map(|(tx, ty, path)| {
             let (tx, ty) = (*tx, *ty);
@@ -623,8 +623,9 @@ pub fn navigation_map_of(root: &Path, tiles: &[(i32, i32, PathBuf)], chrono_dirs
             let mut roads = Vec::new();
             let mut names = Vec::new();
             let mut cameras = Vec::new();
+            let mut lamps = Vec::new();
             let Some(tile) = omsi_world::map_index::read_tile(path, chrono_dirs) else {
-                return (lanes, positions, signs, roads, names, cameras);
+                return (lanes, positions, signs, roads, names, cameras, lamps);
             };
             let origin2 = DVec2::new(tx as f64 * tile_size(), ty as f64 * tile_size());
             let terrain = Terrain::load(&tile_companion(&path, ".terrain")).unwrap_or_else(|_| Terrain::flat());
@@ -700,11 +701,50 @@ pub fn navigation_map_of(root: &Path, tiles: &[(i32, i32, PathBuf)], chrono_dirs
                 let absolute = sco.absolute_height();
                 let pos = DVec3::new(x, y, if absolute { o.pos[2] } else { o.pos[2] + ground() });
                 positions.push((o.id, pos));
+                // a traffic light's head (or a part of one): its lenses and the crossing light
+                if let (Some(crossing), Some(light)) = (o.var_parent, o.extra.first().and_then(|t| t.trim().parse::<usize>().ok())) {
+                    let lenses = lenses_of(&sco, &o.file);
+                    if !lenses.is_empty() {
+                        lamps.push(LampObject { id: o.id, parent: o.parent_id.map(|q| (q, o.attach_index)), crossing, light, position: o.parent_id.is_none().then_some((pos, o.rot[0])), lenses });
+                    }
+                }
                 if !sco.paths.is_empty() {
                     lanes.extend(object_lanes(&sco, pos, [o.rot[0], 0.0, 0.0], None, (tx, ty), o.id, &o.rules));
                 }
             }
-            (lanes, positions, signs, roads, names, cameras)
+            // the heads hung on a frame or a mast ([attachObj], a list of their own): put
+            // together by what they hang on, so their place is not needed
+            for o in &tile.attach_objects {
+                let (Some(crossing), Some(light)) = (o.var_parent, o.extra.first().and_then(|t| t.trim().parse::<usize>().ok())) else { continue };
+                let Some(sco) = sco_of(&o.file) else { continue };
+                let lenses = lenses_of(&sco, &o.file);
+                if !lenses.is_empty() {
+                    lamps.push(LampObject { id: o.id, parent: o.parent_id.map(|q| (q, o.attach_index)), crossing, light, position: None, lenses });
+                }
+            }
+            // the rows along the splines: Korean maps hang many of their traffic lights and
+            // cameras on the road splines ([splineAttachement])
+            for a in &tile.spline_attachments {
+                let kind = camera_kind(&a.file);
+                let light = a.var_parent.zip(a.strings.first().and_then(|t| t.trim().parse::<usize>().ok()));
+                if kind.is_none() && light.is_none() {
+                    continue;
+                }
+                let lenses = match light {
+                    Some(_) => sco_of(&a.file).map(|sco| lenses_of(&sco, &a.file)).unwrap_or_default(),
+                    None => Vec::new(),
+                };
+                for (_, ro) in omsi_world::map_index::tile_row_objects(a, &tile.splines, origin2, None) {
+                    let (pos, heading) = (ro.pose.pos, ro.pose.heading());
+                    if let Some(kind) = kind {
+                        cameras.push(SpeedCamera { position: pos, heading, kind, limit: camera_limit(&a.file, &a.strings) });
+                    }
+                    if let (Some((crossing, light)), false) = (light, lenses.is_empty()) {
+                        lamps.push(LampObject { id: a.id, parent: None, crossing, light, position: Some((pos, heading)), lenses: lenses.clone() });
+                    }
+                }
+            }
+            (lanes, positions, signs, roads, names, cameras, lamps)
         })
         .collect();
     let mut lanes = Vec::new();
@@ -713,27 +753,31 @@ pub fn navigation_map_of(root: &Path, tiles: &[(i32, i32, PathBuf)], chrono_dirs
     let mut roads = Vec::new();
     let mut names = Vec::new();
     let mut cameras = Vec::new();
-    for (l, p, s, r, n, c) in parts {
+    let mut lamps = Vec::new();
+    for (l, p, s, r, n, c, h) in parts {
         lanes.extend(l);
         positions.extend(p);
         signs.extend(s);
         roads.extend(r);
         names.extend(n);
         cameras.extend(c);
+        lamps.extend(h);
     }
+    let signal_heads = signal_heads(lamps);
     log::info!("navigation map: {} roads without a path for cars", roads.len());
     log::info!(
-        "navigation map: {} tiles, {} lanes, {} objects placed, {} street name signs, {} enforcement cameras, {} object types, {} spline types, {:.1} s",
+        "navigation map: {} tiles, {} lanes, {} objects placed, {} street name signs, {} enforcement cameras, {} signal heads, {} object types, {} spline types, {:.1} s",
         tiles.len(),
         lanes.len(),
         positions.len(),
         signs.len(),
         cameras.len(),
+        signal_heads.len(),
         scos.lock().len(),
         slis.lock().len(),
         t0.elapsed().as_secs_f64()
     );
-    NavigationMap { lanes, road_surfaces: roads, places: positions, signs, names, cameras }
+    NavigationMap { lanes, road_surfaces: roads, places: positions, signs, names, cameras, signal_heads }
 }
 
 /// The whole map for the navigator (see [`World::navigation_map`]).
@@ -750,6 +794,194 @@ pub struct NavigationMap {
     pub names: Vec<(DVec3, String)>,
     /// The speed and red-light cameras placed on the map (the navigator's warnings).
     pub cameras: Vec<SpeedCamera>,
+    /// The traffic lights' heads: their lenses in order and the crossing light of each
+    /// (the navigator's signal card draws a head as the bus sees it).
+    pub signal_heads: Vec<SignalHead>,
+}
+
+/// The colour of a lens.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LensColor {
+    Red,
+    Yellow,
+    Green,
+}
+
+/// What a lens shows: a disc, or an arrow.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LensShape {
+    Disc,
+    Left,
+    Right,
+}
+
+/// One lens of a head: its place in the head (1 at the left), colour, shape, and the light
+/// it shows: of which crossing (the parts of one head may name two: the discs one, the
+/// arrow another) and its index there.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Lens {
+    pub slot: u8,
+    pub color: LensColor,
+    pub shape: LensShape,
+    pub crossing: i64,
+    pub light: usize,
+}
+
+/// A traffic light's head as one: Korea's four- and five-light heads are objects put one on
+/// the other - the red, yellow and green discs (`TrafficLight_4`), the left arrow
+/// (`_Left`, its third lens) and the right arrow (`_Right`, its fifth) - each linked to a
+/// light of the crossing (`[varparent]`, and the light's index the first string).
+#[derive(Clone, Debug, PartialEq)]
+pub struct SignalHead {
+    pub crossing: i64,
+    pub lenses: Vec<Lens>,
+}
+
+/// A placed part of a head, before the parts are put together.
+#[derive(Clone, Debug)]
+struct LampObject {
+    id: i64,
+    /// The object it hangs on (`[attachObj]`) and at which of its points: an arrow on its
+    /// disc head, or both on one point of a frame.
+    parent: Option<(i64, usize)>,
+    crossing: i64,
+    light: usize,
+    /// Where it stands and which way it faces when placed on its own.
+    position: Option<(DVec3, f64)>,
+    lenses: Vec<(u8, LensColor, LensShape)>,
+}
+
+/// The lenses of a lamp object: the meshes after `[trafficlight]` whose material fades with
+/// `red`, `yellow` or `green` ([alphascale]). An arrow is a lens whose mesh or texture says
+/// so (`Green_left.o3d`, `gll.tga`), pointing the way its mesh names (`right`), else the way
+/// the object names. Its place in the head is the number its mesh is named by (`3.o3d`),
+/// else Korea's order: red, yellow, the left arrow, green, the right arrow - so that the
+/// lenses of the parts of one head (`Red`/`Yellow`/`Green.o3d` and the arrow part's
+/// `Yellow`/`Green_left.o3d`) fall into their places.
+pub fn lenses_of(sco: &SceneryObject, file: &str) -> Vec<(u8, LensColor, LensShape)> {
+    let stem_of = |f: &str| f.rsplit(['/', '\\']).next().unwrap_or(f).to_ascii_lowercase();
+    let object_right = stem_of(file).contains("right");
+    let mut out: Vec<(u8, LensColor, LensShape)> = Vec::new();
+    for m in &sco.model.meshes {
+        let Some(color) = m.materials.iter().find_map(|t| match t.alphascale.as_deref().map(|a| a.trim().to_ascii_lowercase()).as_deref() {
+            Some("red") => Some(LensColor::Red),
+            Some("yellow") => Some(LensColor::Yellow),
+            Some("green") => Some(LensColor::Green),
+            _ => None,
+        }) else {
+            continue;
+        };
+        let mesh = stem_of(&m.file);
+        let arrow_texture = m.materials.iter().any(|t| {
+            let t = stem_of(&t.texture);
+            t.starts_with("gll") || t.contains("left") || t.contains("right") || t.contains("arrow")
+        });
+        let shape = if mesh.contains("right") || (arrow_texture && stem_of(&m.materials.iter().map(|t| t.texture.as_str()).collect::<String>()).contains("right")) {
+            LensShape::Right
+        } else if mesh.contains("left") {
+            LensShape::Left
+        } else if mesh.contains("arrow") || arrow_texture {
+            if object_right { LensShape::Right } else { LensShape::Left }
+        } else {
+            LensShape::Disc
+        };
+        let slot = mesh.split('.').next().and_then(|n| n.trim().parse::<u8>().ok()).unwrap_or(match (color, shape) {
+            (LensColor::Red, _) => 1,
+            (LensColor::Yellow, _) => 2,
+            (_, LensShape::Left) => 3,
+            (_, LensShape::Disc) => 4,
+            (_, LensShape::Right) => 5,
+        });
+        if !out.iter().any(|l| l.0 == slot) {
+            out.push((slot, color, shape));
+        }
+    }
+    out
+}
+
+/// The parts put together into heads: an object hung on another part or on the same point
+/// of a frame, or standing within 0.8 m of one facing the same way (a pole carries heads
+/// for two approaches back to back), is of its head. A lens a part repeats (the arrow
+/// part's own yellow) is the head's once.
+fn signal_heads(parts: Vec<LampObject>) -> Vec<SignalHead> {
+    let n = parts.len();
+    let mut root: Vec<usize> = (0..n).collect();
+    fn find(root: &mut [usize], mut i: usize) -> usize {
+        while root[i] != i {
+            root[i] = root[root[i]];
+            i = root[i];
+        }
+        i
+    }
+    let by_id: HashMap<i64, usize> = parts.iter().enumerate().map(|(i, p)| (p.id, i)).collect();
+    for (i, p) in parts.iter().enumerate() {
+        if let Some(&j) = p.parent.and_then(|q| by_id.get(&q.0)) {
+            let (a, b) = (find(&mut root, i), find(&mut root, j));
+            root[a] = b;
+        }
+    }
+    // (parts on one point of the same frame)
+    let mut on_point: HashMap<(i64, usize), usize> = HashMap::new();
+    for (i, p) in parts.iter().enumerate() {
+        if let Some(q) = p.parent {
+            match on_point.get(&q) {
+                Some(&j) => {
+                    let (a, b) = (find(&mut root, i), find(&mut root, j));
+                    root[a] = b;
+                }
+                None => {
+                    on_point.insert(q, i);
+                }
+            }
+        }
+    }
+    let mut placed: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+    for (i, p) in parts.iter().enumerate() {
+        if let Some((q, _)) = p.position {
+            let key = ((q.x / 2.0).floor() as i64, (q.y / 2.0).floor() as i64);
+            placed.entry(key).or_default().push(i);
+        }
+    }
+    for (i, p) in parts.iter().enumerate() {
+        let Some((q, h)) = p.position else { continue };
+        let (cx, cy) = ((q.x / 2.0).floor() as i64, (q.y / 2.0).floor() as i64);
+        for dx in -1..=1 {
+            for dy in -1..=1 {
+                for &j in placed.get(&(cx + dx, cy + dy)).into_iter().flatten() {
+                    if j != i && parts[j].position.is_some_and(|(r, k)| (r - q).truncate().length() < 0.8 && ((k - h + 540.0).rem_euclid(360.0) - 180.0).abs() < 10.0) {
+                        let (a, b) = (find(&mut root, i), find(&mut root, j));
+                        root[a] = b;
+                    }
+                }
+            }
+        }
+    }
+    let mut groups: HashMap<usize, Vec<usize>> = HashMap::new();
+    for i in 0..n {
+        let r = find(&mut root, i);
+        groups.entry(r).or_default().push(i);
+    }
+    let mut heads: Vec<SignalHead> = groups
+        .into_values()
+        .map(|mut g| {
+            g.sort_unstable();
+            let crossing = parts[g[0]].crossing;
+            let mut lenses: Vec<Lens> = Vec::new();
+            // (the disc head's lenses first: an arrow part repeats its yellow)
+            g.sort_by_key(|&i| std::cmp::Reverse(parts[i].lenses.iter().filter(|l| l.2 == LensShape::Disc).count()));
+            for &i in &g {
+                for &(slot, color, shape) in &parts[i].lenses {
+                    if !lenses.iter().any(|l| l.slot == slot) {
+                        lenses.push(Lens { slot, color, shape, crossing: parts[i].crossing, light: parts[i].light });
+                    }
+                }
+            }
+            lenses.sort_by_key(|l| l.slot);
+            SignalHead { crossing, lenses }
+        })
+        .collect();
+    heads.sort_by(|a, b| a.crossing.cmp(&b.crossing).then_with(|| a.lenses.len().cmp(&b.lenses.len())));
+    heads
 }
 
 /// What an enforcement camera watches.
@@ -757,8 +989,16 @@ pub struct NavigationMap {
 pub enum CameraKind {
     /// The speed.
     Speed,
-    /// The speed and the red light (a camera on a traffic light's mast).
+    /// The red light.
+    Signal,
+    /// The speed and the red light.
     SignalSpeed,
+    /// A camera that does not say: Korea's camera boxes (`KOR_Photoemergyzone\camera`, a
+    /// traffic light mast with one) tell what they watch by the plate put by them (`speedcctv`
+    /// "과속 단속 장비", `trafficlight_speedcctv` "신호.과속 단속장비", `areacctvstart`...);
+    /// one without a plate watches the red light at a junction, else the speed (the
+    /// navigator decides, by the stop line beside it).
+    Unspecified,
     /// Where an average speed check begins and ends (Korea's 구간단속); `SectionPoint` is a
     /// pole that does not say which (the first passed begins it).
     SectionStart,
@@ -795,10 +1035,16 @@ pub fn camera_kind(file: &str) -> Option<CameraKind> {
     if name.contains("interval") && (name.contains("cam") || name.contains("cctv")) {
         return Some(CameraKind::SectionPoint);
     }
-    if name.contains("tflcam") || name.contains("trafficlightspeedcctv") || name.contains("redlightcam") || (name.contains("amplemast") && name.contains("camera")) {
+    if name.contains("spd+tfl") || name.contains("trafficlightspeedcctv") {
         return Some(CameraKind::SignalSpeed);
     }
-    let speed = ["speedcctv", "speedcam", "blitzer", "fotoradar", "radarcam", "radarfalle"].iter().any(|k| name.contains(k)) || (f.contains("photoemergyzone") && name == "camera");
+    if name.contains("redlightcam") || name.contains("signalcam") || (name.contains("tflcam") && !name.contains("spd")) {
+        return Some(CameraKind::Signal);
+    }
+    if (f.contains("photoemergyzone") && name == "camera") || (name.contains("amplemast") && name.contains("camera")) {
+        return Some(CameraKind::Unspecified);
+    }
+    let speed = ["speedcctv", "speedcam", "blitzer", "fotoradar", "radarcam", "radarfalle"].iter().any(|k| name.contains(k));
     speed.then_some(CameraKind::Speed)
 }
 
@@ -940,5 +1186,61 @@ fn object_program(
         )))
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod signal_head_tests {
+    use super::*;
+    use LensColor::*;
+    use LensShape::*;
+
+    fn part(id: i64, parent: Option<i64>, light: usize, at: Option<(f64, f64)>, lenses: &[(u8, LensColor, LensShape)]) -> LampObject {
+        LampObject { id, parent: parent.map(|q| (q, 0)), crossing: 7, light, position: at.map(|(x, h)| (DVec3::new(x, 0.0, 0.0), h)), lenses: lenses.to_vec() }
+    }
+
+    fn look(h: &SignalHead) -> Vec<(LensColor, LensShape, usize)> {
+        h.lenses.iter().map(|l| (l.color, l.shape, l.light)).collect()
+    }
+
+    /// Korea's four-light head: the disc head (red, yellow, green in its 4th place) with the
+    /// left-arrow part hung on it (its own yellow, and the arrow in the 3rd), each on a
+    /// light of its own; and a five-light head of three parts standing together.
+    #[test]
+    fn heads_of_several_parts_are_put_together_in_their_order() {
+        let discs = [(1, Red, Disc), (2, Yellow, Disc), (4, Green, Disc)];
+        let heads = signal_heads(vec![part(1, None, 0, Some((0.0, 90.0)), &discs), part(2, Some(1), 1, None, &[(2, Yellow, Disc), (3, Green, Left)])]);
+        assert_eq!(heads.len(), 1);
+        assert_eq!(look(&heads[0]), vec![(Red, Disc, 0), (Yellow, Disc, 0), (Green, Left, 1), (Green, Disc, 0)]);
+        let heads = signal_heads(vec![
+            part(1, None, 0, Some((0.0, 90.0)), &discs),
+            part(2, None, 1, Some((0.3, 92.0)), &[(2, Yellow, Disc), (3, Green, Left)]),
+            part(3, None, 2, Some((0.5, 90.0)), &[(2, Yellow, Disc), (5, Green, Right)]),
+        ]);
+        assert_eq!(heads.len(), 1);
+        assert_eq!(look(&heads[0]), vec![(Red, Disc, 0), (Yellow, Disc, 0), (Green, Left, 1), (Green, Disc, 0), (Green, Right, 2)]);
+    }
+
+    /// The disc part and the arrow part hung side by side on one point of a frame, each
+    /// naming a crossing of its own: one head, each lens with its crossing; another point of
+    /// the frame is another head.
+    #[test]
+    fn parts_on_one_point_of_a_frame_are_one_head() {
+        let mut arrow = part(2, Some(100), 0, None, &[(2, Yellow, Disc), (3, Green, Left)]);
+        arrow.crossing = 8;
+        let mut other = part(3, Some(100), 0, None, &[(1, Red, Disc), (2, Yellow, Disc), (4, Green, Disc)]);
+        other.parent = Some((100, 1));
+        let heads = signal_heads(vec![part(1, Some(100), 0, None, &[(1, Red, Disc), (2, Yellow, Disc), (4, Green, Disc)]), arrow, other]);
+        assert_eq!(heads.len(), 2);
+        let four = heads.iter().find(|h| h.lenses.len() == 4).expect("the four-light head");
+        assert_eq!(four.lenses.iter().map(|l| (l.color, l.shape, l.crossing)).collect::<Vec<_>>(), vec![(Red, Disc, 7), (Yellow, Disc, 7), (Green, Left, 8), (Green, Disc, 7)]);
+    }
+
+    /// Two heads on one pole for the two approaches stand back to back: two heads.
+    #[test]
+    fn heads_back_to_back_stay_apart() {
+        let three = [(1, Red, Disc), (2, Yellow, Disc), (3, Green, Disc)];
+        let heads = signal_heads(vec![part(1, None, 0, Some((0.0, 90.0)), &three), part(2, None, 1, Some((0.2, 270.0)), &three)]);
+        assert_eq!(heads.len(), 2);
     }
 }

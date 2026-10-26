@@ -99976,3 +99976,9 @@ _version: 2
   ko: "저지대 침수"
 "Heavy rain fills the hollows - underpasses, dips in the road, fields - beyond what the drains carry; a bus whose air intake goes under has a drowned engine":
   ko: "배수 능력을 넘는 폭우가 오면 지하차도·도로 저점·논밭 같은 저지대에 물이 찹니다. 흡기구까지 잠긴 버스는 엔진이 침수됩니다"
+"Speeding":
+  de: "Tempo"
+  ko: "과속"
+"Signal and speed":
+  de: "Ampel und Tempo"
+  ko: "신호과속"
