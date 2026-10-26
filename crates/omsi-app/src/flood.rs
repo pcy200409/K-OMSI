@@ -85,7 +85,7 @@ impl FloodState {
             let grid = flood::ground_grid(&data, CELL, MAX_CELLS);
             let basins = flood::find_basins(&grid, MIN_DEPTH, MIN_CELLS);
             let note = format!("{} x {} cells of {} m, {} ms", grid.w, grid.h, grid.cell, t.elapsed().as_millis());
-            let _ = tx.send((Flood::new(basins), note));
+            let _ = tx.send((Flood::of_grid(&grid, basins), note));
         });
         if let Err(e) = spawned {
             log::warn!("flood: the analysis could not start: {e}");
@@ -99,6 +99,7 @@ impl FloodState {
             Ok((mut new, note)) => {
                 self.pending = None;
                 new.carry_over(&self.flood);
+                new.generation = self.flood.generation + 1;
                 let deep = new.basins.iter().filter(|b| b.spill - b.bottom >= 0.5).count();
                 let catch: f64 = new.basins.iter().map(|b| b.paved_area + b.bare_area).sum();
                 log::info!("flood: {} basins ({} at least 0.5 m deep, {:.0} m² draining into them) - {note}", new.basins.len(), deep, catch);
