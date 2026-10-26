@@ -116,7 +116,7 @@ pub fn install_sim_decoder() {
         if omsi_htmlpage::wanted(html) {
             Box::new(omsi_htmlpage::EngineRenderer::with_api(width, height, html, api))
         } else {
-            Box::new(omsi_htmlengine::vehicle_renderer(width, height, html, api))
+            omsi_htmlengine::vehicle_renderer(width, height, html, api)
         }
     });
 }
