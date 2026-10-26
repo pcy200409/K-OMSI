@@ -139,8 +139,14 @@ pub(super) fn lights(cx: LightsCx, dt: f32, daylight: omsi_sim::Daylight, behind
             let wetness = puddles::road_wetness(*cx.weather.wetness, wt.snow);
             // (the vehicles' own wheel spray goes with the same water: only through puddles -
             // in snow it keeps the scripts' own slush)
+            let flood = cx.weather.flood.water_at();
             if !(wt.snow || wt.snow_on_road || kind == 2) {
-                omsi_sim::particles::set_road_water(Some(puddles::road_water_hook(w, wetness)));
+                let hook = puddles::road_water_hook(w, wetness);
+                omsi_sim::particles::set_road_water(Some(match flood.clone() {
+                    // (and through the flood water, in full)
+                    Some(f) => std::sync::Arc::new(move |x, y| hook(x, y).max(crate::flood::spray_of(f.depth(x, y)))),
+                    None => hook,
+                }));
             }
             if (wetness > 0.0 || !cx.weather.spray.is_empty()) && !omsi_cfg::flags::OMSI_NO_SPRAY.is_set() {
                 let __ts = Instant::now();
@@ -155,6 +161,7 @@ pub(super) fn lights(cx: LightsCx, dt: f32, daylight: omsi_sim::Daylight, behind
                     w,
                     wetness,
                     rain_quality,
+                    flood.as_ref(),
                 );
                 cx.weather.spray.sprites(cam.position, &mut scene.smoke);
                 cx.perf.profile.add(crate::profile_keys::ProfKey::LightsSpray, __ts.elapsed().as_secs_f64());

@@ -525,6 +525,8 @@ pub struct RigidBody {
     pub wind: Vec3,
     /// How wet the road is, 0 dry .. 1 wet .. 2 under snow (the host's `street_cond`).
     pub wetness: f32,
+    /// K-OMSI: the flood water the body stands in (m deep).
+    pub water_depth: f32,
     /// Distance driven along the road (m, signed): where on the road's unevenness the
     /// body's origin is. An axle at `y` metres from the origin is at `road_s + y`.
     pub road_s: f64,
