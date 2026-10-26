@@ -5,8 +5,8 @@
 use super::*;
 use omsi_ui::icons::Stage;
 
-/// The openOMSI wordmark (white letters, the orange "OMSI"), for the loading screen.
-const WORDMARK: &str = include_str!("../../../../assets/logos/openomsi-wordmark-light.svg");
+/// The K-OMSI wordmark (light grey "K-", the orange "OMSI"), for the loading screen.
+const WORDMARK: &str = include_str!("../../../../assets/logos/komsi-wordmark-light.svg");
 
 /// The pixels of a stretch of the loading bar `w` x `h` with its stripes: 45 degree bands of
 /// the accent `dark` and a lighter one `light`, `period` pixels apart along the bar, moved
@@ -119,7 +119,7 @@ impl Ui {
             }
             None => {
                 let lw = (560.0 * s).min(width * 0.6).round() as u32;
-                let lh = (lw as f32 * 303.0 / 1142.0).round() as u32;
+                let lh = (lw as f32 * 380.0 / 1880.0).round() as u32;
                 let tex = self.text.cached(r, scene, ("\u{0}wordmark".to_string(), lw, [255, 255, 255, ka]), (lw, lh), || {
                     fade(omsi_ui::icons::rasterize_rgba(WORDMARK, lw, lh).unwrap_or_else(|| vec![0; (lw * lh * 4) as usize]))
                 });
