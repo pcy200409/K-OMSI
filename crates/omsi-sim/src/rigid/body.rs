@@ -563,6 +563,13 @@ impl RigidBody {
             let now = realism::roughness(w.surface_now, at, side);
             w.rough = if w.surface_mix < 1.0 { realism::roughness(w.surface_was, at, side) * (1.0 - w.surface_mix) + now * w.surface_mix } else { now };
         }
+        // K-OMSI: a pothole under a tyre (either road model): the road drops by its depth there
+        if let Some(holes) = crate::potholes::current() {
+            for w in self.wheels.iter_mut() {
+                let p = self.position + rot.mul_vec3(w.attach).as_dvec3();
+                w.rough -= holes.depth_at(p.x, p.y);
+            }
+        }
         (force, torque)
     }
 

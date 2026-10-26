@@ -40,6 +40,7 @@ pub mod rain;
 pub mod road_snow;
 pub mod route_arrows;
 pub mod flood_water;
+pub mod pothole_view;
 pub mod threads;
 pub mod trolley_derive;
 pub mod arc_fx;
