@@ -49,6 +49,9 @@ pub struct VehicleHost {
     pub water_depth: f32,
     /// K-OMSI: how icy the road under the vehicle is (0..1, `omsi_sim::road_ice`).
     pub ice: f32,
+    /// K-OMSI: the spray of the vehicles just ahead on a wet road, thrown onto the windscreen
+    /// (0..1, as heavy as a downpour at 1; `spray_screen`).
+    pub spray_ahead: f32,
     /// How much of the vehicle rolls off the road (0..1): its wheels' share on grass, earth
     /// or gravel, a muddy one counted whole (set from what the wheels roll on, see
     /// `omsi_scene::wheel_surface`). The body soils with it (`update_dirt`).
@@ -325,6 +328,7 @@ impl VehicleHost {
             street_cond: self.street_cond,
             water_depth: self.water_depth,
             ice: self.ice,
+            spray_ahead: self.spray_ahead,
             offroad: self.offroad,
             temperature: self.temperature,
             abs_humidity: self.abs_humidity,
