@@ -760,7 +760,7 @@ impl Renderer {
         self.encode_lamp_shadows(&mut enc.shadow, scene, &f, &shadow_batches, &mut timers);
         self.encode_precip_map(&mut enc.shadow, scene, &sh, &shadow_batches, &mut timers);
         let prepass_batches = if self.shares_prepass_depth(&f, &plan) { plan.prefill_batches() } else { &plan.prepass_batches };
-        self.encode_depth_prepass(&mut enc.prepass, scene, &f, prepass_batches, &mut timers);
+        self.encode_depth_prepass(&mut enc.prepass, scene, &f, prepass_batches, &plan.rain_batches, &mut timers);
         if plan.ground.active() {
             self.encode_ground(&mut enc.prepass, scene, &plan.ground, &mut timers);
         }
