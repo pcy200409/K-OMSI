@@ -579,6 +579,8 @@ pub(crate) struct SessionState {
     pub(crate) ice: crate::road_ice::IceState,
     /// The potholes of the roads (`potholes`, the "Potholes" setting).
     pub(crate) potholes: crate::potholes::PotholeState,
+    /// A thunderstorm's power cut (`storm_outage`, the "Storm power cuts" setting).
+    pub(crate) outage: crate::storm_outage::Outage,
     /// How far the cloud cover has drifted with the wind (fractions of its tiling), summed
     /// up frame by frame so that a change of wind does not throw the sky around.
     pub(crate) cloud_drift: [f64; 4],
