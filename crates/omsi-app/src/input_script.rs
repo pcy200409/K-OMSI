@@ -862,6 +862,13 @@ impl App {
                     let (x, y) = xy();
                     self.on_cursor(x * scale, y * scale);
                 }
+                // `place <x>,<y>`: the bus put on the street nearest that world point (a check)
+                "place" => {
+                    let v: Vec<f64> = arg.split(',').filter_map(|x| x.trim().parse().ok()).collect();
+                    if let [x, y] = v[..] {
+                        self.place_bus_at(glam::DVec2::new(x, y));
+                    }
+                }
                 // `cruise <km/h>`: the bus driven at that speed along its heading until it
                 // crashes (no engine, air or brakes needed: a collision test)
                 "cruise" => {
