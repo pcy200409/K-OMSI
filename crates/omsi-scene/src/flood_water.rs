@@ -1,12 +1,13 @@
 //! The water standing in the flooded low ground (K-OMSI, `omsi_sim::flood`): a flat sheet
 //! over each basin's cells - the whole hollow up to its rim - drawn with the map's own water
 //! and moved up and down with the basin's level. Where the ground stands above the water
-//! the ground hides the sheet, so the shore follows the hollow by itself.
+//! the ground hides the sheet, so the shore follows the hollow by itself. Flood water is
+//! muddy: its own material, the map water's waves and mirror on a brown, cloudier body.
 
 use crate::World;
 use glam::{DVec3, Mat4, Vec2, Vec3};
 use omsi_geometry::MeshData;
-use omsi_render::{MeshId, Renderer, Scene};
+use omsi_render::{AlphaMode, MaterialExtra, MaterialId, MeshId, Renderer, Scene};
 use omsi_sim::flood::Flood;
 
 /// Water shallower than this is not drawn: the road's own puddles show it (m).
@@ -14,6 +15,8 @@ const SHOWN_FROM: f32 = 0.03;
 /// The level moves the sheet only by this much or more (m): a few millimetres a frame
 /// would upload the instance every frame.
 const STEP: f32 = 0.005;
+/// The colour of flood water: run-off from streets and fields, brown and hardly clear.
+const MUD: [u8; 4] = [92, 80, 58, 220];
 
 #[derive(Default)]
 pub struct FloodWater {
@@ -21,6 +24,10 @@ pub struct FloodWater {
     generation: u64,
     /// Per basin: its sheet, the sheet's corner and the level it stands at.
     sheets: Vec<Option<Sheet>>,
+    /// The muddy water's material, made at the first sheet.
+    material: Option<MaterialId>,
+    /// The picture's veil while the camera is under the water.
+    veil: Option<omsi_render::TextureId>,
 }
 
 struct Sheet {
@@ -39,7 +46,14 @@ impl FloodWater {
             self.generation = flood.generation;
             self.sheets = (0..flood.basins.len()).map(|_| None).collect();
         }
-        let Some(material) = world.gpu.lock().ground.as_ref().map(|g| g.water_mat) else { return };
+        if world.gpu.lock().ground.is_none() {
+            return;
+        }
+        let material = *self.material.get_or_insert_with(|| {
+            let img = omsi_texture::Image { width: 1, height: 1, rgba: MUD.to_vec(), has_alpha: true };
+            let tex = renderer.add_texture(scene, &img, false);
+            renderer.add_material_extra(scene, Some(tex), AlphaMode::Blend, [1.0; 4], false, None, None, None, None, [0.0; 3], MaterialExtra { water: true, ..Default::default() })
+        });
         for k in 0..flood.basins.len() {
             let level = flood.level(k);
             let deep = flood.basins[k].depth(level) >= SHOWN_FROM;
@@ -64,6 +78,19 @@ impl FloodWater {
                 }
             }
         }
+    }
+
+    /// The camera under the flood water (`eye`): the picture veiled brown over the whole
+    /// window (`size` in pixels), as one sees in muddy water - next to nothing.
+    pub fn veil_under_water(&mut self, renderer: &Renderer, scene: &mut Scene, flood: &Flood, eye: DVec3, size: (u32, u32)) {
+        if flood.depth_at(eye.x, eye.y, eye.z) <= 0.0 {
+            return;
+        }
+        let tex = *self.veil.get_or_insert_with(|| {
+            let img = omsi_texture::Image { width: 1, height: 1, rgba: vec![58, 50, 36, 236], has_alpha: true };
+            renderer.add_texture(scene, &img, false)
+        });
+        scene.overlays.insert(0, (tex, [0.0, 0.0, size.0 as f32, size.1 as f32]));
     }
 
     /// Every sheet taken away.
