@@ -556,20 +556,36 @@ impl Navigator {
         let amber = Color::rgba(232, 150, 0, 1.0);
         let green = Color::rgba(34, 160, 74, 1.0);
         let off = pal.card_dim.alpha(0.25);
-        let (r_on, y_on, g_on) = match l.aspect {
-            Aspect::Red => (true, false, false),
-            Aspect::RedYellow => (true, true, false),
-            Aspect::Yellow => (false, true, false),
-            Aspect::Green => (false, false, true),
-            Aspect::GreenYellow => (false, true, true),
-            Aspect::Dark => (false, false, false),
+        use omsi_scene::{LensColor, LensShape};
+        // (the map's head, else three discs by the aspect)
+        let lenses = if l.lenses.is_empty() {
+            let (r_on, y_on, g_on) = match l.aspect {
+                Aspect::Red => (true, false, false),
+                Aspect::RedYellow => (true, true, false),
+                Aspect::Yellow => (false, true, false),
+                Aspect::Green => (false, false, true),
+                Aspect::GreenYellow => (false, true, true),
+                Aspect::Dark => (false, false, false),
+            };
+            vec![(LensColor::Red, LensShape::Disc, r_on), (LensColor::Yellow, LensShape::Disc, y_on), (LensColor::Green, LensShape::Disc, g_on)]
+        } else {
+            l.lenses.clone()
         };
-        let lit = if g_on { green } else if y_on { amber } else { red };
+        let col_of = |c: LensColor| match c {
+            LensColor::Red => red,
+            LensColor::Yellow => amber,
+            LensColor::Green => green,
+        };
+        let lit = match l.aspect {
+            Aspect::Green | Aspect::GreenYellow => green,
+            Aspect::Yellow | Aspect::RedYellow => amber,
+            _ => red,
+        };
         let alarm = l.advice == cits::LightAdvice::Violation && self.cits.blink();
         let secs = l.secs.map(|n| n.to_string()).unwrap_or_default();
         let px = 14.0 * s;
         let lamp = 5.0 * s;
-        let lamps_w = 3.0 * lamp * 2.0 + 2.0 * 3.0 * s;
+        let lamps_w = lenses.len() as f32 * lamp * 2.0 + (lenses.len().max(1) - 1) as f32 * 3.0 * s;
         let tw = if secs.is_empty() { 0.0 } else { self.fonts.width(&secs, px, Weight::Bold) + 6.0 * s };
         let note_px = 10.5 * s;
         let nw = l.note.as_deref().map(|n| self.fonts.width(n, note_px, Weight::Medium)).unwrap_or(0.0);
@@ -580,8 +596,18 @@ impl Navigator {
         ui.rounded(b, 12.0 * s, if alarm { red } else { pal.card });
         let row = b.y + 13.0 * s;
         let mut x = b.right() - 10.0 * s - tw - lamps_w + lamp;
-        for (on, col) in [(r_on, red), (y_on, amber), (g_on, green)] {
-            ui.circle(Vec2::new(x, row), lamp, if alarm { Color::WHITE.alpha(if on { 1.0 } else { 0.35 }) } else if on { col } else { off });
+        for &(color, shape, on) in &lenses {
+            let c = if alarm { Color::WHITE.alpha(if on { 1.0 } else { 0.35 }) } else if on { col_of(color) } else { off };
+            match shape {
+                LensShape::Disc => ui.circle(Vec2::new(x, row), lamp, c),
+                // (an arrow lens: lit, a white arrow on its colour - a bare green arrow was
+                // lost on the card; dark, a faint arrow on the grey)
+                LensShape::Left | LensShape::Right => {
+                    ui.circle(Vec2::new(x, row), lamp, c);
+                    let arrow = if alarm { Color::rgba(222, 44, 40, 1.0) } else if on { Color::WHITE } else { pal.card_dim.alpha(0.55) };
+                    ui.icon(&mut self.atlas, if shape == LensShape::Left { "arrow_back" } else { "arrow_forward" }, Vec2::new(x, row), lamp * 1.7, arrow);
+                }
+            }
             x += lamp * 2.0 + 3.0 * s;
         }
         if !secs.is_empty() {
