@@ -110391,3 +110391,6 @@ _version: 2
   ca: "Uneix-te al Discord"
   sr: "Pridruži se Discord serveru"
   ka: "Discord-ს შეუერთდი"
+
+"The bus is flooded: water got into the engine, it will not start again":
+  ko: "차량 침수: 엔진에 물이 들어가 다시 시동이 걸리지 않습니다"
