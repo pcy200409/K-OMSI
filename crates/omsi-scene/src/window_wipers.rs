@@ -307,6 +307,8 @@ impl WindowWipers {
                 );
                 let normal_air = pane_depth(air, film.bounds).abs();
                 let rain = vehicle.host.precip_rate * (1.0 + normal_air * 0.035).min(2.0);
+                // (and the spray of a vehicle just ahead on the wet road, on the windscreen)
+                let rain = rain + if film.swept && liquid { vehicle.host.spray_ahead * 1.5 } else { 0.0 };
                 let rate = if !liquid && rain > 0.0 {
                     rain * (0.09 + vehicle.host.precip_rate * 0.10) * SNOW_SETTLING
                 } else if rain > 0.0 || pane_washer > 0.0 {
