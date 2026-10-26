@@ -193,6 +193,40 @@ pub(crate) fn path_along(net: &Network, route: Option<(&[usize], f32)>, bus: DVe
     out
 }
 
+/// The lanes with a traffic light on `way` past the lane the bus is on, with where each
+/// starts (m from the bus): a lane of the way that has one, or one that starts beside it the
+/// same way and has one. Korean crossing sets put the light of a stop line on a path of its
+/// own, a metre long, beside the junction's path that goes on the same way; both turn as
+/// little, and the way took the junction's path about as often as the light's - the signal
+/// box then showed the next junction's light, or none.
+pub(crate) fn lights_on_way(net: &Network, way: &[(usize, f64)]) -> Vec<(usize, f64)> {
+    let mut out = Vec::new();
+    for k in 1..way.len() {
+        let (l, start) = way[k];
+        let lane = &net.lanes[l];
+        if lane.traffic_light.is_some() {
+            out.push((l, start));
+            continue;
+        }
+        let beside = net.lanes[way[k - 1].0]
+            .next
+            .iter()
+            .copied()
+            .filter(|&n| n != l)
+            .filter_map(|n| {
+                let s = &net.lanes[n];
+                let turn = omsi_sim::traffic::wrap_deg(s.start_heading() - lane.start_heading()).abs();
+                let same_way = s.length() <= 3.0 || omsi_sim::traffic::wrap_deg(s.end_heading() - lane.end_heading()).abs() < 20.0;
+                (s.kind == LaneKind::Street && s.traffic_light.is_some() && turn < 15.0 && same_way).then_some((n, turn))
+            })
+            .min_by(|a, b| a.1.total_cmp(&b.1));
+        if let Some((n, _)) = beside {
+            out.push((n, start));
+        }
+    }
+    out
+}
+
 /// Where camera `cam` stands on the path (m ahead, and the lane it is at), when it stands
 /// beside it for the way the bus goes: on its right or over it (Korea drives on the right;
 /// a camera for the other carriageway stands on the bus's left).
@@ -404,8 +438,9 @@ impl Navigator {
             // (out to the cameras' reach: a camera standing by a stop line watches its light)
             let guide = self.route_points(CAMERA_REACH + 50.0);
             let way = path_along(&t.net, None, f.bus, f.heading, CAMERA_REACH, &guide);
-            stop_lines = way.iter().skip(1).filter(|(l, _)| t.net.lanes[*l].traffic_light.is_some()).map(|&(_, d)| d).collect();
-            let light = way.iter().skip(1).find(|(l, d)| t.net.lanes[*l].traffic_light.is_some() && *d <= LIGHT_REACH as f64).map(|&(l, d)| (l, d as f32));
+            let lit = lights_on_way(&t.net, &way);
+            stop_lines = lit.iter().map(|&(_, d)| d).collect();
+            let light = lit.iter().find(|(_, d)| *d <= LIGHT_REACH as f64).map(|&(l, d)| (l, d as f32));
             if omsi_cfg::flags::OMSI_DEBUG_NAV.is_set() {
                 let lit: Vec<_> = lanes.iter().filter_map(|&(l, d)| t.net.lanes[l].traffic_light.map(|(c, li)| (l, d.round(), c, li, t.light_state(c, li).map(|s| s.0)))).collect();
                 log::info!("c-its: {} lanes ahead (on {:?}), with a light: {lit:?}; the way {:?}, its light {light:?}", lanes.len(), lanes.first(), way.iter().map(|w| w.0).collect::<Vec<_>>());
@@ -418,7 +453,8 @@ impl Navigator {
                         let until_go = t.light_until_go(c, li).unwrap_or(0.0);
                         if aspect != Aspect::Dark {
                             let mut lv = light_view_of(aspect, change_in, until_go, dist as f64, v, limit_here.unwrap_or(50.0), units);
-                            lv.lenses = head_lenses(&self.cits.heads, t, c, li);
+                            let stop_line = &t.net.lanes[lane];
+                            lv.lenses = head_lenses(&self.cits.heads, t, c, li, (stop_line.points[0], stop_line.start_heading() as f64));
                             if omsi_cfg::flags::OMSI_DEBUG_NAV.is_set() {
                                 let objs: Vec<(i64, usize)> = t.controller_of_object.iter().filter(|&(_, &k)| k == c).map(|(o, _)| (*o, self.cits.heads.get(o).map_or(0, Vec::len))).collect();
                                 log::info!("c-its: light {c}.{li} {aspect:?} in {change_in:.0} s, lenses {:?}, crossing objects (heads) {objs:?}", lv.lenses);
@@ -588,18 +624,15 @@ fn light_view_of(aspect: Aspect, change_in: f32, until_go: f32, dist: f64, v: f6
 }
 
 /// The lenses of the head that shows light `li` of controller `c`, each lit as its own light
-/// is (an arrow part may name another crossing than the discs: its own controller): of the
-/// heads that show it, the one with the most lenses (a four-light head over the plain one on
-/// the near side; a pedestrian's red and green have no yellow).
-pub(crate) fn head_lenses(heads: &HashMap<i64, Vec<SignalHead>>, t: &TrafficSim, c: usize, li: usize) -> Vec<(LensColor, LensShape, bool)> {
+/// is (an arrow part may name another crossing than the discs: its own controller). Of the
+/// heads that show it, the one by the stop line (`stop`: where it is and which way the lane
+/// goes) - a crossing's heads for its other approaches show the light too, with other arrows
+/// beside it - then one whose discs are that light rather than an arrow, then the one with
+/// the most lenses (a four-light head over the plain one on the near side; a pedestrian's
+/// red and green have no yellow).
+pub(crate) fn head_lenses(heads: &HashMap<i64, Vec<SignalHead>>, t: &TrafficSim, c: usize, li: usize, stop: (DVec3, f64)) -> Vec<(LensColor, LensShape, bool)> {
     let ours: Vec<i64> = t.controller_of_object.iter().filter(|&(_, &k)| k == c).map(|(obj, _)| *obj).collect();
-    let Some(head) = ours
-        .iter()
-        .filter_map(|obj| heads.get(obj))
-        .flatten()
-        .filter(|h| h.lenses.iter().any(|l| l.light == li && ours.contains(&l.crossing)))
-        .max_by_key(|h| (h.lenses.iter().any(|l| l.color == LensColor::Yellow), h.lenses.len()))
-    else {
+    let Some(head) = pick_head(ours.iter().filter_map(|obj| heads.get(obj)).flatten(), &ours, li, stop) else {
         return Vec::new();
     };
     head.lenses
@@ -615,4 +648,23 @@ pub(crate) fn head_lenses(heads: &HashMap<i64, Vec<SignalHead>>, t: &TrafficSim,
             (l.color, l.shape, on)
         })
         .collect()
+}
+
+/// Which of `heads` (of the crossing objects `ours`) `head_lenses` draws for light `li` seen
+/// from the stop line `stop` (see there).
+pub(crate) fn pick_head<'a>(heads: impl Iterator<Item = &'a SignalHead>, ours: &[i64], li: usize, stop: (DVec3, f64)) -> Option<&'a SignalHead> {
+    let (at, h) = (stop.0, stop.1.to_radians());
+    let (ahead, right) = (DVec2::new(h.sin(), h.cos()), DVec2::new(h.cos(), -h.sin()));
+    // (how far from where the bus sees it: over the junction or by the line, in front of it)
+    let near = |head: &SignalHead| -> Option<f64> {
+        let d = (head.place? - at).truncate();
+        let (fwd, side) = (d.dot(ahead), d.dot(right));
+        ((-10.0..=70.0).contains(&fwd) && side.abs() <= 25.0).then(|| (d - ahead * 15.0).length())
+    };
+    let shows = |l: &omsi_scene::Lens| l.light == li && ours.contains(&l.crossing);
+    let rank = |head: &SignalHead| {
+        let near = near(head);
+        (near.is_some(), head.lenses.iter().any(|l| shows(l) && l.shape == LensShape::Disc), -near.unwrap_or(0.0), head.lenses.iter().any(|l| l.color == LensColor::Yellow), head.lenses.len())
+    };
+    heads.filter(|h| h.lenses.iter().any(shows)).max_by(|a, b| rank(a).partial_cmp(&rank(b)).unwrap_or(std::cmp::Ordering::Equal))
 }
