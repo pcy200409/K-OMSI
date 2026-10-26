@@ -692,6 +692,11 @@ impl PluginIo for Io<'_> {
     fn bus_engine(&self) -> Option<(bool, Option<f32>, bool)> {
         pbus::engine(self.app()?)
     }
+    fn bus_flood(&self) -> Option<(f32, bool)> {
+        let app = self.app()?;
+        let v = pbus::veh(app)?;
+        Some((v.host.water_depth, app.session.flood.drowned(v)))
+    }
     fn bus_start_up(&mut self) -> Option<String> {
         self.player_mut().map(|p| p.start_up())
     }

@@ -38,6 +38,7 @@ pub mod money;
 pub mod puddles;
 pub mod rain;
 pub mod route_arrows;
+pub mod flood_water;
 pub mod threads;
 pub mod trolley_derive;
 pub mod arc_fx;
