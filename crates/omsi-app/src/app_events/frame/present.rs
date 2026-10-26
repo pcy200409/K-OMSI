@@ -14,6 +14,7 @@ pub(super) fn lighting(cx: LightingCx, dt: f32, daylight: omsi_sim::Daylight) ->
         *cx.weather.wetness = road_wetness(precip_of(w).1, dt as f64, *cx.weather.wetness);
     }
     cx.weather.flood.tick(cx.world.world.as_deref(), cx.weather.weather.as_ref(), dt);
+    cx.weather.flood.affect_player(cx.player.player.as_mut().map(|p| &mut p.vehicle));
     let inside = match cx.net.inside_remote.and_then(|id| cx.net.remotes.remotes.get(&id)) {
         // (in another player's bus: its box is the one the camera is in)
         Some(rv) => Some(rv.vehicle()),
