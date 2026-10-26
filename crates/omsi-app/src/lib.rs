@@ -212,6 +212,7 @@ mod traffic_link;
 pub(crate) use omsi_content::tutorial;
 mod flood;
 mod road_ice;
+mod spray_screen;
 mod weather_setup;
 mod weather_tomorrow;
 use omsi_weather::{weather_cycle, weather_model};
