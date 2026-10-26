@@ -107893,3 +107893,5 @@ _version: 2
   ms: "Kesan persekitaran"
   tl: "Mga biswal na epekto sa kapaligiran"
   zh-tw: "環境效果"
+"The bus is flooded: water got into the engine, it will not start again":
+  ko: "차량 침수: 엔진에 물이 들어가 다시 시동이 걸리지 않습니다"
