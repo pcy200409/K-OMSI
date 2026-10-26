@@ -15,3 +15,5 @@ patch/ai-stop-request
 patch/lan-clear-store
 patch/obis-taco
 patch/c-its
+patch/roof-snow
+patch/flood
