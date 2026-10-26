@@ -48,6 +48,10 @@ impl App {
         if let Some(scene) = self.scene.as_mut() {
             scene.overlays.clear();
         }
+        // the camera under the flood water: the picture veiled (under the interface drawn next)
+        if let (Some(r), Some(scene), Some(cam), Some(surf)) = (self.renderer.as_ref(), self.scene.as_mut(), self.camera.as_ref(), self.gfx.surface.as_ref()) {
+            self.gfx.flood_water.veil_under_water(r, scene, &self.session.flood.flood, cam.position, (surf.config.width, surf.config.height));
+        }
         let hud = self
             .gfx.surface
             .as_ref()
