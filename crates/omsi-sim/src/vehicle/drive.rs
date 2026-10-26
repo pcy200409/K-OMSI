@@ -401,6 +401,7 @@ impl VehicleInstance {
         rb.wetness = self.host.street_cond;
         rb.air_density = crate::rigid::realism::air_density(self.host.temperature, 0.0);
         rb.wind = self.host.wind;
+        rb.water_depth = self.host.water_depth;
         rb.coupled = self.coupled_parts();
         let v0 = rb.forward_speed();
         {

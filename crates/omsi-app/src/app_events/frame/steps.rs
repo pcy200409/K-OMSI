@@ -458,6 +458,7 @@ pub(crate) fn throw_spray(
     world: &World,
     wetness: f32,
     quality: u8,
+    flood: Option<&omsi_sim::flood::WaterAt>,
 ) {
     let mut vehicles: Vec<(u64, &omsi_sim::VehicleInstance)> = Vec::new();
     if let Some(p) = player.filter(|_| quality > 0) {
@@ -472,7 +473,7 @@ pub(crate) fn throw_spray(
         }
         vehicles.extend(remotes.remotes.iter().map(|(id, r)| (puddles::REMOTE_KEY | *id as u64, r.vehicle())));
     }
-    spray.frame(dt, &vehicles, eye, wind, &|x, y| puddles::water_at(x, y, world.wet_road_at(x, y, wetness)));
+    spray.frame(dt, &vehicles, eye, wind, &|x, y| crate::flood::with_flood(puddles::water_at(x, y, world.wet_road_at(x, y, wetness)), flood, x, y));
 }
 
 /// The vehicles whose own lights shine (`lights::collect`): the player's, the AI's and the
