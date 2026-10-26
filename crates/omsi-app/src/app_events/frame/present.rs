@@ -22,6 +22,7 @@ pub(super) fn lighting(
     }
     cx.weather.flood.tick(cx.common.settings.flood, cx.world.world.as_deref(), cx.weather.weather.as_ref(), dt);
     cx.weather.flood.affect_player(cx.player.player.as_mut().map(|p| &mut p.vehicle));
+    cx.weather.ice.tick(cx.common.settings.black_ice, cx.world.world.as_deref(), cx.weather.weather.as_ref(), *cx.weather.wetness, cx.player.player.as_mut().map(|p| &mut p.vehicle), dt);
     let inside = match cx
         .net
         .inside_remote

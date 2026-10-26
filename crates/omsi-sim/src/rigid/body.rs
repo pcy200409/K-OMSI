@@ -172,6 +172,7 @@ impl RigidBody {
             road_s: 0.0,
             realistic: realistic_default(),
             unloaded: None,
+            ice: 0.0,
         }
     }
 
@@ -822,11 +823,13 @@ impl RigidBody {
             if w.surface != w.surface_now {
                 (w.surface_was, w.surface_now, w.surface_mix) = (w.surface_now, w.surface, 0.0);
             }
+            // (black ice takes the grip of either road model)
+            let ice = 1.0 - crate::road_ice::GRIP_LOSS * self.ice.clamp(0.0, 1.0);
             if !self.realistic {
-                (w.mu_scale, w.rough) = (1.0, 0.0);
+                (w.mu_scale, w.rough) = (ice, 0.0);
                 continue;
             }
-            w.mu_scale = realism::grip_scale(w.surface_now, self.wetness);
+            w.mu_scale = realism::grip_scale(w.surface_now, self.wetness) * ice;
             // the road under each tyre, eased from the old surface's over a metre
             let side = (w.attach.x > 0.0) as u8;
             let at = self.road_s + w.attach.y as f64;
