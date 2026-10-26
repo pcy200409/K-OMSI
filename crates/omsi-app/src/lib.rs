@@ -214,6 +214,7 @@ mod flood;
 mod potholes;
 mod road_ice;
 mod spray_screen;
+mod storm_outage;
 mod weather_setup;
 mod weather_tomorrow;
 use omsi_weather::{weather_cycle, weather_model};
@@ -791,6 +792,7 @@ fn assemble_app(args: Args, settings: settings::Settings) -> App {
             flood: Default::default(),
             ice: Default::default(),
             potholes: Default::default(),
+            outage: Default::default(),
             cloud_drift: [0.0; 4],
             weather_blend: None,
             weather_cycle: None,
