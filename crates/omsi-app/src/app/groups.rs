@@ -234,6 +234,8 @@ pub(crate) struct GfxState {
     pub(crate) route_arrows: crate::route_arrows::RouteArrows,
     /// The plugins' cables in the scene (`omsi.cable`).
     pub(crate) plugin_cables: omsi_scene::plugin_cables::PluginCables,
+    /// The water over the flooded low ground (`flood`, `OMSI_FLOOD`).
+    pub(crate) flood_water: omsi_scene::flood_water::FloodWater,
     /// Frames the window was hidden for (they are not drawn).
     pub(crate) hidden_frames: u32,
     /// Stand-in for the window's frame while the window is hidden (OMSI_RENDER_OCCLUDED).
