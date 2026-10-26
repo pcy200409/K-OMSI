@@ -318,7 +318,7 @@ pub(crate) struct LightView {
 pub(crate) struct CameraView {
     pub dist: f64,
     pub limit: Option<f32>,
-    /// What else it watches (`Signal`, `Section`), on the tab.
+    /// What it watches (`Speeding`, `Signal`, `Signal and speed`, `Section`), on the tab.
     pub tag: Option<&'static str>,
     pub over: bool,
     /// Flashing: over its speed, or a moment at a new stage (1 km, 500 m, 300 m).
@@ -393,6 +393,7 @@ impl Navigator {
         let mut light_view = None;
         let mut camera_view = None;
         let mut average = None;
+        let mut stop_lines: Vec<f64> = Vec::new();
         let limit_here = self.speed_limit;
 
         // --- the traffic light ahead and the vehicle ahead: the traffic's own network
@@ -400,9 +401,11 @@ impl Navigator {
             let lanes = t.lanes_ahead_of(f.bus, f.heading, LIGHT_REACH);
             // (the light of the bus's own way: the junction's other paths have lights of
             // their own - the right turn's green while the bus's way is red)
-            let guide = self.route_points(LIGHT_REACH as f64 + 50.0);
-            let way = path_along(&t.net, None, f.bus, f.heading, LIGHT_REACH as f64, &guide);
-            let light = way.iter().skip(1).find(|(l, _)| t.net.lanes[*l].traffic_light.is_some()).map(|&(l, d)| (l, d as f32));
+            // (out to the cameras' reach: a camera standing by a stop line watches its light)
+            let guide = self.route_points(CAMERA_REACH + 50.0);
+            let way = path_along(&t.net, None, f.bus, f.heading, CAMERA_REACH, &guide);
+            stop_lines = way.iter().skip(1).filter(|(l, _)| t.net.lanes[*l].traffic_light.is_some()).map(|&(_, d)| d).collect();
+            let light = way.iter().skip(1).find(|(l, d)| t.net.lanes[*l].traffic_light.is_some() && *d <= LIGHT_REACH as f64).map(|&(l, d)| (l, d as f32));
             if omsi_cfg::flags::OMSI_DEBUG_NAV.is_set() {
                 let lit: Vec<_> = lanes.iter().filter_map(|&(l, d)| t.net.lanes[l].traffic_light.map(|(c, li)| (l, d.round(), c, li, t.light_state(c, li).map(|s| s.0)))).collect();
                 log::info!("c-its: {} lanes ahead (on {:?}), with a light: {lit:?}; the way {:?}, its light {light:?}", lanes.len(), lanes.first(), way.iter().map(|w| w.0).collect::<Vec<_>>());
@@ -521,11 +524,12 @@ impl Navigator {
             self.cits.stage = stage;
             if let Some(n) = near {
                 let over = n.limit.is_some_and(|l| kmh > l + 0.5);
-                let tag = match cams[n.camera].kind {
-                    CameraKind::Speed => None,
-                    CameraKind::SignalSpeed => Some("Signal"),
-                    _ => Some("Section"),
-                };
+                let tag = Some(match camera_watches(cams[n.camera].kind, n.dist, &stop_lines) {
+                    CameraKind::Speed | CameraKind::Unspecified => "Speeding",
+                    CameraKind::Signal => "Signal",
+                    CameraKind::SignalSpeed => "Signal and speed",
+                    _ => "Section",
+                });
                 camera_view = Some(CameraView { dist: n.dist, limit: n.limit, tag, over, flash: over || self.cits.pulse > 0.0 });
             }
         }
@@ -547,12 +551,28 @@ impl Navigator {
     }
 }
 
+/// What a camera `dist` m ahead watches: what its object or plate says, and a camera that
+/// does not say watches the red light where it stands by a stop line of the way (`stop_lines`,
+/// m ahead: from 30 m before it, a camera on the near side, to 60 m past it, on the mast
+/// across the junction), else the speed.
+pub(crate) fn camera_watches(kind: CameraKind, dist: f64, stop_lines: &[f64]) -> CameraKind {
+    match kind {
+        CameraKind::Unspecified if stop_lines.iter().any(|&s| (-30.0..=60.0).contains(&(dist - s))) => CameraKind::Signal,
+        CameraKind::Unspecified => CameraKind::Speed,
+        k => k,
+    }
+}
+
+/// Which of a camera, its plate and its mast standing together says most: a plate over a
+/// camera box that does not say.
 fn kind_rank(k: CameraKind) -> u8 {
     match k {
-        CameraKind::Speed => 0,
-        CameraKind::SignalSpeed => 1,
-        CameraKind::SectionPoint => 2,
-        CameraKind::SectionStart | CameraKind::SectionEnd => 3,
+        CameraKind::Unspecified => 0,
+        CameraKind::Speed => 1,
+        CameraKind::Signal => 2,
+        CameraKind::SignalSpeed => 3,
+        CameraKind::SectionPoint => 4,
+        CameraKind::SectionStart | CameraKind::SectionEnd => 5,
     }
 }
 
