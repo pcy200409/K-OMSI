@@ -668,6 +668,7 @@ fn assemble_app(args: Args, settings: settings::Settings) -> App {
             window_hidden: false,
             route_arrows: Default::default(),
             plugin_cables: Default::default(),
+            flood_water: Default::default(),
             hidden_frames: 0,
             stand_in: None,
             sim_view: Default::default(),

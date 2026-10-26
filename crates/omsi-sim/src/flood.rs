@@ -304,12 +304,23 @@ pub struct Flood {
     pub basins: Vec<Basin>,
     /// The water in each basin (m³).
     pub water: Vec<f64>,
+    /// The grid the basins' cells count in (its cell (0, 0)'s centre, cell size, width).
+    pub origin: DVec2,
+    pub cell: f64,
+    pub w: usize,
+    /// Which analysis this is (a new one, a new set of basins: their water drawn anew).
+    pub generation: u64,
 }
 
 impl Flood {
     pub fn new(basins: Vec<Basin>) -> Flood {
         let water = vec![0.0; basins.len()];
-        Flood { basins, water }
+        Flood { basins, water, ..Default::default() }
+    }
+
+    /// The basins of `grid`.
+    pub fn of_grid(grid: &HeightGrid, basins: Vec<Basin>) -> Flood {
+        Flood { origin: grid.origin, cell: grid.cell, w: grid.w, ..Flood::new(basins) }
     }
 
     /// `dt` real seconds of `rain_mm_h` of rain (0 for none, and for snow).
