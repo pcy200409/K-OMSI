@@ -571,6 +571,8 @@ pub(crate) struct SessionState {
     pub(crate) wetness: f32,
     /// The water standing in the low ground (`flood`, `OMSI_FLOOD`).
     pub(crate) flood: crate::flood::FloodState,
+    /// The black ice on the roads (`road_ice`, the "Black ice" setting).
+    pub(crate) ice: crate::road_ice::IceState,
     /// How far the cloud cover has drifted with the wind (fractions of its tiling), summed
     /// up frame by frame so that a change of wind does not throw the sky around.
     pub(crate) cloud_drift: [f64; 4],

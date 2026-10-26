@@ -891,7 +891,8 @@ impl AiState {
             } else {
                 l.speed_limit_kmh * self.desire
             };
-            wanted.min(self.max_speed_kmh).max(3.0) / 3.6
+            // (and less of it on black ice)
+            (wanted.min(self.max_speed_kmh) * crate::road_ice::ai_speed_factor()).max(3.0) / 3.6
         };
         let mut v0 = limit(lane);
         if let Some(cap) = self.speed_cap {

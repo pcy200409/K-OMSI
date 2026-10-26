@@ -1329,3 +1329,29 @@ fn flood_water_holds_a_bus_back() {
     assert!(wet < dry - 2.0, "dry {dry} m/s, through the water {wet} m/s");
     assert!(wet >= 0.0);
 }
+
+#[test]
+fn black_ice_takes_the_grip() {
+    // braking hard from 50 km/h: on ice the bus slides on much farther
+    let stop = |ice: f32| {
+        let mut rb = RigidBody::from_definition(&bus(), &[]);
+        rb.place(DVec3::ZERO, 0.0);
+        let g = road(1e9, 0.0);
+        run(&mut rb, 2.0, 0.0, 0.0, &g);
+        rb.velocity = rb.orientation.mul_vec3(Vec3::Y) * 13.9;
+        for w in rb.wheels.iter_mut() {
+            w.spin = 13.9 / w.radius;
+        }
+        rb.ice = ice;
+        let start = rb.position;
+        for _ in 0..1200 {
+            rb.step(1.0 / 60.0, 0.0, &[60000.0; 4], 0.0, &g);
+            if rb.forward_speed() < 0.1 {
+                break;
+            }
+        }
+        (rb.position - start).length()
+    };
+    let (dry, icy) = (stop(0.0), stop(1.0));
+    assert!(icy > dry * 2.0, "dry {dry:.1} m, on ice {icy:.1} m");
+}
