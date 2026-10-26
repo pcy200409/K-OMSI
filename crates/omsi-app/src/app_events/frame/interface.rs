@@ -40,7 +40,7 @@ impl App {
                 self.gfx.pothole_view.sync(w, r, scene, cam.position, self.session.potholes.field.as_deref());
             }
         }
-        if let Some(msg) = self.session.flood.notice.take().or_else(|| self.session.ice.notice.take()) {
+        if let Some(msg) = self.session.flood.notice.take().or_else(|| self.session.ice.notice.take()).or_else(|| self.session.outage.notice.take()) {
             self.service_msg = Some((msg, 10.0));
         }
         let (notes, tooltip) = self.frame_notes(dt, mirror_help);
