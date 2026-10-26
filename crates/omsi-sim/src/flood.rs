@@ -74,6 +74,8 @@ pub struct Basin {
     pub bare_area: f64,
     /// The middle of its cells (world x, y), for the log.
     pub centre: DVec2,
+    /// Its lowest road cell (world x, y) and that road's height, if a road runs through it.
+    pub lowest_road: Option<(DVec2, f32)>,
     /// One cell's area (m²).
     pub cell_area: f64,
 }
@@ -253,6 +255,7 @@ pub fn find_basins(g: &HeightGrid, min_depth: f32, min_cells: usize) -> Vec<Basi
             continue;
         }
         let centre = cells.iter().map(|&i| g.centre(i)).sum::<DVec2>() / cells.len() as f64;
+        let lowest_road = order.iter().find(|o| g.paved[o.1 as usize]).map(|o| (g.centre(o.1 as usize), o.0));
         basins.push(Basin {
             bottom,
             spill,
@@ -261,6 +264,7 @@ pub fn find_basins(g: &HeightGrid, min_depth: f32, min_cells: usize) -> Vec<Basi
             paved_area: paved[b] as f64 * cell_area,
             bare_area: bare[b] as f64 * cell_area,
             centre,
+            lowest_road,
             cell_area,
         });
     }
@@ -310,6 +314,37 @@ pub struct Flood {
     pub w: usize,
     /// Which analysis this is (a new one, a new set of basins: their water drawn anew).
     pub generation: u64,
+    /// The basin each basin cell belongs to and the cell's floor (grid index -> both).
+    pub cell_basin: std::sync::Arc<std::collections::HashMap<u32, (u32, f32)>>,
+}
+
+/// Where the water stands, as a snapshot for another thread (the tyres' spray): the basins'
+/// cells and their levels now.
+#[derive(Clone)]
+pub struct WaterAt {
+    cells: std::sync::Arc<std::collections::HashMap<u32, (u32, f32)>>,
+    levels: Vec<f32>,
+    origin: DVec2,
+    cell: f64,
+    w: usize,
+}
+
+impl WaterAt {
+    /// The water over the ground at world (x, y) (m).
+    pub fn depth(&self, x: f64, y: f64) -> f32 {
+        if self.cell <= 0.0 {
+            return 0.0;
+        }
+        let gx = ((x - self.origin.x) / self.cell).round();
+        let gy = ((y - self.origin.y) / self.cell).round();
+        if gx < 0.0 || gy < 0.0 || gx >= self.w as f64 {
+            return 0.0;
+        }
+        match self.cells.get(&((gy as usize * self.w + gx as usize) as u32)) {
+            Some(&(k, floor)) => (self.levels[k as usize] - floor).max(0.0),
+            None => 0.0,
+        }
+    }
 }
 
 impl Flood {
@@ -320,7 +355,48 @@ impl Flood {
 
     /// The basins of `grid`.
     pub fn of_grid(grid: &HeightGrid, basins: Vec<Basin>) -> Flood {
-        Flood { origin: grid.origin, cell: grid.cell, w: grid.w, ..Flood::new(basins) }
+        let cell_basin = basins
+            .iter()
+            .enumerate()
+            .flat_map(|(k, b)| b.cells.iter().zip(&b.floor).map(move |(&c, &f)| (c, (k as u32, f))))
+            .collect();
+        Flood { origin: grid.origin, cell: grid.cell, w: grid.w, cell_basin: std::sync::Arc::new(cell_basin), ..Flood::new(basins) }
+    }
+
+    /// Where the water stands now, for another thread.
+    pub fn water_at(&self) -> WaterAt {
+        WaterAt {
+            cells: self.cell_basin.clone(),
+            levels: (0..self.basins.len()).map(|k| if self.water[k] > 0.0 { self.level(k) } else { f32::MIN }).collect(),
+            origin: self.origin,
+            cell: self.cell,
+            w: self.w,
+        }
+    }
+
+    /// The water standing over `ground` (m) at world (x, y): the deepest of the basins of the
+    /// cell and its neighbours there (the water's sheet reaches a cell beyond its basin).
+    pub fn depth_at(&self, x: f64, y: f64, ground: f64) -> f32 {
+        if self.cell_basin.is_empty() || self.cell <= 0.0 {
+            return 0.0;
+        }
+        let gx = ((x - self.origin.x) / self.cell).round() as i64;
+        let gy = ((y - self.origin.y) / self.cell).round() as i64;
+        let mut level = f32::MIN;
+        for dy in -1..=1 {
+            for dx in -1..=1 {
+                let (cx, cy) = (gx + dx, gy + dy);
+                if cx < 0 || cy < 0 || cx >= self.w as i64 {
+                    continue;
+                }
+                if let Some(&(k, _)) = self.cell_basin.get(&((cy * self.w as i64 + cx) as u32)) {
+                    if self.water[k as usize] > 0.0 {
+                        level = level.max(self.level(k as usize));
+                    }
+                }
+            }
+        }
+        (level as f64 - ground).max(0.0) as f32
     }
 
     /// `dt` real seconds of `rain_mm_h` of rain (0 for none, and for snow).
@@ -476,6 +552,21 @@ mod tests {
         assert!(f.water[0] < after);
         f.step(36000.0, 0.0, &d);
         assert_eq!(f.water[0], 0.0);
+    }
+
+    #[test]
+    fn the_depth_at_a_point_is_the_level_over_its_ground() {
+        let g = bowl(0.5, true);
+        let mut f = Flood::of_grid(&g, find_basins(&g, 0.05, 1));
+        assert_eq!(f.depth_at(10.0, 10.0, 0.5), 0.0);
+        f.water[0] = f.basins[0].volume_at(0.8);
+        assert!((f.depth_at(10.0, 10.0, 0.5) - 0.3).abs() < 1e-4);
+        // far from the bowl: dry
+        assert_eq!(f.depth_at(1.0, 1.0, 1.0), 0.0);
+        // and for the spray: over the bowl's floor, not over its rim
+        let at = f.water_at();
+        assert!((at.depth(10.0, 10.0) - 0.3).abs() < 1e-4);
+        assert_eq!(at.depth(1.0, 1.0), 0.0);
     }
 
     #[test]
