@@ -156,6 +156,7 @@ flags! {
     OMSI_BENCH: Num, Test, Use, "-", "Offscreen: draw the final picture this many more times and log the median CPU and GPU-wait time.";
     OMSI_BENCH_FRAMES: Bool, Debug, Use, "off", "With OMSI_BENCH: log every bench frame's times, not only the medians.";
     OMSI_BENCH_STEREO: Bool, Test, Use, "off", "With OMSI_BENCH: benchmark a stationary stereo pair without a headset; --size is per eye, symmetric 100 degree vertical FOV and 64 mm eye separation. GPU completion waits are confined to this offline benchmark.";
+    OMSI_BLACK_ICE: Bool, Switch, Use, "off", "K-OMSI: the \"Black ice\" setting on for this run (wet roads freeze in the frost, bridges first).";
     OMSI_BLEND_AB: Bool, Test, Use, "off", "Offscreen: a second picture with the blended draws in the old order, for a before/after of the draw order.";
     OMSI_BRIDGE_ONLY: Bool, Test, Use, "off", "LAN: forget our own addresses so that only what the rendezvous bridge reports is tried.";
     OMSI_BUDGET_FROM: Text, Test, Use, "-", "Offscreen with OMSI_TEXTURE_MEMORY: x,y[,MB] - the texture budget is met as seen from that point.";
@@ -285,7 +286,7 @@ flags! {
     OMSI_FLASHLIGHT: Bool, Test, Use, "off", "Offscreen: the player's flashlight is on (in the window it is Alt+F).";
     OMSI_FLEET_AHEAD: Num, Test, Use, "FLEET_AHEAD", "Minutes ahead the timetable fleet is planned (for tests).";
     OMSI_FLEET_IDLE: Num, Test, Use, "FLEET_IDLE", "Seconds a fleet vehicle idles (shortened for tests).";
-    OMSI_FLOOD: Text, Tuning, Use, "-", "K-OMSI: low ground floods in heavy rain (first stage: the basins and their water written to the log). scale[,drain]: the water's time scale (10) and the drains' capacity in mm/h (30).";
+    OMSI_FLOOD: Text, Tuning, Use, "-", "K-OMSI: the \"Low ground floods\" setting on for this run (the basins and their water also written to the log). scale[,drain]: the water's time scale (10) and the drains' capacity in mm/h (30).";
     OMSI_FOLLOW_CAM: Text, Test, Use, "-", "right,ahead,up,yaw,pitch: a camera in the followed car's frame.";
     OMSI_FOOT_RUN: Num, Tuning, Use, "3.8", "On foot: the pace of a run (Shift) in m/s.";
     OMSI_FOOT_WALK: Num, Tuning, Use, "1.4", "On foot: the walking pace in m/s.";
@@ -441,6 +442,7 @@ flags! {
     OMSI_PLUGIN_HOST32: Text, Setup, Use, "beside the game", "Path of omsi-plugin-host32.exe.";
     OMSI_PLUGIN_PROCESS_ALLOW: Text, Setup, Use, "none", "Optional native process preapproval: absolute path to a JSON manifest binding plugin content and in-folder helpers to SHA256 hashes. The interactive game otherwise asks the player. Changes revoke consent; packages must declare process. Approved programs run with the game account permissions.";
     OMSI_POPULATION_SHOTS: Bool, Test, Use, "off", "Offscreen: pictures of the framed population spawns.";
+    OMSI_POTHOLES: Bool, Switch, Use, "off", "K-OMSI: the \"Potholes\" setting on for this run.";
     OMSI_PRESENCE_URL: Text, Setup, Use, "built-in", "Base URL of the presence (\"playing now\") service.";
     OMSI_PRESENT_MODE: Text, Tuning, Use, "auto", "How frames reach the screen: fifo (vsync), fifo_relaxed, mailbox, immediate or auto. Vsync is `auto` (AutoVsync); a mode the surface lacks falls back to auto.";
     OMSI_PROBE: Text, Test, Use, "-", "x0,y0,x1,y1[,n]: print terrain and road surface heights along a line.";
@@ -481,6 +483,7 @@ flags! {
     OMSI_SKY_CUBE_EVERY_FRAME: Bool, Switch, Frame, "off", "Enhanced: redraw a slice of the sky cube every frame again, not at most 60 a second (A/B).";
     OMSI_SPOT_SELECT: Num, Test, Use, "-", "Turn on spotlight n (headlight pictures).";
     OMSI_STORM: Text, Tuning, Use, "-", "activity[,azimuth]: a thunderstorm of this activity (0..1) over the place whatever the weather; with an azimuth (degrees, 0 east, 90 north) the flash stands frozen there at its first stroke (for checks).";
+    OMSI_STORM_CUTS: Bool, Switch, Use, "off", "K-OMSI: the \"Storm power cuts\" setting on for this run (a lightning strike nearby may put the traffic lights and street lamps out).";
     OMSI_SURFACE_BIAS: Num, Tuning, Use, "-24", "Depth bias of road surfaces.";
     OMSI_SURFACE_FLUSH: Num, Tuning, Once, "0.12", "Height in metres under which a surface counts as flush with the road.";
     OMSI_SUSP_TRACE: Text, Debug, Use, "-", "Offscreen CSV: body height and each wheel's travel and load every frame.";

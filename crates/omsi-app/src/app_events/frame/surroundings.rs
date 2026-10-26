@@ -26,7 +26,7 @@ impl App {
         }
         let mut daylight = omsi_sim::Daylight::compute(&self.clock, self.session.envir.as_ref());
         // (a thunderstorm's power cut puts the street lamps out)
-        self.session.outage.tick(self.settings.storm_outage, self.clock.run_time);
+        self.session.outage.tick(self.settings.storm_outage || omsi_cfg::flags::OMSI_STORM_CUTS.is_set(), self.clock.run_time);
         if self.session.outage.active() {
             daylight.lamps_on = false;
         }
@@ -235,7 +235,7 @@ pub(super) fn lights(cx: LightsCx, dt: f32, daylight: omsi_sim::Daylight, behind
                     if let Some(r) = cx.gfx.renderer.as_mut() {
                         for (delay, distance, dir) in r.take_strikes() {
                             s.thunder(delay, distance, dir, cam.position);
-                            cx.weather.outage.strike(cx.common.settings.storm_outage, distance, cx.clock.clock.run_time);
+                            cx.weather.outage.strike(cx.common.settings.storm_outage || omsi_cfg::flags::OMSI_STORM_CUTS.is_set(), distance, cx.clock.clock.run_time);
                         }
                     }
                     s.update(
