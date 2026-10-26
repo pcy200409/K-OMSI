@@ -28,6 +28,7 @@ pub(super) fn options_pages(app: &App) -> Vec<Page> {
         switch_row(app, "flood", "Low ground floods", "Heavy rain fills the hollows - underpasses, dips in the road, fields - beyond what the drains carry; a bus whose air intake goes under has a drowned engine"),
         switch_row(app, "black_ice", "Black ice", "Wet roads freeze in the frost - bridges and flyovers first, the rest in patches - and the tyres hardly grip on them; the traffic drives slower"),
         switch_row(app, "potholes", "Potholes", "Holes in the paved roads that jolt the bus, more of them as the rain of the run adds up"),
+        switch_row(app, "storm_outage", "Storm power cuts", "A lightning strike close by may put the power out for a few minutes: the traffic lights go dark and the street lamps out"),
         switch_row(app, "collision_pedestrians", "Collisions with people", "Enables/disables knocking down people"),
         switch_row(app, "timetable_win", "Timetable window (Insert)", "Displays a list of all stops (only when a tour is active)"),
         switch_row(app, "trip_summary", "Trip summary", "At the end of each trip: its stops with the times planned and driven, to copy or to save"),

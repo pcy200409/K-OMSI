@@ -36,7 +36,7 @@ fn field_group(field: &str) -> Option<Option<Group>> {
         "session.world_day" | "session.clock_jump" | "session.pending_time" | "session.autosave_t" => Some(Clock),
         "session.rain" | "session.cabin_air" | "session.spray" | "session.lamps_on" | "session.envir" | "session.weather"
         | "session.wetness" | "session.cloud_drift" | "session.weather_blend" | "session.weather_cycle" | "session.metar_rx"
-        | "session.metar_once" | "session.metar_next" | "session.sky" | "session.tomorrow" | "session.flood" | "session.ice" | "session.potholes" => Some(Weather),
+        | "session.metar_once" | "session.metar_next" | "session.sky" | "session.tomorrow" | "session.flood" | "session.ice" | "session.potholes" | "session.outage" => Some(Weather),
         _ => return None,
     })
 }
