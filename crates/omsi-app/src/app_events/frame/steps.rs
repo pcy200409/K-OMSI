@@ -574,6 +574,7 @@ pub(crate) fn throw_spray(
     world: &World,
     wetness: f32,
     quality: u8,
+    flood: Option<&omsi_sim::flood::WaterAt>,
 ) {
     let mut vehicles: Vec<(u64, &omsi_sim::VehicleInstance)> = Vec::new();
     if let Some(p) = player.filter(|_| quality > 0) {
@@ -606,9 +607,14 @@ pub(crate) fn throw_spray(
     spray.frame(dt, &vehicles, eye, wind, &|x, y, z| {
         // (none under a bridge or a canopy: Enhanced draws the road dry there)
         if world.roofed_at(x, y, z) {
-            return puddles::Water::default();
+            return crate::flood::with_flood(puddles::Water::default(), flood, x, y);
         }
-        puddles::water_at(x, y, world.wet_road_at(x, y, wetness))
+        crate::flood::with_flood(
+            puddles::water_at(x, y, world.wet_road_at(x, y, wetness)),
+            flood,
+            x,
+            y,
+        )
     });
 }
 

@@ -3,6 +3,10 @@
 
 use super::*;
 
+/// Flood water (kg/m³) and the drag coefficient of a bus's flat front pushing through it.
+const WATER_DENSITY: f32 = 1000.0;
+const WATER_CD: f32 = 1.0;
+
 impl RigidBody {
     /// `hub_heights[a]`: unloaded hub height of axle `a` above the model origin; the tyre
     /// radius when the model does not say (see `VehicleType::wheel_geometry`).
@@ -164,6 +168,7 @@ impl RigidBody {
             air_density: realism::air_density(20.0, 0.0),
             wind: Vec3::ZERO,
             wetness: 0.0,
+            water_depth: 0.0,
             road_s: 0.0,
             realistic: realistic_default(),
             unloaded: None,
@@ -780,7 +785,7 @@ impl RigidBody {
     /// in the realistic model; OMSI 2's leaves it to the vehicle's scripts.
     fn air_and_road(&mut self, rot: Quat, h: f32) -> (Vec3, Vec3) {
         let inv = rot.inverse();
-        let (force, torque) = if self.realistic {
+        let (mut force, torque) = if self.realistic {
             // (every OMSI 2 bus already has its still-air drag in its brake script - bremse.osc
             // adds 9.5 m2 x cw 0.8 x 0.6 v2 to every wheel's brake force - so only what the weather
             // changes is added here: the wind and an air that is not 1.2 kg/m3)
@@ -799,6 +804,16 @@ impl RigidBody {
             // about 40 % more air than OMSI's.
             (Vec3::ZERO, Vec3::ZERO)
         };
+        // K-OMSI: standing flood water - the body pushes it aside, a bow wave's drag on the
+        // front under the water (at most what stops the body within this substep)
+        if self.water_depth > 0.0 {
+            let v = Vec3::new(self.velocity.x, self.velocity.y, 0.0);
+            let width = self.wheels.iter().map(|w| w.attach.x.abs()).fold(0.0f32, f32::max) * 2.0 + 0.4;
+            let area = width * self.water_depth.min(1.5);
+            let drag = 0.5 * WATER_DENSITY * WATER_CD * area * v.length_squared();
+            let most = self.mass * v.length() / h.max(1e-4);
+            force -= v.normalize_or_zero() * drag.min(most);
+        }
         // where on the road's unevenness the body stands (a reversing bus retraces it)
         let ds = self.velocity.dot(rot.mul_vec3(Vec3::Y)) as f64 * h as f64;
         self.road_s += ds;
