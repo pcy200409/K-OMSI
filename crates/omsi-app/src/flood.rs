@@ -21,6 +21,8 @@ const SETTLE: f32 = 3.0;
 const LOG_EVERY: f32 = 30.0;
 /// The height of a bus's engine air intake over the road (m): water above it drowns the engine.
 const INTAKE: f32 = 1.0;
+/// A drowned bus put down this far from where it drowned is another run (m).
+const MOVED_ON: f64 = 150.0;
 /// The water a tyre throws all its spray from (m deep).
 const FULL_SPRAY: f32 = 0.1;
 /// The scripts' flags of a running engine and its revolutions (`startup::engine_running`'s).
@@ -37,9 +39,10 @@ pub(crate) struct FloodState {
     /// Seconds since the ground was last seen to change, and since the last log.
     still: f32,
     log_t: f32,
-    /// The bus whose engine the water drowned (its type, by address): it stays dead for
-    /// this bus; another bus (a new run) starts clean.
-    drowned: Option<usize>,
+    /// The bus whose engine the water drowned (its type, by address) and where it stood: it
+    /// stays dead there; another bus, or the same one put down somewhere else (a new run, a
+    /// recovery to the depot), starts clean.
+    drowned: Option<(usize, glam::DVec3)>,
     /// The depth the bus stood in when it was last written to the log.
     logged_depth: f32,
     /// A message for the driver, once (`frame_ui` shows it).
@@ -125,7 +128,7 @@ impl FloodState {
 
     /// Whether the water drowned this bus's engine.
     pub(crate) fn drowned(&self, v: &omsi_sim::VehicleInstance) -> bool {
-        self.drowned == Some(Arc::as_ptr(&v.ty) as usize)
+        self.drowned.is_some_and(|(k, _)| k == Arc::as_ptr(&v.ty) as usize)
     }
 
     /// Where the water stands now, for the tyres' spray (None while flooding is off or dry).
@@ -146,7 +149,7 @@ impl FloodState {
             return;
         }
         let key = Arc::as_ptr(&v.ty) as usize;
-        if self.drowned.is_some_and(|k| k != key) {
+        if self.drowned.is_some_and(|(k, at)| k != key || (at - v.position).truncate().length() > MOVED_ON) {
             self.drowned = None;
         }
         let depth = self.flood.depth_at(v.position.x, v.position.y, v.position.z);
@@ -161,11 +164,11 @@ impl FloodState {
         }
         v.host.water_depth = depth;
         if depth > INTAKE && self.drowned.is_none() {
-            self.drowned = Some(key);
+            self.drowned = Some((key, v.position));
             log::warn!("flood: the bus stands {depth:.2} m deep at ({:.0}, {:.0}): water in the engine, it is dead for this run", v.position.x, v.position.y);
             self.notice = Some("The bus is flooded: water got into the engine, it will not start again".into());
         }
-        if self.drowned == Some(key) {
+        if self.drowned.is_some_and(|(k, _)| k == key) {
             for name in ENGINE_FLAGS.iter().chain(ENGINE_REVS.iter()) {
                 if v.var(name).is_some() {
                     v.set_var(name, 0.0);
