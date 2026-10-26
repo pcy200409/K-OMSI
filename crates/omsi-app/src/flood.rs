@@ -65,11 +65,11 @@ pub(crate) fn with_flood(mut w: omsi_scene::puddles::Water, flood: Option<&flood
     w
 }
 
-/// `OMSI_FLOOD=scale[,drain mm/h]`: on, at this time scale (10 when not a number) and with
-/// drains of this capacity (30 mm/h).
-fn drainage() -> Option<Drainage> {
-    let v = omsi_cfg::flags::OMSI_FLOOD.var()?;
+/// The water's pace and the drains: ten times the real pace and 30 mm/h, or what
+/// `OMSI_FLOOD=scale[,drain mm/h]` says.
+fn drainage() -> Drainage {
     let mut d = Drainage::default();
+    let Some(v) = omsi_cfg::flags::OMSI_FLOOD.var() else { return d };
     let mut it = v.split(',').map(|x| x.trim().parse::<f32>().ok());
     if let Some(Some(s)) = it.next() {
         d.time_scale = s.max(0.0);
@@ -77,17 +77,27 @@ fn drainage() -> Option<Drainage> {
     if let Some(Some(m)) = it.next() {
         d.drain_mm_h = m.max(0.0);
     }
-    Some(d)
+    d
 }
 
 impl FloodState {
-    /// A frame of `dt` seconds under `weather` over `world`.
-    pub(crate) fn tick(&mut self, world: Option<&omsi_scene::World>, weather: Option<&omsi_content::weather::Weather>, dt: f32) {
-        if self.drainage.is_none() {
-            self.drainage = drainage();
-            if let Some(d) = self.drainage {
-                log::info!("flood: on - time x{}, drains {} mm/h, bare ground soaks {} mm/h", d.time_scale, d.drain_mm_h, d.soak_mm_h);
+    /// A frame of `dt` seconds under `weather` over `world`; `on`: the setting (or `OMSI_FLOOD`).
+    pub(crate) fn tick(&mut self, on: bool, world: Option<&omsi_scene::World>, weather: Option<&omsi_content::weather::Weather>, dt: f32) {
+        let on = on || omsi_cfg::flags::OMSI_FLOOD.is_set();
+        if !on {
+            if self.drainage.take().is_some() {
+                // (switched off: the water goes, its sheets with it - a new generation)
+                self.flood = Flood { generation: self.flood.generation + 1, ..Default::default() };
+                (self.ground, self.pending, self.still) = (None, None, 0.0);
+                flood::set_water(None);
+                log::info!("flood: off");
             }
+            return;
+        }
+        if self.drainage.is_none() {
+            let d = drainage();
+            self.drainage = Some(d);
+            log::info!("flood: on - time x{}, drains {} mm/h, bare ground soaks {} mm/h", d.time_scale, d.drain_mm_h, d.soak_mm_h);
         }
         let (Some(d), Some(world)) = (self.drainage, world) else { return };
         self.take_analysis();
@@ -104,11 +114,18 @@ impl FloodState {
         let (kind, rate) = weather.map(omsi_weather::conditions::precip_of).unwrap_or((0, 0.0));
         let rain_mm_h = if kind == 1 { omsi_scene::rain::rain_rate_mm_h(rate) } else { 0.0 };
         self.flood.step(dt, rain_mm_h, &d);
+        // (what the AI traffic stops short of)
+        flood::set_water(self.water_at());
         self.log_t += dt;
         if self.log_t >= LOG_EVERY {
             self.log_t = 0.0;
             self.log_levels(rain_mm_h);
         }
+    }
+
+    /// Whether the water drowned this bus's engine.
+    pub(crate) fn drowned(&self, v: &omsi_sim::VehicleInstance) -> bool {
+        self.drowned == Some(Arc::as_ptr(&v.ty) as usize)
     }
 
     /// Where the water stands now, for the tyres' spray (None while flooding is off or dry).
@@ -125,6 +142,7 @@ impl FloodState {
             return;
         };
         if self.drainage.is_none() {
+            v.host.water_depth = 0.0;
             return;
         }
         let key = Arc::as_ptr(&v.ty) as usize;
