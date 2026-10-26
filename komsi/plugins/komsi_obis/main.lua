@@ -467,7 +467,7 @@ local function header(me, others, n_obis, n_ai)
   return {
     { type = "row", children = {
       { type = "badge", text = tostring(me.duty.line or "-"), color = BLUE, weight = "bold" },
-      { type = "text", text = stop_name(nil, me.duty.terminus or "") .. " 행", weight = "bold", grow = true, wrap = false },
+      { type = "space", grow = true },   -- (행선지 글자는 빼 달라고 함, 2026-10-26)
       { type = "badge", text = "유저 " .. n_obis, color = n_obis > 0 and GREEN or "#2A2D33" },
       { type = "badge", text = "AI " .. n_ai, color = "#2A2D33" },
       { type = "button", id = "bd_style", icon = "sync_alt" },
