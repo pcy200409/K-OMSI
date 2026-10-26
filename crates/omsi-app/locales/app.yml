@@ -108523,3 +108523,5 @@ _version: 2
   vi: "Catmull-Rom tiêu chuẩn hoặc AMD FSR 1; thay đổi có hiệu lực ngay"
   zh: "标准 Catmull-Rom 或 AMD FSR 1；更改立即生效"
   zh-tw: "標準 Catmull-Rom 或 AMD FSR 1；變更立即生效"
+"The bus is flooded: water got into the engine, it will not start again":
+  ko: "차량 침수: 엔진에 물이 들어가 다시 시동이 걸리지 않습니다"
