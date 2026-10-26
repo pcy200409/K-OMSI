@@ -258,6 +258,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_AI_MODEL_LOCK` | bool | off | use | sim | AI cars steer no further than their model's own steering lock (no 60 degree allowance for tight turns). |
 | `OMSI_AI_WAY_ONLY` | bool | off | use | app | AI vehicles stand on their way with the plain ground sampler, as before (A/B). |
 | `OMSI_BASIC_PIPELINES` | bool | off | once | guard, render | Use the reduced (basic) render pipelines, as after a driver failed to build the full ones. |
+| `OMSI_BLACK_ICE` | bool | off | use | app | K-OMSI: the "Black ice" setting on for this run (wet roads freeze in the frost, bridges first). |
 | `OMSI_CROSSING_DEFORM` | bool | off | use | scene | Apply the crossings' ground deformation again (A/B; Omsi.exe does not). |
 | `OMSI_CUT_PLAIN` | bool | off | use | scene | Road-cut textures uploaded without GPU-made mipmaps. |
 | `OMSI_DEBUG_RAIL` | bool | off | use | sim | Log a rail vehicle's speed, the drive and brake the scripts ask for and the adhesion, twice a second. |
@@ -348,6 +349,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_NO_VAR_SYNC` | bool | off | use | lan | LAN: no variable sync. |
 | `OMSI_NO_WHEEL_SLIP` | bool | off | use | sim | Every wheel grips, as before wheels turned on their own (A/B). |
 | `OMSI_OLD_WORLD_GRID` | bool | off | use | map | Maps with world coordinates take the one tile size of 371.9 m (comparison). |
+| `OMSI_POTHOLES` | bool | off | use | app | K-OMSI: the "Potholes" setting on for this run. |
 | `OMSI_REALISTIC_ROAD` | bool | off | use | sim | The setting "Realistic road physics" on for this run (A/B against the OMSI 2 model: slip-angle tyres, surfaces, road roughness, wind). |
 | `OMSI_REPAIR_BODY_DEPTH` | bool | off | use | scene | The old guess for [matl_alpha] 2 vehicle bodies (A/B). |
 | `OMSI_ROAD_CUT` | bool | off | once | geometry | Take the ground away under every road surface (Omsi.exe does not). |
@@ -358,6 +360,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_SHADOW_NEAR_EVERY_FRAME` | bool | off | frame | render | Redraw the near shadow map every frame. |
 | `OMSI_SIM_THREAD` | text | the setting | use | sim | Window: the AI traffic's, the people's and the scenery scripts' steps on a thread of their own while the picture is drawn (one frame later): 0 / false / off / no: on the main thread, anything else: on their thread, over the `sim_thread` setting (off by default); the offscreen run ignores it. |
 | `OMSI_SKY_CUBE_EVERY_FRAME` | bool | off | frame | render | Enhanced: redraw a slice of the sky cube every frame again, not at most 60 a second (A/B). |
+| `OMSI_STORM_CUTS` | bool | off | use | app | K-OMSI: the "Storm power cuts" setting on for this run (a lightning strike nearby may put the traffic lights and street lamps out). |
 | `OMSI_TERRAIN_ALIGN` | bool | off | use | scene | Align the terrain to the splines again at load (A/B; Omsi.exe does not). |
 | `OMSI_TEXTURE_RAIN` | bool | off | use | scene | OMSI 2's own texture rain on the glass instead of the drops. |
 | `OMSI_TRACKIR_NATIVE` | text | on | use | input | 0 turns the native TrackIR interface off. |
@@ -371,7 +374,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_CHARACTER_MODELS` | text | settings | use | app | Override the character models for a game session: original (OMSI's people) or improved (the Microsoft Rocketbox avatars, drawn on this computer only). |
 | `OMSI_ENHANCED` | bool | settings | use | app | Enhanced graphics for this run. |
 | `OMSI_ENHANCED_PLUS` | bool | settings | use | app | Enhanced+ (ray traced) graphics for this run. |
-| `OMSI_FLOOD` | text | - | use | app | K-OMSI: low ground floods in heavy rain (first stage: the basins and their water written to the log). scale[,drain]: the water's time scale (10) and the drains' capacity in mm/h (30). |
+| `OMSI_FLOOD` | text | - | use | app | K-OMSI: the "Low ground floods" setting on for this run (the basins and their water also written to the log). scale[,drain]: the water's time scale (10) and the drains' capacity in mm/h (30). |
 | `OMSI_FOOT_RUN` | num | 3.8 | use | app | On foot: the pace of a run (Shift) in m/s. |
 | `OMSI_FOOT_WALK` | num | 1.4 | use | app | On foot: the walking pace in m/s. |
 | `OMSI_GRAPHICS` | text | settings | use | app | vanilla, vanilla_plus or enhanced: another renderer for one run. |
