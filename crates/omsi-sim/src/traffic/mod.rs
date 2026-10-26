@@ -39,7 +39,7 @@ pub use lane::{
 };
 pub use lights::{
     Aspect, DEFAULT_APPROACH, LightStop, PLAYER_SEARCH_RANGE, TrafficLightController,
-    UNLINKED_PHASE, WAITING_AT_LINE,
+    UNLINKED_PHASE, WAITING_AT_LINE, outage, set_outage,
 };
 pub use walk_path::PathFooting;
 
