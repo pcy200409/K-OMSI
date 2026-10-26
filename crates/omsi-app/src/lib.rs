@@ -156,6 +156,7 @@ pub(crate) use omsi_content::tutorial;
 mod weather_setup;
 mod flood;
 mod road_ice;
+mod spray_screen;
 mod weather_tomorrow;
 use omsi_weather::{weather_cycle, weather_model};
 mod world_load;
