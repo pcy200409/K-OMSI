@@ -37,6 +37,9 @@ impl App {
         if let (Some(w), Some(r), Some(scene)) = (self.world.as_ref(), self.renderer.as_ref(), self.scene.as_mut()) {
             self.gfx.flood_water.sync(w, r, scene, &self.session.flood.flood);
         }
+        if let Some(msg) = self.session.flood.notice.take() {
+            self.service_msg = Some((msg, 10.0));
+        }
         let (notes, tooltip) = self.frame_notes(dt, mirror_help);
         let __t = Instant::now();
         // (the frame's overlays start empty; the notes are the interface's, in
