@@ -199,3 +199,21 @@ fn a_camera_beside_the_right_hand_lane_counts_from_the_other_lanes() {
     assert!(right.is_some_and(|(d, l)| (d - 500.0).abs() < 0.5 && l != 0), "{right:?}");
     assert_eq!(on_path(&net, &lanes, DVec3::new(-11.0, 600.0, 0.0)), None);
 }
+
+/// At a junction every path starts the way the road ends: the right turn's light is not the
+/// bus's while it goes straight on, and is while its route turns right.
+#[test]
+fn the_way_at_a_junction_is_the_one_the_bus_takes() {
+    let road = omsi_sim::traffic::LaneBuilder::polyline(vec![DVec3::ZERO, DVec3::new(0.0, 100.0, 0.0)], LaneKind::Street, 3.0);
+    let straight = omsi_sim::traffic::LaneBuilder::polyline(vec![DVec3::new(0.0, 100.0, 0.0), DVec3::new(0.0, 130.0, 0.0)], LaneKind::Street, 3.0);
+    // (a right turn: on north a few metres, then east)
+    let right = omsi_sim::traffic::LaneBuilder::polyline(vec![DVec3::new(0.0, 100.0, 0.0), DVec3::new(0.0, 103.0, 0.0), DVec3::new(6.0, 112.0, 0.0), DVec3::new(30.0, 115.0, 0.0)], LaneKind::Street, 3.0);
+    let mut net = Network { lanes: vec![road, right, straight], ..Default::default() };
+    net.link(1.5);
+    net.lanes[0].next = vec![1, 2];
+    let way = path_along(&net, None, DVec3::new(0.0, 20.0, 0.0), 0.0, 200.0, &[]);
+    assert_eq!(way.iter().map(|w| w.0).collect::<Vec<_>>(), vec![0, 2]);
+    let guide = [DVec3::new(10.0, 113.0, 0.0), DVec3::new(25.0, 115.0, 0.0)];
+    let way = path_along(&net, None, DVec3::new(0.0, 20.0, 0.0), 0.0, 200.0, &guide);
+    assert_eq!(way.iter().map(|w| w.0).collect::<Vec<_>>(), vec![0, 1]);
+}
