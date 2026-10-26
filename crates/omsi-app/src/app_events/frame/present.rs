@@ -20,6 +20,7 @@ pub(super) fn lighting(
     if let Some(w) = cx.weather.weather.as_ref() {
         *cx.weather.wetness = road_wetness(precip_of(w).1, dt as f64, *cx.weather.wetness);
     }
+    cx.weather.flood.tick(cx.world.world.as_deref(), cx.weather.weather.as_ref(), dt);
     let inside = match cx
         .net
         .inside_remote
