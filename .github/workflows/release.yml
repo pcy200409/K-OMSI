@@ -146,25 +146,27 @@ jobs:
           }
           Get-ChildItem dist/windows
       # K-OMSI: openMapper (openOMSI-org/openMapper, AGPL-3.0, the map editor) beside the
-      # game in an `openMapper` folder: its own release, by tag and checked against the
-      # SHA-256 recorded here and the release's SHA256SUMS
+      # game in an `openMapper` folder. Its source of the release tag (the commit is pinned
+      # here) with K-OMSI's patches (komsi/openmapper/*.patch: Korean texts, the objects'
+      # drawing, lines on the map, the line map export, no update from the official
+      # releases) built with openMapper's own packaging script.
       - name: openMapper
         shell: pwsh
         env:
-          GH_TOKEN: ${{ github.token }}
-          OPENMAPPER_TAG: v0.1.5
-          OPENMAPPER_SHA256_X64: b110aad396091f26023e5680cbf490c51579940f8c2d3593cd42f7179031a898
-          OPENMAPPER_SHA256_ARM64: 5d7b391bd70c970b65dd9dcf5f10f16b678c32016cc3bd80e9364e802159121d
+          OPENMAPPER_TAG: v0.1.8
+          OPENMAPPER_COMMIT: bcc77231813fb5106b96a8e5c8676bb5e6574c67
         run: |
-          $ver = $env:OPENMAPPER_TAG.TrimStart("v")
-          $file = "openMapper-$ver-windows-${{ matrix.arch }}.zip"
-          gh release download $env:OPENMAPPER_TAG -R openOMSI-org/openMapper --pattern $file --pattern SHA256SUMS -D openmapper
-          $want = if ("${{ matrix.arch }}" -eq "arm64") { $env:OPENMAPPER_SHA256_ARM64 } else { $env:OPENMAPPER_SHA256_X64 }
-          $have = (Get-FileHash "openmapper/$file" -Algorithm SHA256).Hash.ToLower()
-          if ($have -ne $want) { throw "openMapper zip: SHA-256 $have, expected $want" }
-          $sums = Get-Content openmapper/SHA256SUMS | Where-Object { $_ -match [regex]::Escape($file) }
-          if (-not $sums -or ($sums -split '\s+')[0].ToLower() -ne $have) { throw "openMapper zip: not as its SHA256SUMS says" }
-          Expand-Archive "openmapper/$file" -DestinationPath openmapper/x
+          git clone --quiet -c core.autocrlf=false --depth 1 --branch $env:OPENMAPPER_TAG https://github.com/openOMSI-org/openMapper.git openmapper-src
+          $have = (git -C openmapper-src rev-parse HEAD).Trim()
+          if ($have -ne $env:OPENMAPPER_COMMIT) { throw "openMapper $env:OPENMAPPER_TAG is commit $have, expected $env:OPENMAPPER_COMMIT" }
+          foreach ($p in Get-ChildItem komsi/openmapper/*.patch | Sort-Object Name) {
+            git -C openmapper-src apply --whitespace=nowarn $p.FullName
+            if ($LASTEXITCODE -ne 0) { throw "openMapper: $($p.Name) does not apply" }
+          }
+          pwsh -File openmapper-src/tools/package-windows.ps1 -Target $env:TARGET
+          if ($LASTEXITCODE -ne 0) { throw "openMapper: packaging failed" }
+          $zip = Get-ChildItem openmapper-src/target/package/*.zip | Select-Object -First 1
+          Expand-Archive $zip.FullName -DestinationPath openmapper/x
           $dir = Get-ChildItem openmapper/x -Directory | Select-Object -First 1
           Copy-Item -Recurse $dir.FullName dist/windows/openMapper
           Get-ChildItem dist/windows/openMapper
