@@ -177,6 +177,7 @@ flags! {
     OMSI_CHECK_WALLS: Bool, Test, Use, "off", "Check: everybody inside a bus who stands away from its walkways.";
     OMSI_CHECK_WHEELS: Bool, Test, Use, "off", "Map check: probe the ground along every lane's wheel tracks (invisible walls, humps, holes).";
     OMSI_CHURN: Text, Test, Use, "-", "Offscreen: x,y - load the tiles round that point and unload/reload the start area (streaming test).";
+    OMSI_CLEAR_LAN_STORE: Bool, Tuning, Use, "off", "LAN: a joining game deletes the sealed store of the mods it fetched (`~/.openomsi/lan-store`) when it ends and before the next join, so nothing of another player's mods stays on this machine (the next join fetches them again).";
     OMSI_CLICK_ALL: Bool, Test, Use, "off", "Check: aim at every clickable item of the cab and report which one would actually be operated.";
     OMSI_CLOUDFLARED: Text, Setup, Use, "-", "Path of the cloudflared binary for the LAN tunnel (searched after the game's folder, before the PATH).";
     OMSI_CLOUDFLARED_OWN: Bool, Test, Use, "off", "LAN tunnel: only the game's own downloaded cloudflared, to test the download.";
