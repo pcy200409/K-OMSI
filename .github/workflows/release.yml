@@ -153,8 +153,8 @@ jobs:
       - name: openMapper
         shell: pwsh
         env:
-          OPENMAPPER_TAG: v0.1.8
-          OPENMAPPER_COMMIT: bcc77231813fb5106b96a8e5c8676bb5e6574c67
+          OPENMAPPER_TAG: v0.1.13
+          OPENMAPPER_COMMIT: b55d3423fd36f4bc2133804291e6829b56d2b469
         run: |
           $src = Join-Path $env:RUNNER_TEMP "openmapper-src"
           git clone --quiet -c core.autocrlf=false --depth 1 --branch $env:OPENMAPPER_TAG https://github.com/openOMSI-org/openMapper.git $src
