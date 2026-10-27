@@ -1,6 +1,6 @@
 <p align="center"><img src="https://raw.githubusercontent.com/pcy200409/K-OMSI/branding/komsi/logo.png" alt="K-OMSI" width="470"></p>
 
-**K-OMSI 0.4** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.42를 바탕으로 K-OMSI 수정을 얹은 빌드입니다. 이번부터 K-OMSI 버전은 0.4.x로 따로 매기고, 맵 편집기 [openMapper](https://github.com/openOMSI-org/openMapper) 0.1.8(K-OMSI 수정판)을 함께 넣었습니다.
+**K-OMSI 0.4** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.45를 바탕으로 K-OMSI 수정을 얹은 빌드입니다. 이번부터 K-OMSI 버전은 0.4.x로 따로 매기고, 맵 편집기 [openMapper](https://github.com/openOMSI-org/openMapper) 0.1.8(K-OMSI 수정판)을 함께 넣었습니다.
 
 > **비공식 포크입니다.** K-OMSI는 공식 openOMSI(openOMSI.org)와 관계없는 독립 프로젝트이며, openOMSI의 이름·로고는 원작자의 것입니다([TRADEMARKS.md](https://github.com/pcy200409/K-OMSI/blob/release/TRADEMARKS.md)). 문제는 공식 저장소가 아니라 [K-OMSI 이슈](https://github.com/pcy200409/K-OMSI/issues)로 알려 주세요.
 >
@@ -34,6 +34,21 @@
 - **플레이어 버스 지붕 눈**: 눈이 내릴 때 플레이어 버스의 지붕 높이(`VehicleType::roof_height()`)와 운전석 박스 윗면에 맞춰 눈이 쌓이도록 보정했습니다.
 - **openMapper 동봉 (새, K-OMSI 수정판)**: Windows 묶음의 `openMapper` 폴더에 [openMapper](https://github.com/openOMSI-org/openMapper) 0.1.8(AGPL-3.0, 도로 그리기·오브젝트 배치·지형 편집)을 K-OMSI 수정을 얹어 직접 빌드해 넣었습니다. 더한 것: 보기 > 지도에 노선 표시(노선 선택 포함), 파일 > 노선도 내보내기(SVG·PNG, 도로망 위/노선만), 주차칸 등 납작한 오브젝트가 도로에 묻히던 문제와 낮 텍스처가 검정인 오브젝트(정류장 도움 화살표)의 검은 원 수정, 새 문구의 한국어 번역, 공식 릴리스로의 자동 업데이트 끄기(우리 수정판을 덮어쓰지 않도록). 수정 내용은 이 저장소의 `komsi/openmapper/*.patch`에 있습니다. `openMapper\openmapper.exe`로 실행하며 macOS 묶음에는 들어 있지 않습니다.
 
+
+## openOMSI 0.3.43 ~ 0.3.45 공식 변경사항 (요약)
+
+0.3.42 이후 main에 들어온 변경입니다(공식 CHANGELOG의 새 항목 기준 요약).
+
+### 새 기능
+- **운전석 핸들이 실제 핸들만큼 돔** (*Cab wheel rotation*, 런처 설정 › 주행 › 게임 컨트롤러와 게임 옵션, `cab_wheel_rotation`): 운전석 핸들 모델이 정한 각도(180°~1800°, 끝에서 끝)만큼 돌아 900°·1080° 휠과 똑같이 움직입니다. 기본 *자동*(0)은 기존처럼 버스 자체 애니메이션을 쓰고, 스크립트로 핸들을 돌리는 버스는 자기 회전을 유지합니다.
+- **휠별 포스 피드백 조정**: *세부 조정*에 *셀프 센터링*(0~200 %), *댐핑*(0~300 %), *정차 저항*(0~200 %), *최소 힘*(0~20 %), *스무딩*(0~50 ms)과 **조정 초기화**가 생겼습니다. 런처의 게임 컨트롤러 페이지와 게임 컨트롤러 메뉴의 *포스 피드백* 탭에서 바꾸며, `gamectrler.cfg`의 `[openOMSI.FFTuning]`(OMSI 2는 무시)에 저장됩니다. 기본값은 지금 느낌 그대로입니다(#2103, #3289).
+
+### 수정
+- **런처가 0.3.41처럼 시작**: 0.3.42의 데이터 폴더 위치 선택(#3243)이 프로그램 옆에 파일을 쓰고 폴더를 복사해 일부 백신·브라우저가 차단하던 문제로 되돌려졌습니다. 데이터는 다시 `~/.openomsi`에 둡니다(위 0.3.42의 "데이터 폴더 위치 선택"은 빠졌습니다).
+- **그래픽 장치를 잃으면 로딩 화면에 멈추지 않고 스스로 다시 시작**(#3232): 드라이버가 말없이 멈춰 잘못된 리소스 오류가 쏟아지면 장치 손실로 보고, 마지막 상황에서 가벼운 그래픽으로 다시 시작합니다.
+- **장치 손실 뒤 재시작이 더 가벼움**(#3323, #3328): 첫 재시작에서 Enhanced 추가 기능(레이 트레이싱, 모든 조명·램프 그림자, 구름 그림자, 조명 빛번짐)을 끄고, 두 번째에는 Enhanced가 Vanilla+로 바뀝니다. 장치 손실 때 내비게이터 지도가 오류 보고로 끝나지 않습니다.
+- **로그가 멈춘 곳을 알려 줌**: 프레임의 한 단계가 10초 넘게 걸리면 `game.log`에 그 이름을 적고 30초마다 다시 적습니다(#3326).
+- **스크립트를 따로 가진 열차 차량**(Konstal 105Na 등의 2호차)이 도색의 `[setvar]`를 받아 행선판·번호판·지붕 부품이 보이고(#3343), `[control_cable_*]`가 차량마다 스크립트 신호를 전달해 2호차도 1호차와 함께 전원·조명·제동이 들어가며(#3342), 각 차량이 자기 팬터그래프 위 가선을 잽니다(#3341).
 
 ## openOMSI 0.3.42 공식 변경사항 (요약)
 
