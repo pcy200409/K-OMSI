@@ -1,0 +1,1214 @@
+diff --git a/locales/ko.tsv b/locales/ko.tsv
+index ebca320..8b803ce 100644
+--- a/locales/ko.tsv
++++ b/locales/ko.tsv
+@@ -2407,3 +2407,13 @@ Straight on	직진
+ A piece straight on between arms that face each other	서로 마주 보는 접속부 사이의 직선 구간
+ auto	자동
+ Built by Auto-Junction from the arms	자동 교차로가 접속부로부터 생성
++Export a line map	노선도 내보내기
++lines	노선도
++ (lines alone)	 (노선만)
++Line map saved:	노선도 저장함:
++Over the map's roads	지도 도로망 위에
++The lines and stops alone	노선과 정류장만
++SVG and PNG; the lines chosen in View > Which lines	SVG와 PNG로 저장, 노선은 보기 > 표시할 노선에서 고른 것
++Lines on the map	노선 표시
++Which lines	표시할 노선
++All lines	모든 노선
+diff --git a/src/app.rs b/src/app.rs
+index a9485fc..efc5847 100644
+--- a/src/app.rs
++++ b/src/app.rs
+@@ -228,6 +228,11 @@ impl App {
+         }
+         // OPENMAPPER_MULTIPLAYER: File > Multiplayer open at the start
+         app.collab.open = std::env::var_os("OPENMAPPER_MULTIPLAYER").is_some();
++        // OPENMAPPER_ROUTES=all|<line>: the lines drawn on the map from the start
++        if let Ok(l) = std::env::var("OPENMAPPER_ROUTES") {
++            app.ed.show_routes = true;
++            app.ed.route_line = Some(l).filter(|l| !l.is_empty() && l != "all");
++        }
+         app
+     }
+ 
+@@ -268,6 +273,10 @@ impl App {
+         if self.shot.is_some() {
+             attrs = attrs.with_window_level(winit::window::WindowLevel::AlwaysOnTop).with_active(false);
+         }
++        // OPENMAPPER_WINDOW_AT=x,y: the window there (a check run on another screen)
++        if let Some(v) = std::env::var("OPENMAPPER_WINDOW_AT").ok().map(|c| c.split(',').filter_map(|x| x.trim().parse::<i32>().ok()).collect::<Vec<_>>()).filter(|v| v.len() == 2) {
++            attrs = attrs.with_position(winit::dpi::PhysicalPosition::new(v[0], v[1]));
++        }
+         crate::logging::stage("creating the window");
+         let window = Arc::new(el.create_window(attrs)?);
+         crate::logging::stage("starting the graphics card");
+@@ -1273,6 +1282,41 @@ impl App {
+                     }
+                 }
+             }
++            Action::ExportLineMap { background, plain } => {
++                if let Some(doc) = &self.ed.doc {
++                    let name = doc.dir.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_else(|| "map".into());
++                    let title = tr("Export a line map", "Экспорт схемы маршрутов");
++                    if let Some(out) = rfd::FileDialog::new().add_filter("SVG", &["svg"]).set_file_name(format!("{name} {}.svg", tr("lines", "маршруты"))).set_title(title).save_file() {
++                        let stem = out.with_extension("");
++                        let mut written = Vec::new();
++                        let mut failed = None;
++                        // (both: the one over the roads keeps the name, the other is marked)
++                        for (on, ground, mark) in [(background, true, ""), (plain, false, if background { tr(" (lines alone)", " (только маршруты)") } else { "" })] {
++                            if !on {
++                                continue;
++                            }
++                            let opts = crate::plan::Options { background: ground, line: self.ed.route_line.clone() };
++                            let pic = crate::plan::picture(doc, &self.lib, &omsi_cfg::content_roots(), &opts);
++                            for ext in ["svg", "png"] {
++                                let file = PathBuf::from(format!("{}{mark}.{ext}", stem.display()));
++                                match crate::plan::write(&pic, &file) {
++                                    Ok(()) => written.push(file),
++                                    Err(e) => failed = Some(format!("{}: {e}", file.display())),
++                                }
++                            }
++                        }
++                        match failed {
++                            Some(e) => self.ed.error(e),
++                            None => {
++                                self.ed.toast(format!("{} {}", tr("Line map saved:", "Схема сохранена:"), written.iter().map(|f| f.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()).collect::<Vec<_>>().join(", ")));
++                                if let Some(f) = written.first() {
++                                    reveal(f);
++                                }
++                            }
++                        }
++                    }
++                }
++            }
+             Action::MergeTiles => {
+                 if let Some(r) = &self.roots {
+                     self.ui.merge.show(install::list_maps(r));
+@@ -2109,6 +2153,9 @@ impl App {
+             // (the pictures taken of the view are clean of them)
+             if !self.snapshot {
+                 crate::ui_edit::paint_names(&ctx, &self.ed, &self.lib, &self.cam, self.view);
++                if self.ed.show_routes {
++                    self.tt.paint_route_stops(&ctx, &self.cam, self.view);
++                }
+                 if let (Some(sel), Some(doc), Some(a)) = (self.ed.path_numbers.filter(|s| self.ed.selected == Some(*s)), self.ed.doc.as_ref(), self.assets.as_mut()) {
+                     crate::ui_edit::paint_path_numbers(&ctx, &crate::lanes::of_one(doc, a, sel), &self.cam, self.view);
+                 }
+@@ -2281,6 +2328,7 @@ impl App {
+                 let t_x = Instant::now();
+                 let mut extras = self.ed.extras(&self.cam, assets);
+                 self.tt.overlay(&self.ed, &self.cam, &mut extras);
++                self.tt.routes_overlay(&self.ed, self.roots.as_ref(), &self.cam, &mut extras);
+                 g.renderer.profile.add("extras", crate::render::profile::ms(t_x));
+                 self.geo.feed(&mut g.renderer.imagery, &g.gpu, &self.ed);
+                 g.renderer.daytime = self.ui.daytime.map(|h| crate::render::daylight::at_map(h, &doc.traffic.timezone));
+diff --git a/src/assets.rs b/src/assets.rs
+index bf6aecf..4e83325 100644
+--- a/src/assets.rs
++++ b/src/assets.rs
+@@ -55,6 +55,10 @@ pub struct ObjectModel {
+     /// Laid on the ground (`[surface]` or a ground-layer `[rendertype]`): the terrain is cut
+     /// under it.
+     pub surface: bool,
++    /// A flat marking laid on the road with no ground-layer `[rendertype]` (bays, arrows: all
++    /// of it within a few centimetres of its foot): drawn with the road's depth pull, else
++    /// the road pulled towards the eye hides it (openOMSI lifts such objects with the roads).
++    pub decal: bool,
+     /// `[terrainhole]` cutter meshes (object frame).
+     pub holes: Vec<MeshData>,
+     /// Its own lanes (`[path]`: junctions, stops), in its frame.
+@@ -347,6 +351,11 @@ pub fn texture_dirs(omsi: &Path, content: &Path, dir: &Path) -> Vec<PathBuf> {
+     dirs
+ }
+ 
++/// Every texel of the picture black (its alpha aside).
++fn all_black(p: &std::path::Path) -> bool {
++    omsi_texture::decode_file(p).map(|i| !i.rgba.is_empty() && i.rgba.chunks_exact(4).all(|c| c[0] == 0 && c[1] == 0 && c[2] == 0)).unwrap_or(false)
++}
++
+ fn find_tex(name: &str, dirs: &[PathBuf]) -> Option<PathBuf> {
+     if name.trim().is_empty() {
+         return None;
+@@ -450,7 +459,15 @@ pub(crate) fn load_object(path: &Path, omsi: &Path, content: &Path) -> Option<Ob
+                     _ => Alpha::Opaque,
+                 };
+                 let glow = def.and_then(|d| d.nightmap.as_ref().and_then(|n| find_tex(n, &dirs)).map(|p| (p, true)).or_else(|| d.lightmap.as_ref().and_then(|l| find_tex(&l.0, &dirs)).map(|p| (p, false))));
+-                Material { texture: find_tex(&mat.texture, &dirs), color: mat.diffuse, alpha, glow }
++                let mut texture = find_tex(&mat.texture, &dirs);
++                // a texture all black under a night map only shapes the glow (NCCR's stop
++                // markers): the editor shows the night map's picture by day too, not a black disc
++                if let (Some(t), Some((n, true))) = (&texture, &glow)
++                    && all_black(t)
++                {
++                    texture = Some(n.clone());
++                }
++                Material { texture, color: mat.diffuse, alpha, glow }
+             })
+             .collect();
+         parts.push(Part { mesh, materials, texts, freetex });
+@@ -522,6 +539,7 @@ pub(crate) fn load_object(path: &Path, omsi: &Path, content: &Path) -> Option<Ob
+     }
+     let attachments = sco.attachments.iter().map(crate::place::attachment_matrix).collect();
+     let surface = sco.render_type.is_ground_layer() || sco.surface;
++    let decal = !surface && !parts.is_empty() && tree.is_none() && lo.z >= -0.05 && hi.z <= 0.25;
+     let mut holes = Vec::new();
+     if sco.tree.is_none() && !sco.only_editor {
+         for (dir, file) in sco.terrain_hole_sources(&model) {
+@@ -534,7 +552,7 @@ pub(crate) fn load_object(path: &Path, omsi: &Path, content: &Path) -> Option<Ob
+     }
+     // (a tree with an editor-only helper box is seen in the game: only the box is not)
+     let technical = (sco.only_editor && tree.is_none()) || sco.is_entry_point || sco.is_car_park || sco.is_help_arrow || (parts.is_empty() && tree.is_none());
+-    Some(ObjectModel { parts, lo, hi, abs_height: sco.absolute_height(), tree, helpers, attachments, surface, holes, technical, editor_parts: sco.only_editor, paths: sco.paths.clone(), texts: model.text_textures.clone(), labels: label_names, lights: sco.traffic_lights.iter().map(|l| l.name.clone()).collect(), light_head: sco.is_traffic_light && sco.traffic_lights.is_empty() })
++    Some(ObjectModel { parts, lo, hi, abs_height: sco.absolute_height(), tree, helpers, attachments, surface, decal, holes, technical, editor_parts: sco.only_editor, paths: sco.paths.clone(), texts: model.text_textures.clone(), labels: label_names, lights: sco.traffic_lights.iter().map(|l| l.name.clone()).collect(), light_head: sco.is_traffic_light && sco.traffic_lights.is_empty() })
+ }
+ 
+ fn load_spline(path: &Path, omsi: &Path, content: &Path) -> Option<SplineModel> {
+diff --git a/src/editor.rs b/src/editor.rs
+index 26bac90..fe9cf13 100644
+--- a/src/editor.rs
++++ b/src/editor.rs
+@@ -492,6 +492,10 @@ pub struct Editor {
+     pub show_lanes: bool,
+     /// The names of bus stops and start points float over them in the view.
+     pub show_names: bool,
++    /// The map's lines are drawn in the view: their ways and stops (View > Lines on the map).
++    pub show_routes: bool,
++    /// Only this line is drawn (else all of them).
++    pub route_line: Option<String>,
+     /// A window picks things on the map (the Lines window its stops): a click only notes
+     /// what is under the cursor and where, nothing is selected or moved.
+     pub pick_mode: bool,
+@@ -644,6 +648,8 @@ impl Default for Editor {
+             hide: [false; 3],
+             show_lanes: false,
+             show_names: true,
++            show_routes: false,
++            route_line: None,
+             pick_mode: false,
+             picked: None,
+             link_pick: None,
+diff --git a/src/icons.rs b/src/icons.rs
+index d3a8128..a7d3f2d 100644
+--- a/src/icons.rs
++++ b/src/icons.rs
+@@ -203,6 +203,25 @@ pub fn fonts() -> FontDefinitions {
+     f
+ }
+ 
++/// The system's Korean font (`OPENMAPPER_KO_FONT` names one), if any.
++pub(crate) fn korean_font() -> Option<Vec<u8>> {
++    let mut paths: Vec<String> = std::env::var("OPENMAPPER_KO_FONT").into_iter().collect();
++    let win = std::env::var("WINDIR").unwrap_or_else(|_| "C:/Windows".into());
++    for f in ["malgun.ttf", "NotoSansKR-VF.ttf", "gulim.ttc"] {
++        paths.push(format!("{win}/Fonts/{f}"));
++    }
++    for p in [
++        "/System/Library/Fonts/AppleSDGothicNeo.ttc",
++        "/Library/Fonts/AppleGothic.ttf",
++        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
++        "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
++        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
++    ] {
++        paths.push(p.into());
++    }
++    paths.iter().find_map(|p| std::fs::read(p).ok())
++}
++
+ /// A label with an icon in front (the icon's own font, the text's own).
+ pub fn labelled(icon: Icon, text: &str) -> egui::text::LayoutJob {
+     let mut job = egui::text::LayoutJob::default();
+diff --git a/src/plan.rs b/src/plan.rs
+index 1e2d1f7..cd3d8f2 100644
+--- a/src/plan.rs
++++ b/src/plan.rs
+@@ -1,6 +1,7 @@
+-//! A plan of the map as an SVG picture (File > Export a plan of the map): its tiles, water,
+-//! roads, tracks and footpaths seen from above, the bus lines' ways in colour with a key,
+-//! the stops with their names, a scale bar and north. To share with players or print.
++//! A plan of the map as an SVG or PNG picture (File > Export a plan of the map, Export a line
++//! map): its tiles, water, roads, tracks and footpaths seen from above, the bus lines' ways in
++//! colour with a key, the stops with their names, a scale bar and north. To share with players
++//! or print. A line map leaves the ground out: the lines and their stops alone.
+ 
+ use std::fmt::Write as _;
+ use std::path::{Path, PathBuf};
+@@ -14,166 +15,442 @@ use crate::library::{Category, Library};
+ /// The colours of the lines, in turn.
+ const LINE_COLOURS: [&str; 10] = ["#d7263d", "#1b78c8", "#2e933c", "#f08a24", "#7b2cbf", "#0f7173", "#c2185b", "#5c6bc0", "#8d6e63", "#b8a200"];
+ 
+-fn esc(s: &str) -> String {
+-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
++/// What a picture shows.
++#[derive(Debug, Clone)]
++pub struct Options {
++    /// The map's ground, water and roads under the lines (else the lines alone).
++    pub background: bool,
++    /// Only this line (else all of them).
++    pub line: Option<String>,
+ }
+ 
+-/// A polyline as an SVG path (`flip`: world to picture).
+-fn path_d(pts: &[DVec2], flip: &impl Fn(DVec2) -> (f64, f64)) -> String {
+-    let mut d = String::new();
+-    for (i, p) in pts.iter().enumerate() {
+-        let (x, y) = flip(*p);
+-        let _ = write!(d, "{}{x:.1},{y:.1}", if i == 0 { "M" } else { " L" });
++impl Default for Options {
++    fn default() -> Options {
++        Options { background: true, line: None }
+     }
+-    d
++}
++
++/// What is drawn, in picture units (x right, y down), in the order drawn.
++enum Prim {
++    Rect { x: f64, y: f64, w: f64, h: f64, rx: f64, fill: &'static str },
++    /// A line with round ends and joins; a dash of (on, off).
++    Line { pts: Vec<(f64, f64)>, colour: String, width: f64, opacity: f64, dash: Option<(f64, f64)> },
++    Poly { pts: Vec<(f64, f64)>, fill: &'static str },
++    Circle { x: f64, y: f64, r: f64, fill: &'static str, stroke: (&'static str, f64) },
++    /// A text on its baseline, left or centred; a halo round it of (colour, width).
++    Text { x: f64, y: f64, size: f64, text: String, fill: String, bold: bool, centred: bool, halo: Option<(&'static str, f64)> },
++}
++
++/// A picture of the map: its size and what is drawn.
++pub struct Picture {
++    w: f64,
++    h: f64,
++    prims: Vec<Prim>,
++}
++
++fn esc(s: &str) -> String {
++    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+ }
+ 
+ /// The map's plan; `roots`: where the stops' models are found (the lines' ways go by them).
+ pub fn svg(doc: &Document, lib: &Library, roots: &[PathBuf]) -> String {
++    to_svg(&picture(doc, lib, roots, &Options::default()))
++}
++
++/// A stop of a line: where it stands and its name (the timetable's, the trip's or the
++/// object's label).
++fn line_stop(doc: &Document, files: &mut crate::timetable::network::Files, id: i64, own: Option<&str>) -> Option<(DVec2, String)> {
++    let (k, o) = doc.tiles.iter().find_map(|(k, t)| t.tile.objects.iter().find(|o| o.id == id).map(|o| (*k, o)))?;
++    let abs = files.get(&o.file).map(|f| f.abs_height).unwrap_or(false);
++    let p = doc.object_world(k, o, abs).truncate();
++    let name = doc.timetable.stop_name(id).map(str::to_string).filter(|n| !n.is_empty()).or_else(|| own.map(str::to_string).filter(|n| !n.is_empty())).or_else(|| o.extra.first().cloned()).unwrap_or_default();
++    Some((p, name.replace('@', " ")))
++}
++
++/// What the picture shows, laid out.
++pub fn picture(doc: &Document, lib: &Library, roots: &[PathBuf], opts: &Options) -> Picture {
+     let ts = tile_size();
+-    let (lo, hi) = doc.tiles.keys().fold((DVec2::splat(f64::MAX), DVec2::splat(f64::MIN)), |(a, b), k| (a.min(tile_origin(*k)), b.max(tile_origin(*k) + DVec2::splat(ts))));
+     if doc.tiles.is_empty() {
+-        return String::new();
++        return Picture { w: 1.0, h: 1.0, prims: Vec::new() };
+     }
+-    let margin = 40.0;
++    // the lines' ways (each trip's way along its track, else along the roads) and stops
++    let tt = &doc.timetable;
++    let mut ways: Vec<(String, &'static str, Vec<Vec<DVec2>>)> = Vec::new();
++    let mut line_stops: Vec<(i64, DVec2, String)> = Vec::new();
++    if !tt.trips.is_empty() {
++        let mut files = crate::timetable::network::Files::new(roots.to_vec());
++        let net = crate::timetable::network::Network::build(doc, &mut files);
++        for (li, line) in tt.lines.iter().enumerate() {
++            if opts.line.as_ref().is_some_and(|l| !l.eq_ignore_ascii_case(&line.name)) {
++                continue;
++            }
++            let colour = LINE_COLOURS[li % LINE_COLOURS.len()];
++            let mut drawn = Vec::new();
++            for name in crate::timetable::route::line_trips(tt, line) {
++                let Some(trip) = tt.trip(&name) else { continue };
++                let mut at: Vec<DVec3> = Vec::new();
++                for (id, own) in crate::timetable::route::trip_stations(trip) {
++                    let Some(p) = crate::timetable::stop_world(doc, &mut files, id) else { continue };
++                    at.push(p);
++                    if !line_stops.iter().any(|s| s.0 == id) {
++                        if let Some((q, n)) = line_stop(doc, &mut files, id, own.as_deref()) {
++                            line_stops.push((id, q, n));
++                        }
++                    }
++                }
++                let way: Vec<DVec2> = crate::timetable::route::trip_way(doc, &net, trip, &at).iter().map(|p| p.truncate()).collect();
++                if way.len() >= 2 {
++                    drawn.push(way);
++                }
++            }
++            if !drawn.is_empty() {
++                ways.push((line.name.clone(), colour, drawn));
++            }
++        }
++    }
++    // the picture's extent: the map's tiles, or (the lines alone) the lines
++    let tiles_box = doc.tiles.keys().fold((DVec2::splat(f64::MAX), DVec2::splat(f64::MIN)), |(a, b), k| (a.min(tile_origin(*k)), b.max(tile_origin(*k) + DVec2::splat(ts))));
++    let lines_box = ways.iter().flat_map(|w| w.2.iter().flatten()).chain(line_stops.iter().map(|s| &s.1)).fold((DVec2::splat(f64::MAX), DVec2::splat(f64::MIN)), |(a, b), p| (a.min(*p), b.max(*p)));
++    let plain = !opts.background && lines_box.0.x < lines_box.1.x;
++    let (lo, hi) = if plain { lines_box } else { tiles_box };
++    // (room round the map for the title, the key and the scale: they grow with the picture)
++    let margin = if plain { ((hi - lo).max_element() * 0.06).max(60.0) } else { ((hi - lo).max_element() * 0.03).max(40.0) };
+     let (w, h) = (hi.x - lo.x + 2.0 * margin, hi.y - lo.y + 2.0 * margin);
+     // (north up: the picture's y runs down)
+     let flip = |p: DVec2| (p.x - lo.x + margin, hi.y - p.y + margin);
+     let font = (w.max(h) / 160.0).clamp(5.0, 40.0);
+-    let mut s = String::new();
+-    // (some 2400 pixels along its longer side when opened as a picture)
+-    let px = 2400.0 / w.max(h);
+-    let _ = writeln!(s, r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w:.0} {h:.0}" width="{:.0}" height="{:.0}" font-family="Helvetica, Arial, sans-serif">"#, w * px, h * px);
+-    let _ = writeln!(s, r##"<rect width="100%" height="100%" fill="#f7f6f2"/>"##);
+-    // the tiles
+-    s.push_str(r##"<g fill="#e7ecdc" stroke="#d6dccb" stroke-width="0.5">"##);
+-    for k in doc.tiles.keys() {
+-        let (x, y) = flip(tile_origin(*k) + DVec2::new(0.0, ts));
+-        let _ = write!(s, r#"<rect x="{x:.1}" y="{y:.1}" width="{ts:.1}" height="{ts:.1}"/>"#);
+-    }
+-    s.push_str("</g>\n");
+-    // water: where a tile's ground lies below its water, in 5 m cells
+-    s.push_str(r##"<g fill="#a9cfe8">"##);
+-    let cell = 5.0;
+-    let n = (ts / cell).round() as usize;
+-    for (k, t) in &doc.tiles {
+-        let Some(wl) = t.water else { continue };
+-        let level = (wl[0] + wl[1] + wl[2] + wl[3]) / 4.0;
+-        let org = tile_origin(*k);
+-        for j in 0..n {
+-            let mut run: Option<usize> = None;
+-            for i in 0..=n {
+-                let wet = i < n && t.height_at((i as f64 + 0.5) * cell, (j as f64 + 0.5) * cell) < level;
+-                match (wet, run) {
+-                    (true, None) => run = Some(i),
+-                    (false, Some(a)) => {
+-                        let (x, y) = flip(org + DVec2::new(a as f64 * cell, (j + 1) as f64 * cell));
+-                        let _ = write!(s, r#"<rect x="{x:.1}" y="{y:.1}" width="{:.1}" height="{:.1}"/>"#, (i - a) as f64 * cell, cell + 0.2);
+-                        run = None;
++    // (the title, the key, the scale and north: read at the size of the whole picture)
++    let big = (w.max(h) / 90.0).clamp(font, 120.0);
++    let mut out: Vec<Prim> = Vec::new();
++    out.push(Prim::Rect { x: 0.0, y: 0.0, w, h, rx: 0.0, fill: "#f7f6f2" });
++    if !plain {
++        // the tiles
++        for k in doc.tiles.keys() {
++            let (x, y) = flip(tile_origin(*k) + DVec2::new(0.0, ts));
++            out.push(Prim::Rect { x, y, w: ts, h: ts, rx: 0.0, fill: "#e7ecdc" });
++        }
++        for k in doc.tiles.keys() {
++            let (x, y) = flip(tile_origin(*k) + DVec2::new(0.0, ts));
++            out.push(Prim::Line { pts: vec![(x, y), (x + ts, y), (x + ts, y + ts), (x, y + ts), (x, y)], colour: "#d6dccb".into(), width: 0.5, opacity: 1.0, dash: None });
++        }
++        // water: where a tile's ground lies below its water, in 5 m cells
++        let cell = 5.0;
++        let n = (ts / cell).round() as usize;
++        for (k, t) in &doc.tiles {
++            let Some(wl) = t.water else { continue };
++            let level = (wl[0] + wl[1] + wl[2] + wl[3]) / 4.0;
++            let org = tile_origin(*k);
++            for j in 0..n {
++                let mut run: Option<usize> = None;
++                for i in 0..=n {
++                    let wet = i < n && t.height_at((i as f64 + 0.5) * cell, (j as f64 + 0.5) * cell) < level;
++                    match (wet, run) {
++                        (true, None) => run = Some(i),
++                        (false, Some(a)) => {
++                            let (x, y) = flip(org + DVec2::new(a as f64 * cell, (j + 1) as f64 * cell));
++                            out.push(Prim::Rect { x, y, w: (i - a) as f64 * cell, h: cell + 0.2, rx: 0.0, fill: "#a9cfe8" });
++                            run = None;
++                        }
++                        _ => {}
+                     }
+-                    _ => {}
+                 }
+             }
+         }
+-    }
+-    s.push_str("</g>\n");
+-    // the splines by their kind
+-    let mut roads: Vec<(Vec<DVec2>, f64)> = Vec::new();
+-    let mut tracks: Vec<Vec<DVec2>> = Vec::new();
+-    let mut paths: Vec<Vec<DVec2>> = Vec::new();
+-    let mut lines_of = |pts: Vec<DVec2>, file: &str| match lib.find(file).map(|a| (a.category, a.half_width)) {
+-        Some((Category::Roads, hw)) => roads.push((pts, (hw as f64).max(2.0))),
+-        Some((Category::Tracks, _)) => tracks.push(pts),
+-        Some((Category::Paths, _)) => paths.push(pts),
+-        _ => {}
+-    };
+-    for (k, t) in &doc.tiles {
+-        for sp in t.tile.splines.iter().filter(|s| !s.deleted) {
+-            let c = omsi_geometry::SplineCurve::from_map(sp, tile_origin(*k));
+-            let m = (sp.length / 4.0).ceil().max(1.0) as usize;
+-            lines_of((0..=m).map(|i| c.point_at(sp.length * i as f64 / m as f64).truncate()).collect(), &sp.file);
+-        }
+-    }
+-    let _ = writeln!(s, r##"<g fill="none" stroke="#c8b98f" stroke-width="1.2" stroke-linecap="round">{}</g>"##, paths.iter().map(|p| format!(r#"<path d="{}"/>"#, path_d(p, &flip))).collect::<String>());
+-    // (each road its own width: an outline under, the road over it)
+-    let mut outline = String::new();
+-    let mut fill = String::new();
+-    for (p, hw) in &roads {
+-        let d = path_d(p, &flip);
+-        let _ = write!(outline, r#"<path d="{d}" stroke-width="{:.1}"/>"#, hw * 2.0 + 1.6);
+-        let _ = write!(fill, r#"<path d="{d}" stroke-width="{:.1}"/>"#, hw * 2.0);
+-    }
+-    let _ = writeln!(s, r##"<g fill="none" stroke="#a7a59d" stroke-linecap="round" stroke-linejoin="round">{outline}</g>"##);
+-    let _ = writeln!(s, r##"<g fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round">{fill}</g>"##);
+-    let _ = writeln!(s, r##"<g fill="none" stroke="#5a5a5a" stroke-width="1.6" stroke-dasharray="6 3">{}</g>"##, tracks.iter().map(|p| format!(r#"<path d="{}"/>"#, path_d(p, &flip))).collect::<String>());
+-    // the lines' ways (each trip's way along the roads, as the Lines window finds it)
+-    let tt = &doc.timetable;
+-    let mut key: Vec<(String, &str)> = Vec::new();
+-    if !tt.trips.is_empty() {
+-        let mut files = crate::timetable::network::Files::new(roots.to_vec());
+-        let net = crate::timetable::network::Network::build(doc, &mut files);
+-        let mut ways = String::new();
+-        for (li, line) in tt.lines.iter().enumerate() {
+-            let colour = LINE_COLOURS[li % LINE_COLOURS.len()];
+-            let mut drawn = false;
+-            for trip in tt.trips.iter().filter(|t| t.line.eq_ignore_ascii_case(&line.name) && t.stations.len() >= 2) {
+-                let pos: Vec<Option<DVec3>> = trip.stations.iter().map(|id| crate::timetable::stop_world(doc, &mut files, *id)).collect();
+-                let r = crate::timetable::route::find(&net, &pos, doc.global.left_hand_traffic);
+-                let pts: Vec<DVec2> = r.polyline(&net).iter().map(|p| p.truncate()).collect();
+-                if pts.len() >= 2 {
+-                    let _ = write!(ways, r#"<path d="{}" stroke="{colour}"/>"#, path_d(&pts, &flip));
+-                    drawn = true;
++        // the splines by their kind
++        let mut roads: Vec<(Vec<DVec2>, f64)> = Vec::new();
++        let mut tracks: Vec<Vec<DVec2>> = Vec::new();
++        let mut paths: Vec<Vec<DVec2>> = Vec::new();
++        for (k, t) in &doc.tiles {
++            for sp in t.tile.splines.iter().filter(|s| !s.deleted) {
++                let c = omsi_geometry::SplineCurve::from_map(sp, tile_origin(*k));
++                let m = (sp.length / 4.0).ceil().max(1.0) as usize;
++                let pts: Vec<DVec2> = (0..=m).map(|i| c.point_at(sp.length * i as f64 / m as f64).truncate()).collect();
++                match lib.find(&sp.file).map(|a| (a.category, a.half_width)) {
++                    Some((Category::Roads, hw)) => roads.push((pts, (hw as f64).max(2.0))),
++                    Some((Category::Tracks, _)) => tracks.push(pts),
++                    Some((Category::Paths, _)) => paths.push(pts),
++                    _ => {}
+                 }
+             }
+-            if drawn {
+-                key.push((line.name.clone(), colour));
+-            }
+         }
+-        let _ = writeln!(s, r#"<g fill="none" stroke-width="{:.1}" stroke-opacity="0.75" stroke-linecap="round" stroke-linejoin="round">{ways}</g>"#, (font * 0.45).max(2.5));
++        let line = |pts: &[DVec2], colour: &str, width: f64, dash: Option<(f64, f64)>| Prim::Line { pts: pts.iter().map(|p| flip(*p)).collect(), colour: colour.into(), width, opacity: 1.0, dash };
++        out.extend(paths.iter().map(|p| line(p, "#c8b98f", 1.2, None)));
++        // (each road its own width: an outline under, the road over it)
++        out.extend(roads.iter().map(|(p, hw)| line(p, "#a7a59d", hw * 2.0 + 1.6, None)));
++        out.extend(roads.iter().map(|(p, hw)| line(p, "#ffffff", hw * 2.0, None)));
++        out.extend(tracks.iter().map(|p| line(p, "#5a5a5a", 1.6, Some((6.0, 3.0)))));
+     }
+-    // the stops, each name once over its stops (the two sides of a road)
+-    let stops: Vec<(String, DVec2)> = doc.tiles.iter().flat_map(|(k, t)| t.tile.objects.iter().filter(|o| o.flag == 7 && o.extra.len() >= 4).map(move |o| (o.extra[0].clone(), tile_origin(*k) + DVec2::new(o.pos[0], o.pos[1])))).collect();
++    // the lines' ways
++    let (width, opacity) = if plain { ((font * 0.55).max(3.0), 0.9) } else { ((font * 0.45).max(2.5), 0.75) };
++    for (_, colour, drawn) in &ways {
++        for way in drawn {
++            out.push(Prim::Line { pts: way.iter().map(|p| flip(*p)).collect(), colour: colour.to_string(), width, opacity, dash: None });
++        }
++    }
++    // the stops, each name once over its stops (the two sides of a road): the map's own, or
++    // with the lines alone those of the lines
++    let stops: Vec<(String, DVec2)> = if plain {
++        line_stops.iter().map(|s| (s.2.clone(), s.1)).collect()
++    } else {
++        doc.tiles.iter().flat_map(|(k, t)| t.tile.objects.iter().filter(|o| o.flag == 7 && o.extra.len() >= 4).map(move |o| (o.extra[0].replace('@', " "), tile_origin(*k) + DVec2::new(o.pos[0], o.pos[1])))).collect()
++    };
++    // (the stops of either side, "Rathaus A" and "Rathaus B", are named once: "Rathaus")
++    let base = |n: &str| -> String {
++        let n = n.trim();
++        match n.rsplit_once(' ') {
++            Some((head, tail)) if tail.chars().count() == 1 && tail.chars().all(|c| c.is_ascii_uppercase()) && !head.trim().is_empty() => head.trim().to_string(),
++            _ => n.to_string(),
++        }
++    };
+     let mut groups: Vec<(String, Vec<DVec2>)> = Vec::new();
+     for (name, p) in &stops {
+-        match groups.iter_mut().find(|g| g.0 == *name && g.1.iter().any(|q| (*q - *p).length() < 80.0)) {
++        let name = base(name);
++        match groups.iter_mut().find(|g| g.0 == name && g.1.iter().any(|q| (*q - *p).length() < 80.0)) {
+             Some(g) => g.1.push(*p),
+-            None => groups.push((name.clone(), vec![*p])),
++            None => groups.push((name, vec![*p])),
+         }
+     }
+     let r = (font * 0.35).max(2.0);
+-    s.push_str(r##"<g fill="#ffffff" stroke="#222222" stroke-width="0.8">"##);
+     for (_, p) in &stops {
+         let (x, y) = flip(*p);
+-        let _ = write!(s, r#"<circle cx="{x:.1}" cy="{y:.1}" r="{r:.1}"/>"#);
++        out.push(Prim::Circle { x, y, r, fill: "#ffffff", stroke: ("#222222", 0.8) });
+     }
+-    s.push_str("</g>\n");
+-    let _ = write!(s, r##"<g font-size="{font:.1}" fill="#222222" stroke="#f7f6f2" stroke-width="{:.1}" paint-order="stroke" text-anchor="middle">"##, font * 0.25);
++    // (a name that would lie on one already put is left out)
++    let mut taken: Vec<[f64; 4]> = Vec::new();
+     for (name, ps) in &groups {
+         let c = ps.iter().copied().sum::<DVec2>() / ps.len() as f64;
+         let (x, y) = flip(c);
+-        let _ = write!(s, r#"<text x="{x:.1}" y="{:.1}">{}</text>"#, y - r - font * 0.4, esc(name));
++        let y = y - r - font * 0.4;
++        let half = name.chars().map(|ch| if ch.is_ascii() { 0.55 } else { 1.0 }).sum::<f64>() * font * 0.5;
++        let b = [x - half, y - font, x + half, y + font * 0.25];
++        if taken.iter().any(|t| b[0] < t[2] && b[2] > t[0] && b[1] < t[3] && b[3] > t[1]) {
++            continue;
++        }
++        taken.push(b);
++        out.push(Prim::Text { x, y, size: font, text: name.clone(), fill: "#222222".into(), bold: false, centred: true, halo: Some(("#f7f6f2", font * 0.25)) });
+     }
+-    s.push_str("</g>\n");
+     // the title, the lines' key, the scale and north
+     let name = if doc.global.friendly_name.is_empty() { doc.global.name.clone() } else { doc.global.friendly_name.clone() };
+-    let _ = writeln!(s, r##"<text x="{:.1}" y="{:.1}" font-size="{:.1}" font-weight="bold" fill="#222222">{}</text>"##, margin * 0.5, margin * 0.5 + font * 1.4, font * 1.6, esc(&name));
+-    for (i, (n, c)) in key.iter().enumerate() {
+-        let y = margin * 0.5 + font * (3.2 + 1.5 * i as f64);
+-        let _ = writeln!(s, r##"<rect x="{:.1}" y="{:.1}" width="{:.1}" height="{:.1}" rx="{:.1}" fill="{c}"/><text x="{:.1}" y="{:.1}" font-size="{font:.1}" font-weight="bold" fill="#ffffff" text-anchor="middle">{}</text>"##, margin * 0.5, y - font, font * 2.6, font * 1.25, font * 0.25, margin * 0.5 + font * 1.3, y, esc(n));
++    let left = margin * 0.5;
++    out.push(Prim::Text { x: left, y: margin * 0.5 + big * 1.4, size: big * 1.6, text: name, fill: "#222222".into(), bold: true, centred: false, halo: Some(("#f7f6f2", big * 0.3)) });
++    for (i, (n, c, _)) in ways.iter().enumerate() {
++        let y = margin * 0.5 + big * (3.2 + 1.5 * i as f64);
++        let bw = (big * 2.6).max(big * (0.8 + 0.62 * n.chars().count() as f64));
++        out.push(Prim::Rect { x: left, y: y - big, w: bw, h: big * 1.25, rx: big * 0.25, fill: c });
++        out.push(Prim::Text { x: left + bw * 0.5, y, size: big, text: n.clone(), fill: "#ffffff".into(), bold: true, centred: true, halo: None });
+     }
+     // (a round length about a fifth of the picture)
+     let bar = [10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0].into_iter().rfind(|b| *b <= (w - 2.0 * margin) / 5.0).unwrap_or(10.0);
+     let (bx, by) = (w - margin * 0.5 - bar, h - margin * 0.5);
+     let label = if bar >= 1000.0 { format!("{} km", bar / 1000.0) } else { format!("{bar} m") };
+-    let _ = writeln!(s, r##"<g stroke="#222222" stroke-width="{:.1}"><line x1="{bx:.1}" y1="{by:.1}" x2="{:.1}" y2="{by:.1}"/><line x1="{bx:.1}" y1="{:.1}" x2="{bx:.1}" y2="{by:.1}"/><line x1="{:.1}" y1="{:.1}" x2="{:.1}" y2="{by:.1}"/></g><text x="{:.1}" y="{:.1}" font-size="{font:.1}" fill="#222222" text-anchor="middle">{label}</text>"##, font * 0.15, bx + bar, by - font * 0.4, bx + bar, by - font * 0.4, bx + bar, bx + bar / 2.0, by - font * 0.6);
+-    let (nx, ny) = (w - margin * 0.5 - font, margin * 0.5 + font * 2.5);
+-    let _ = writeln!(s, r##"<path d="M{nx:.1},{:.1} L{:.1},{:.1} L{nx:.1},{:.1} L{:.1},{:.1} Z" fill="#222222"/><text x="{nx:.1}" y="{:.1}" font-size="{font:.1}" font-weight="bold" fill="#222222" text-anchor="middle">N</text>"##, ny - font * 1.6, nx + font * 0.6, ny, ny - font * 0.4, nx - font * 0.6, ny, ny - font * 1.9);
+-    let _ = writeln!(s, r##"<text x="{:.1}" y="{:.1}" font-size="{:.1}" fill="#8a8a8a">{}</text>"##, margin * 0.5, h - margin * 0.5, font * 0.7, esc(tr("Made with openMapper", "Сделано в openMapper")));
++    let tick = big * 0.4;
++    for pts in [vec![(bx, by), (bx + bar, by)], vec![(bx, by - tick), (bx, by)], vec![(bx + bar, by - tick), (bx + bar, by)]] {
++        out.push(Prim::Line { pts, colour: "#222222".into(), width: big * 0.15, opacity: 1.0, dash: None });
++    }
++    out.push(Prim::Text { x: bx + bar / 2.0, y: by - big * 0.6, size: big, text: label, fill: "#222222".into(), bold: false, centred: true, halo: None });
++    let (nx, ny) = (w - margin * 0.5 - big, margin * 0.5 + big * 2.5);
++    out.push(Prim::Poly { pts: vec![(nx, ny - big * 1.6), (nx + big * 0.6, ny), (nx, ny - big * 0.4), (nx - big * 0.6, ny)], fill: "#222222" });
++    out.push(Prim::Text { x: nx, y: ny - big * 1.9, size: big, text: "N".into(), fill: "#222222".into(), bold: true, centred: true, halo: None });
++    out.push(Prim::Text { x: left, y: h - margin * 0.5, size: big * 0.7, text: tr("Made with openMapper", "Сделано в openMapper").into(), fill: "#8a8a8a".into(), bold: false, centred: false, halo: None });
++    Picture { w, h, prims: out }
++}
++
++/// The picture as SVG (some 2400 pixels along its longer side when opened as a picture).
++pub fn to_svg(p: &Picture) -> String {
++    let (w, h) = (p.w, p.h);
++    let px = 2400.0 / w.max(h);
++    let mut s = String::new();
++    let _ = writeln!(s, r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w:.0} {h:.0}" width="{:.0}" height="{:.0}" font-family="Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Helvetica, Arial, sans-serif">"#, w * px, h * px);
++    for prim in &p.prims {
++        match prim {
++            Prim::Rect { x, y, w, h, rx, fill } => {
++                let _ = writeln!(s, r#"<rect x="{x:.1}" y="{y:.1}" width="{w:.1}" height="{h:.1}" rx="{rx:.1}" fill="{fill}"/>"#);
++            }
++            Prim::Line { pts, colour, width, opacity, dash } => {
++                let mut d = String::new();
++                for (i, (x, y)) in pts.iter().enumerate() {
++                    let _ = write!(d, "{}{x:.1},{y:.1}", if i == 0 { "M" } else { " L" });
++                }
++                let dash = dash.map(|(a, b)| format!(r#" stroke-dasharray="{a} {b}""#)).unwrap_or_default();
++                let _ = writeln!(s, r#"<path d="{d}" fill="none" stroke="{colour}" stroke-width="{width:.1}" stroke-opacity="{opacity}" stroke-linecap="round" stroke-linejoin="round"{dash}/>"#);
++            }
++            Prim::Poly { pts, fill } => {
++                let d: Vec<String> = pts.iter().map(|(x, y)| format!("{x:.1},{y:.1}")).collect();
++                let _ = writeln!(s, r#"<polygon points="{}" fill="{fill}"/>"#, d.join(" "));
++            }
++            Prim::Circle { x, y, r, fill, stroke } => {
++                let _ = writeln!(s, r#"<circle cx="{x:.1}" cy="{y:.1}" r="{r:.1}" fill="{fill}" stroke="{}" stroke-width="{}"/>"#, stroke.0, stroke.1);
++            }
++            Prim::Text { x, y, size, text, fill, bold, centred, halo } => {
++                let halo = halo.map(|(c, w)| format!(r#" stroke="{c}" stroke-width="{w:.1}" paint-order="stroke""#)).unwrap_or_default();
++                let _ = writeln!(s, r#"<text x="{x:.1}" y="{y:.1}" font-size="{size:.1}" fill="{fill}"{}{}{halo}>{}</text>"#, if *bold { r#" font-weight="bold""# } else { "" }, if *centred { r#" text-anchor="middle""# } else { "" }, esc(text));
++            }
++        }
++    }
+     s.push_str("</svg>\n");
+     s
+ }
+ 
+-/// `openmapper --plan path/to/global.cfg out.svg` (no window).
++/// `#rrggbb` with an opacity.
++fn colour(hex: &str, opacity: f64) -> tiny_skia::Color {
++    let v = u32::from_str_radix(hex.trim_start_matches('#'), 16).unwrap_or(0);
++    tiny_skia::Color::from_rgba8((v >> 16) as u8, (v >> 8) as u8, v as u8, (opacity.clamp(0.0, 1.0) * 255.0) as u8)
++}
++
++fn paint(c: tiny_skia::Color) -> tiny_skia::Paint<'static> {
++    let mut p = tiny_skia::Paint::default();
++    p.set_color(c);
++    p.anti_alias = true;
++    p
++}
++
++/// The font the PNG's texts are drawn in: the system's Korean one (it has Latin too), else
++/// the interface's.
++fn png_font() -> Option<&'static ab_glyph::FontVec> {
++    static F: std::sync::OnceLock<Option<ab_glyph::FontVec>> = std::sync::OnceLock::new();
++    F.get_or_init(|| {
++        let bytes = crate::icons::korean_font().or_else(|| {
++            let defs = egui::FontDefinitions::default();
++            ["Ubuntu-Light", "NotoSans-Regular"].iter().find_map(|n| defs.font_data.get(*n)).map(|d| d.font.to_vec())
++        })?;
++        ab_glyph::FontVec::try_from_vec(bytes).ok()
++    })
++    .as_ref()
++}
++
++/// A text as an outline `px` high: its path with the baseline at y = 0, and its width.
++fn text_path(f: &impl ab_glyph::Font, s: &str, px: f32) -> Option<(tiny_skia::Path, f32)> {
++    use ab_glyph::OutlineCurve;
++    let k = px / f.units_per_em()?;
++    let mut pb = tiny_skia::PathBuilder::new();
++    let mut pen = 0.0f32;
++    for c in s.chars() {
++        let id = f.glyph_id(c);
++        if let Some(o) = f.outline(id) {
++            let mut last: Option<(f32, f32)> = None;
++            let at = |p: ab_glyph::Point| (pen + p.x * k, -p.y * k);
++            for curve in &o.curves {
++                let (start, end) = match *curve {
++                    OutlineCurve::Line(a, b) => (a, b),
++                    OutlineCurve::Quad(a, _, c) => (a, c),
++                    OutlineCurve::Cubic(a, _, _, d) => (a, d),
++                };
++                let s0 = at(start);
++                if last != Some(s0) {
++                    if last.is_some() {
++                        pb.close();
++                    }
++                    pb.move_to(s0.0, s0.1);
++                }
++                match *curve {
++                    OutlineCurve::Line(_, b) => {
++                        let b = at(b);
++                        pb.line_to(b.0, b.1);
++                    }
++                    OutlineCurve::Quad(_, b, c) => {
++                        let (b, c) = (at(b), at(c));
++                        pb.quad_to(b.0, b.1, c.0, c.1);
++                    }
++                    OutlineCurve::Cubic(_, b, c, d) => {
++                        let (b, c, d) = (at(b), at(c), at(d));
++                        pb.cubic_to(b.0, b.1, c.0, c.1, d.0, d.1);
++                    }
++                }
++                last = Some(at(end));
++            }
++            if last.is_some() {
++                pb.close();
++            }
++        }
++        pen += f.h_advance_unscaled(id) * k;
++    }
++    Some((pb.finish()?, pen))
++}
++
++/// The picture as a PNG image, `longest` pixels along its longer side.
++pub fn to_png(p: &Picture, longest: u32) -> Option<image::RgbaImage> {
++    use tiny_skia::{FillRule, LineCap, LineJoin, PathBuilder, Pixmap, Stroke, StrokeDash, Transform};
++    let k = longest as f64 / p.w.max(p.h);
++    let (pw, ph) = ((p.w * k).round().max(1.0) as u32, (p.h * k).round().max(1.0) as u32);
++    let mut pix = Pixmap::new(pw, ph)?;
++    let tf = Transform::from_scale(k as f32, k as f32);
++    let poly = |pts: &[(f64, f64)], close: bool| {
++        let mut pb = PathBuilder::new();
++        for (i, (x, y)) in pts.iter().enumerate() {
++            if i == 0 {
++                pb.move_to(*x as f32, *y as f32);
++            } else {
++                pb.line_to(*x as f32, *y as f32);
++            }
++        }
++        if close {
++            pb.close();
++        }
++        pb.finish()
++    };
++    for prim in &p.prims {
++        match prim {
++            Prim::Rect { x, y, w, h, rx, fill } => {
++                let path = if *rx > 0.0 {
++                    let (x, y, w, h, r) = (*x as f32, *y as f32, *w as f32, *h as f32, *rx as f32);
++                    let mut pb = PathBuilder::new();
++                    pb.move_to(x + r, y);
++                    pb.line_to(x + w - r, y);
++                    pb.quad_to(x + w, y, x + w, y + r);
++                    pb.line_to(x + w, y + h - r);
++                    pb.quad_to(x + w, y + h, x + w - r, y + h);
++                    pb.line_to(x + r, y + h);
++                    pb.quad_to(x, y + h, x, y + h - r);
++                    pb.line_to(x, y + r);
++                    pb.quad_to(x, y, x + r, y);
++                    pb.close();
++                    pb.finish()
++                } else {
++                    tiny_skia::Rect::from_xywh(*x as f32, *y as f32, *w as f32, *h as f32).map(PathBuilder::from_rect)
++                };
++                if let Some(path) = path {
++                    pix.fill_path(&path, &paint(colour(fill, 1.0)), FillRule::Winding, tf, None);
++                }
++            }
++            Prim::Line { pts, colour: c, width, opacity, dash } => {
++                let Some(path) = poly(pts, false) else { continue };
++                let stroke = Stroke { width: *width as f32, line_cap: LineCap::Round, line_join: LineJoin::Round, dash: dash.and_then(|(a, b)| StrokeDash::new(vec![a as f32, b as f32], 0.0)), ..Default::default() };
++                pix.stroke_path(&path, &paint(colour(c, *opacity)), &stroke, tf, None);
++            }
++            Prim::Poly { pts, fill } => {
++                if let Some(path) = poly(pts, true) {
++                    pix.fill_path(&path, &paint(colour(fill, 1.0)), FillRule::Winding, tf, None);
++                }
++            }
++            Prim::Circle { x, y, r, fill, stroke } => {
++                if let Some(path) = PathBuilder::from_circle(*x as f32, *y as f32, *r as f32) {
++                    pix.fill_path(&path, &paint(colour(fill, 1.0)), FillRule::Winding, tf, None);
++                    pix.stroke_path(&path, &paint(colour(stroke.0, 1.0)), &Stroke { width: stroke.1 as f32, ..Default::default() }, tf, None);
++                }
++            }
++            Prim::Text { x, y, size, text, fill, bold, centred, halo } => {
++                let Some(font) = png_font() else { continue };
++                let px = (*size * k) as f32;
++                let Some((path, width)) = text_path(font, text, px) else { continue };
++                let left = (*x * k) as f32 - if *centred { width * 0.5 } else { 0.0 };
++                let at = Transform::from_translate(left, (*y * k) as f32);
++                if let Some((c, w)) = halo {
++                    let s = Stroke { width: (*w * k) as f32, line_join: LineJoin::Round, ..Default::default() };
++                    pix.stroke_path(&path, &paint(colour(c, 1.0)), &s, at, None);
++                }
++                let ink = paint(colour(fill, 1.0));
++                pix.fill_path(&path, &ink, FillRule::Winding, at, None);
++                if *bold {
++                    pix.stroke_path(&path, &ink, &Stroke { width: px * 0.05, ..Default::default() }, at, None);
++                }
++            }
++        }
++    }
++    // (the background is opaque: the premultiplied pixels are the plain ones)
++    image::RgbaImage::from_raw(pw, ph, pix.take())
++}
++
++/// `openmapper --plan path/to/global.cfg out.svg` (no window; `out.png`: a picture).
+ pub fn cli(cfg: &Path, out: &Path) -> i32 {
+     let prefs = crate::install::Prefs::load();
+     let Some(omsi) = crate::install::find_omsi_root(&prefs) else {
+@@ -194,7 +471,12 @@ pub fn cli(cfg: &Path, out: &Path) -> i32 {
+         lib.poll();
+         std::thread::sleep(std::time::Duration::from_millis(20));
+     }
+-    match std::fs::write(out, svg(&doc, &lib, &omsi_cfg::content_roots())) {
++    // OPENMAPPER_PLAN_LINES=1: the lines alone; =<line>: that line alone
++    let opts = match std::env::var("OPENMAPPER_PLAN_LINES") {
++        Ok(l) => Options { background: false, line: Some(l).filter(|l| !l.is_empty() && l != "1" && l != "all") },
++        Err(_) => Options::default(),
++    };
++    match write(&picture(&doc, &lib, &omsi_cfg::content_roots(), &opts), out) {
+         Ok(()) => {
+             println!("{}", out.display());
+             0
+@@ -206,6 +488,17 @@ pub fn cli(cfg: &Path, out: &Path) -> i32 {
+     }
+ }
+ 
++/// Write the picture as SVG, or as PNG when the file is named so.
++pub fn write(p: &Picture, out: &Path) -> Result<(), String> {
++    let png = out.extension().is_some_and(|e| e.eq_ignore_ascii_case("png"));
++    if png {
++        let img = to_png(p, 4096).ok_or_else(|| "the picture could not be drawn".to_string())?;
++        img.save(out).map_err(|e| e.to_string())
++    } else {
++        std::fs::write(out, to_svg(p)).map_err(|e| e.to_string())
++    }
++}
++
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+@@ -228,4 +521,13 @@ mod tests {
+         assert!(s.contains("#a9cfe8"));
+         assert!(s.matches("<rect").count() > 60);
+     }
++
++    #[test]
++    fn a_plan_is_drawn_as_a_png_too() {
++        let doc = flat_map(2);
++        let img = to_png(&picture(&doc, &Library::default(), &[], &Options::default()), 256).unwrap();
++        assert_eq!(img.width().max(img.height()), 256);
++        // (the ground's colour, not left transparent)
++        assert_eq!(img.get_pixel(img.width() / 2, img.height() / 2)[3], 255);
++    }
+ }
+diff --git a/src/render/mod.rs b/src/render/mod.rs
+index 565a385..5ebe8f6 100644
+--- a/src/render/mod.rs
++++ b/src/render/mod.rs
+@@ -2585,7 +2585,7 @@ fn push_object(groups: &mut Groups, key: &str, model: &Arc<ObjectModel>, label:
+     }
+     let inst = Instance::new(m, tint);
+     let radius = (model.centre().length() + model.radius()) * scale;
+-    groups.entry(key.to_string()).or_default().1.push(Pending { inst: if model.surface { inst.surface(SURF_OBJECT) } else { inst }, radius, sel });
++    groups.entry(key.to_string()).or_default().1.push(Pending { inst: if model.surface || model.decal { inst.surface(SURF_OBJECT) } else { inst }, radius, sel });
+ }
+ 
+ /// Batches (one per model, in a fixed order) from the instances gathered, numbered from
+diff --git a/src/timetable/route.rs b/src/timetable/route.rs
+index e5d9226..5d37216 100644
+--- a/src/timetable/route.rs
++++ b/src/timetable/route.rs
+@@ -393,3 +393,128 @@ pub fn find(net: &Network, positions: &[Option<DVec3>], left_hand: bool) -> Rout
+     r.legs = legs;
+     r
+ }
++
++/// A trip's stops: its `[station_typ2]` IDCodes, or an older file's `[station]` blocks (the
++/// stop's IDCode on the first line, its name on the third), with the name such a block gives.
++pub fn trip_stations(trip: &omsi_timetable::Trip) -> Vec<(i64, Option<String>)> {
++    if trip.stations.is_empty() {
++        trip.stations_legacy.iter().filter_map(|s| Some((s.first()?.trim().parse().ok()?, s.get(2).map(|n| n.trim().to_string())))).collect()
++    } else {
++        trip.stations.iter().map(|id| (*id, None)).collect()
++    }
++}
++
++/// The trips of a line: those its tours name and those that show its number.
++pub fn line_trips(tt: &super::Timetable, line: &omsi_timetable::Line) -> Vec<String> {
++    let mut out: Vec<String> = Vec::new();
++    for t in line.tours.iter().flat_map(|t| t.trips.iter()) {
++        if !out.iter().any(|x| x.eq_ignore_ascii_case(&t.trip)) && tt.trip(&t.trip).is_some() {
++            out.push(t.trip.clone());
++        }
++    }
++    for t in tt.trips.iter().filter(|t| t.line.trim().eq_ignore_ascii_case(line.name.trim())) {
++        if !out.iter().any(|x| x.eq_ignore_ascii_case(&t.name)) {
++            out.push(t.name.clone());
++        }
++    }
++    out
++}
++
++/// A trip's way in the world, to draw: along the track it names (the lanes the game drives),
++/// else found along the roads between its stops (`stops`: where they stand, in order).
++pub fn trip_way(doc: &crate::doc::Document, net: &Network, trip: &omsi_timetable::Trip, stops: &[DVec3]) -> Vec<DVec3> {
++    use super::network::PathKey;
++    let tt = &doc.timetable;
++    // (the track named on the trip's first `[trip]` line, else the one of its own name)
++    let track = Some(trip.display_name.trim()).filter(|n| !n.is_empty()).and_then(|n| tt.track(n)).or_else(|| tt.track(&trip.name));
++    if let Some(track) = track {
++        let order = if tt.order.is_empty() { &doc.order } else { &tt.order };
++        // each entry's lanes (the path's two ways)
++        let options: Vec<Vec<usize>> = track
++            .entries
++            .iter()
++            .filter_map(|e| match e.values[..] {
++                [id, path, tile, ..] => order.get(tile as usize).and_then(|t| net.by_key.get(&PathKey { tile: *t, id: id as i64, path: path as usize })).cloned(),
++                _ => None,
++            })
++            .map(|l| l.into_iter().filter(|&i| net.lanes[i].pts.len() >= 2).collect::<Vec<_>>())
++            .filter(|l: &Vec<usize>| !l.is_empty())
++            .collect();
++        let ends = |l: usize| (net.lanes[l].pts[0], net.lanes[l].pts[net.lanes[l].pts.len() - 1]);
++        let mut lanes: Vec<usize> = Vec::new();
++        for (i, choice) in options.iter().enumerate() {
++            // (the way that goes on from where the last ended, towards the next)
++            let score = |l: usize| {
++                let (a, b) = ends(l);
++                let from = lanes.last().map(|&p| (a - ends(p).1).length()).unwrap_or(0.0);
++                let to = options.get(i + 1).map(|n| n.iter().map(|&m| (ends(m).0 - b).length()).fold(f64::MAX, f64::min)).unwrap_or(0.0);
++                from + to
++            };
++            if let Some(&best) = choice.iter().min_by(|a, b| score(**a).total_cmp(&score(**b))) {
++                lanes.push(best);
++            }
++        }
++        let way = lanes_way(net, &lanes, None);
++        if way.len() >= 2 {
++            return way;
++        }
++    }
++    if stops.len() < 2 {
++        return Vec::new();
++    }
++    let pos: Vec<Option<DVec3>> = stops.iter().map(|p| Some(*p)).collect();
++    let r = find(net, &pos, doc.global.left_hand_traffic);
++    match (r.stops.first(), r.stops.last()) {
++        (Some(a), Some(b)) if a.0 <= b.0 => lanes_way(net, &r.lanes[a.0..=b.0], Some((a.1.along, b.1.along))),
++        _ => Vec::new(),
++    }
++}
++
++/// The line along lanes (`ends`: where on the first and the last it starts and stops). A lane
++/// changed off at its start is not driven, and a change to the lane beside is drawn as a bus
++/// takes it: an S easing across over the metres after it, not a step (nor, where a track
++/// names both lanes whole, an N back and forth).
++pub fn lanes_way(net: &Network, lanes: &[usize], ends: Option<(f64, f64)>) -> Vec<DVec3> {
++    let n = lanes.len();
++    let mut out: Vec<DVec3> = Vec::new();
++    let mut carry: Option<f64> = None;
++    for (i, &l) in lanes.iter().enumerate() {
++        let lane = &net.lanes[l];
++        if lane.pts.len() < 2 {
++            continue;
++        }
++        let first = ends.map(|e| e.0).filter(|_| i == 0);
++        if i + 1 < n && lane.side.contains(&lanes[i + 1]) {
++            carry = carry.or(first);
++            continue;
++        }
++        let s0 = carry.take().or(first).unwrap_or(0.0).clamp(0.0, lane.length());
++        let s1 = ends.map(|e| e.1).filter(|_| i + 1 == n).unwrap_or(lane.length()).clamp(s0, lane.length());
++        let start = lane.point_at(s0);
++        // a step sideways from where the last lane ended: eased in along this one
++        let shift = out.last().map(|p| *p - start).filter(|d| {
++            let g = d.truncate().length();
++            g > 0.3 && g < 12.0
++        });
++        let span = shift.map(|d| (d.truncate().length() * 7.0).clamp(10.0, 40.0).min((s1 - s0) * 0.8)).unwrap_or(0.0);
++        let mut at: Vec<f64> = vec![s0];
++        if span > 1.0 {
++            let steps = (span / 1.5).ceil() as usize;
++            at.extend((1..=steps).map(|k| s0 + span * k as f64 / steps as f64));
++        }
++        let from = s0 + span;
++        at.extend(lane.along.iter().copied().filter(|a| *a > from && *a < s1));
++        at.push(s1);
++        for s in at {
++            let mut p = lane.point_at(s);
++            if let (Some(d), true) = (shift, span > 1.0) {
++                let t = ((s - s0) / span).clamp(0.0, 1.0);
++                p += d * (1.0 - t * t * (3.0 - 2.0 * t));
++            }
++            if out.last().is_none_or(|q| (*q - p).length() > 1e-3) {
++                out.push(p);
++            }
++        }
++    }
++    out
++}
+diff --git a/src/ui.rs b/src/ui.rs
+index 201d0a1..20820e5 100644
+--- a/src/ui.rs
++++ b/src/ui.rs
+@@ -192,6 +192,9 @@ pub enum Action {
+     Export,
+     /// A plan of the map as an SVG picture.
+     ExportPlan,
++    /// A map of the lines as SVG and PNG pictures: over the map's ground and roads, the lines
++    /// alone, or both.
++    ExportLineMap { background: bool, plain: bool },
+     /// Do it without asking about unsaved changes.
+     Force(Box<Action>),
+     /// Save, then do it; nothing more if the save fails.
+@@ -244,6 +247,10 @@ pub struct UiState {
+     pub groups: crate::ui_groups::Groups,
+     /// The window of the map's earlier versions (backups of its saves).
+     pub versions_open: bool,
++    /// File > Export a line map leaves out the version over the map's ground, or the one of
++    /// the lines alone.
++    pub line_map_no_ground: bool,
++    pub line_map_no_plain: bool,
+     /// The window of the edits made (undo and redo by a click).
+     pub history_open: bool,
+     /// The preferences' starred and recently used assets, for the catalogue.
+@@ -312,6 +319,8 @@ impl Default for UiState {
+             find: Default::default(),
+             groups: Default::default(),
+             versions_open: false,
++            line_map_no_ground: false,
++            line_map_no_plain: false,
+             history_open: false,
+             favourites: Vec::new(),
+             recent_assets: Vec::new(),
+@@ -868,6 +877,17 @@ fn menu_bar(root: &mut egui::Ui, st: &mut UiState, ed: &mut Editor, can_undo: bo
+                 if menu_item(ui, Some(Icon::Map), tr("Export a plan of the map…", "Экспорт плана карты…"), "", true) {
+                     actions.push(Action::ExportPlan);
+                 }
++                ui.menu_button(icons::labelled(Icon::Route, tr("Export a line map", "Экспорт схемы маршрутов")), |ui| {
++                    let (mut ground, mut plain) = (!st.line_map_no_ground, !st.line_map_no_plain);
++                    check(ui, &mut ground, tr("Over the map's roads", "Поверх дорог карты"));
++                    check(ui, &mut plain, tr("The lines and stops alone", "Только маршруты и остановки"));
++                    (st.line_map_no_ground, st.line_map_no_plain) = (!ground, !plain);
++                    ui.label(egui::RichText::new(tr("SVG and PNG; the lines chosen in View > Which lines", "SVG и PNG; маршруты, выбранные в Вид > Какие маршруты")).small().weak());
++                    if ui.add_enabled(ground || plain, egui::Button::new(tr("Export…", "Экспорт…"))).clicked() {
++                        actions.push(Action::ExportLineMap { background: ground, plain });
++                        ui.close();
++                    }
++                });
+                 if menu_item(ui, Some(Icon::Import), tr("Import assets…", "Импорт ассетов…"), "", true) {
+                     actions.push(Action::Import);
+                 }
+@@ -939,6 +959,21 @@ fn menu_bar(root: &mut egui::Ui, st: &mut UiState, ed: &mut Editor, can_undo: bo
+                 check(ui, &mut ed.show_technical, icons::labelled(icon, tr("What the game does not show", "То, чего не видно в игре")));
+                 check(ui, &mut ed.show_lanes, icons::labelled(Icon::Route, tr("AI lanes", "Полосы ИИ")));
+                 check(ui, &mut ed.show_names, icons::labelled(Icon::Bus, tr("Names of stops and start points", "Названия остановок и точек старта")));
++                check(ui, &mut ed.show_routes, icons::labelled(Icon::Route, tr("Lines on the map", "Маршруты на карте")));
++                let lines: Vec<String> = ed.doc.as_ref().map(|d| d.timetable.lines.iter().map(|l| l.name.clone()).collect()).unwrap_or_default();
++                if ed.show_routes && lines.len() > 1 {
++                    ui.menu_button(icons::labelled(Icon::Route, tr("Which lines", "Какие маршруты")), |ui| {
++                        if radio(ui, ed.route_line.is_none(), tr("All lines", "Все маршруты")).clicked() {
++                            ed.route_line = None;
++                        }
++                        for l in lines {
++                            let on = ed.route_line.as_ref().is_some_and(|x| x.eq_ignore_ascii_case(&l));
++                            if radio(ui, on, l.clone()).clicked() {
++                                ed.route_line = Some(l);
++                            }
++                        }
++                    });
++                }
+                 ui.menu_button(icons::labelled(Icon::Layers, tr("Show", "Показывать")), |ui| {
+                     // (what is hidden cannot be clicked either: handy in a dense town)
+                     for (i, name, icon) in [(0, tr("Trees", "Деревья"), Icon::Tree), (1, tr("Objects", "Объекты"), Icon::Building), (2, tr("Roads and splines", "Дороги и сплайны"), Icon::Road)] {
+diff --git a/src/ui_timetable.rs b/src/ui_timetable.rs
+index 9cbe068..21d1003 100644
+--- a/src/ui_timetable.rs
++++ b/src/ui_timetable.rs
+@@ -32,6 +32,27 @@ const PICK_REACH: f64 = 12.0;
+ /// An average bus with its stops: what a trip's time is guessed from (km/h).
+ const BUS_SPEED: f64 = 22.0;
+ 
++/// Colours of the lines on the map, one a line in the order of the timetable.
++const LINE_COLOURS: [[f32; 4]; 8] = [
++    [0.25, 0.75, 1.0, 0.95],
++    [1.0, 0.45, 0.3, 0.95],
++    [0.45, 0.85, 0.35, 0.95],
++    [0.95, 0.8, 0.2, 0.95],
++    [0.8, 0.45, 0.95, 0.95],
++    [0.2, 0.85, 0.75, 0.95],
++    [1.0, 0.55, 0.8, 0.95],
++    [0.65, 0.65, 0.65, 0.95],
++];
++
++/// A trip of the lines on the map as last drawn: the stops and the network it was drawn
++/// for, its way and its stops (IDCode, where it stands, its name).
++struct Drawn {
++    stations: Vec<i64>,
++    net_key: u64,
++    way: Vec<DVec3>,
++    stops: Vec<(i64, DVec3, String)>,
++}
++
+ /// A stop of the map: tile, IDCode, its name (the object's label) and where it stands.
+ #[derive(Clone)]
+ struct MapStop {
+@@ -79,6 +100,10 @@ pub struct TimetableUi {
+     fill_from: (u32, u32),
+     fill_to: (u32, u32),
+     layover: u32,
++    /// The lines drawn on the map (View > Lines on the map), by trip.
++    drawn: HashMap<String, Drawn>,
++    /// The stops of the lines drawn this frame, for their names: (where, name, colour).
++    drawn_stops: Vec<(DVec3, String, [f32; 4])>,
+     /// The year the holidays are shown of.
+     holiday_year: i32,
+     holidays_open: bool,
+@@ -95,18 +120,7 @@ fn minutes(t: &Trip) -> f32 {
+ 
+ /// The trips a line runs: those its tours name and those that show its number.
+ fn line_trips(tt: &Timetable, line: &Line) -> Vec<String> {
+-    let mut out: Vec<String> = Vec::new();
+-    for t in line.tours.iter().flat_map(|t| t.trips.iter()) {
+-        if !out.iter().any(|x| x.eq_ignore_ascii_case(&t.trip)) && tt.trip(&t.trip).is_some() {
+-            out.push(t.trip.clone());
+-        }
+-    }
+-    for t in tt.trips.iter().filter(|t| t.line.trim().eq_ignore_ascii_case(line.name.trim())) {
+-        if !out.iter().any(|x| x.eq_ignore_ascii_case(&t.name)) {
+-            out.push(t.name.clone());
+-        }
+-    }
+-    out
++    route::line_trips(tt, line)
+ }
+ 
+ fn small_button(ui: &mut egui::Ui, icon: Icon, hint: &str) -> bool {
+@@ -340,6 +354,92 @@ impl TimetableUi {
+         }
+     }
+ 
++    /// The map's lines drawn in the view (View > Lines on the map): each trip's way in its
++    /// line's colour - along the track saved with it, else found along the roads - and its
++    /// stops. (Their names are painted by [`Self::paint_route_stops`].)
++    pub fn routes_overlay(&mut self, ed: &Editor, roots: Option<&Roots>, cam: &crate::camera::Camera, x: &mut FrameExtras) {
++        self.drawn_stops.clear();
++        let Some(doc) = ed.doc.as_ref() else { return };
++        if !ed.show_routes || doc.timetable.trips.is_empty() {
++            return;
++        }
++        // (the network takes seconds on a big map: for the lines on the map it is made again
++        // at most every half minute, not each second while tiles load or change)
++        let stale = self.net_built.is_none_or(|t| t.elapsed().as_secs() >= 30);
++        if (self.net.is_none() || stale) && !self.ensure_net(doc, roots) {
++            return;
++        }
++        let Some(net) = &self.net else { return };
++        let tt = &doc.timetable;
++        let w = (cam.distance * 0.004).clamp(0.08, 6.0) as f32;
++        let lift = DVec3::Z * 0.5;
++        let mut seen = std::collections::HashSet::new();
++        for (li, line) in tt.lines.iter().enumerate() {
++            if ed.route_line.as_ref().is_some_and(|l| !l.eq_ignore_ascii_case(&line.name)) {
++                continue;
++            }
++            let c = LINE_COLOURS[li % LINE_COLOURS.len()];
++            for name in line_trips(tt, line) {
++                let Some(trip) = tt.trip(&name) else { continue };
++                let k = lower(&name);
++                let ids = route::trip_stations(trip);
++                let stations: Vec<i64> = ids.iter().map(|s| s.0).collect();
++                if !self.drawn.get(&k).is_some_and(|d| d.stations == stations && d.net_key == self.net_key) {
++                    let mut stops = Vec::new();
++                    for (id, own) in &ids {
++                        let Some(p) = timetable::stop_world(doc, &mut self.files, *id) else { continue };
++                        let name = self.stops.iter().find(|s| s.id == *id).map(|s| s.name.clone()).filter(|n| !n.trim().is_empty()).or_else(|| tt.stop_name(*id).map(str::to_string)).or_else(|| own.clone()).unwrap_or_else(|| format!("#{id}"));
++                        stops.push((*id, p, name.replace('@', " ")));
++                    }
++                    let at: Vec<DVec3> = stops.iter().map(|s| s.1).collect();
++                    let way = route::trip_way(doc, net, trip, &at);
++                    self.drawn.insert(k.clone(), Drawn { stations, net_key: self.net_key, way, stops });
++                }
++                let d = &self.drawn[&k];
++                for s in d.way.windows(2) {
++                    crate::editor::line(&mut x.overlay, cam, s[0] + lift, s[1] + lift, w * 1.2, c);
++                }
++                for (id, p, name) in &d.stops {
++                    if seen.insert(*id) {
++                        crate::editor::disc(&mut x.overlay, cam, *p + DVec3::Z * 0.3, w * 4.0, c);
++                        self.drawn_stops.push((*p, name.clone(), c));
++                    }
++                }
++            }
++        }
++    }
++
++    /// The names of the stops of the lines on the map, over them in the view (nearest
++    /// first; one that would lie over a nearer one is left out).
++    pub fn paint_route_stops(&self, ctx: &egui::Context, cam: &crate::camera::Camera, view: egui::Rect) {
++        if self.drawn_stops.is_empty() || !view.is_positive() {
++            return;
++        }
++        const REACH: f64 = 900.0;
++        let eye = cam.eye();
++        let mut near: Vec<(f64, &(DVec3, String, [f32; 4]))> = self.drawn_stops.iter().map(|s| ((s.0 - eye).length(), s)).filter(|(d, _)| *d < REACH).collect();
++        near.sort_by(|a, b| a.0.total_cmp(&b.0));
++        let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Background, egui::Id::new("route stops"))).with_clip_rect(view);
++        let font = egui::FontId::proportional(12.0);
++        let mut taken: Vec<egui::Rect> = Vec::new();
++        for (_, (p, name, c)) in near.into_iter().take(80) {
++            let Some((sx, sy)) = crate::selection::project(cam, *p + DVec3::Z * 3.0, view.width(), view.height()) else { continue };
++            let at = view.min + Vec2::new(sx, sy);
++            if !view.contains(at) {
++                continue;
++            }
++            let galley = painter.layout_no_wrap(name.clone(), font.clone(), Color32::WHITE);
++            let r = egui::Rect::from_center_size(at - Vec2::new(0.0, galley.size().y * 0.5), galley.size() + Vec2::new(10.0, 4.0));
++            if taken.iter().any(|t| t.intersects(r)) {
++                continue;
++            }
++            taken.push(r);
++            let fill = Color32::from_rgba_unmultiplied((c[0] * 120.0) as u8, (c[1] * 120.0) as u8, (c[2] * 120.0) as u8, 210);
++            painter.rect_filled(r, egui::CornerRadius::same(3), fill);
++            painter.galley(r.min + Vec2::new(5.0, 2.0), galley, Color32::WHITE);
++        }
++    }
++
+     pub fn window(&mut self, ctx: &egui::Context, ed: &mut Editor, roots: Option<&Roots>, actions: &mut Vec<Action>) {
+         let Some(dir) = ed.doc.as_ref().map(|d| d.dir.clone()) else {
+             self.open = false;
