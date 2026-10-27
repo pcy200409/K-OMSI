@@ -147,7 +147,8 @@ fn western_only(b: u8) -> bool {
 ///   only one ě in a file that is otherwise plain).
 ///
 /// On a Windows with a double-byte ANSI code page, what is not UTF-8 and reads in that one
-/// without a broken character is in it.
+/// without a broken character is in it. On any other system, Korean text in CP949 is
+/// still told by its Hangul ([`korean`]).
 pub fn detect(bytes: &[u8]) -> CodePage {
     detect_on(bytes, system_code_page())
 }
@@ -167,6 +168,10 @@ fn detect_on(bytes: &[u8], system: Option<CodePage>) -> CodePage {
         if page.encoding().decode_without_bom_handling_and_without_replacement(bytes).is_some() {
             return page;
         }
+    }
+    // before the Cyrillic runs: Hangul in CP949 is bytes of 0xB0..=0xFE as well
+    if korean(bytes) {
+        return CodePage::EucKr;
     }
     let (mut letters, mut in_runs, mut run) = (0usize, 0usize, 0usize);
     let close_run = |run: &mut usize, in_runs: &mut usize| {
@@ -231,6 +236,34 @@ fn detect_on(bytes: &[u8], system: Option<CodePage>) -> CodePage {
         return CodePage::Windows1250;
     }
     CodePage::Windows1252
+}
+
+/// Whether `bytes` are Korean text in CP949, whatever the system's code page: they read as
+/// CP949 without a broken character and at least four in five of their characters beyond
+/// ASCII are Hangul syllables of KS X 1001 (lead `0xB0..=0xC8`, trail `0xA1..=0xFE`, the
+/// ones a Korean Windows writes). A Korean map's timetable was read as 1252 on a Western
+/// or UTF-8 Windows, and its stops no longer matched the tiles' (UTF-16) labels. Western
+/// and Cyrillic text never passes: a single accented letter before ASCII breaks CP949,
+/// and two in a row are mostly Hanja there.
+fn korean(bytes: &[u8]) -> bool {
+    if encoding_rs::EUC_KR.decode_without_bom_handling_and_without_replacement(bytes).is_none() {
+        return false;
+    }
+    let (mut hangul, mut other, mut i) = (0usize, 0usize, 0usize);
+    while i < bytes.len() {
+        let b = bytes[i];
+        if b < 0x80 {
+            i += 1;
+            continue;
+        }
+        match bytes.get(i + 1) {
+            Some(&t) if (0xB0..=0xC8).contains(&b) && t >= 0xA1 => hangul += 1,
+            _ => other += 1,
+        }
+        // (it read without a broken character: every byte above ASCII leads a pair)
+        i += 2;
+    }
+    hangul >= 1 && hangul * 5 >= (hangul + other) * 4
 }
 
 /// `bytes` decoded in the code page [`detect`] finds.
@@ -442,6 +475,32 @@ mod tests {
         // a Russian file on a Chinese system is not GBK
         let ru = cp1251("[station]\r\nУлица Ленина\r\nМетро Сокол\r\n");
         assert_eq!(detect_on(&ru, CodePage::double_byte(936)), CodePage::Windows1251);
+    }
+
+    #[test]
+    fn reads_korean_on_any_system() {
+        let cp949 = |s: &str| encoding_rs::EUC_KR.encode(s).0.into_owned();
+        let stops = cp949("[busstop]\r\n현천차고지출발\r\n118\r\n11832\r\n\r\n[busstop]\r\n헤라팔래스(청도방면)\r\n0\r\n15652\r\n");
+        // a Western, a Russian, a Czech and a UTF-8 Windows (no double-byte system page)
+        for system in [None, Some(CodePage::Windows1250)] {
+            assert_eq!(detect_on(&stops, system), CodePage::EucKr);
+        }
+        assert_eq!(detect_on(&cp949("[trip]\r\n124 시영아파트\r\n124\r\n"), None), CodePage::EucKr);
+        // one syllable is enough, a Hanja or a sign beside the Hangul too
+        assert_eq!(detect_on(&cp949("역\r\n"), None), CodePage::EucKr);
+        assert_eq!(detect_on(&cp949("서울역·시청앞(市廳) 정류장 방면 종점\r\n"), None), CodePage::EucKr);
+        // and a Korean system reads it as before
+        assert_eq!(detect_on(&stops, CodePage::double_byte(949)), CodePage::EucKr);
+        // other text is not taken for Korean: German, French, Polish, Czech, Russian
+        // (upper case words too, whose bytes are partly Hangul pairs in CP949)
+        assert_eq!(detect_on(&cp1252("Äpfel, Äcker, Größe, Straße"), None), CodePage::Windows1252);
+        assert_eq!(detect_on(&cp1252("Ça va, Première, Genève"), None), CodePage::Windows1252);
+        let cp1250 = |s: &str| encoding_rs::WINDOWS_1250.encode(s).0.into_owned();
+        assert_eq!(detect_on(&cp1250("Łazarz, Śródka, Żegrze, Dworzec Główny"), None), CodePage::Windows1250);
+        // ("Čí" is a Hangul pair in CP949, the ř before an ASCII letter is none)
+        assert_ne!(detect_on(&cp1250("Praha,Třebenická\r\nČížek\r\n"), None), CodePage::EucKr);
+        assert_eq!(detect_on(&cp1251("ВОКЗАЛ\r\nМОСКВА\r\nЦЕНТР\r\n"), None), CodePage::Windows1251);
+        assert_eq!(detect_on(&cp1251("Улица Ленина, Метро Сокол"), None), CodePage::Windows1251);
     }
 
     #[test]
