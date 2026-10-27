@@ -331,6 +331,33 @@ impl VehicleType {
         Self::load_with(root, bus_file, true)
     }
 
+    /// Where the vehicle's roof is (model frame, up): the top of its body, else the top of
+    /// the `[boundingbox]`. Weather stays off what faces up below this (the floor, the
+    /// seats), so it must follow the body: a box that stands a metre above the roof (a city
+    /// bus' `[boundingbox]` centred 0.7 m too high) took the roof itself for "under a roof"
+    /// and no snow lay on the bus. The body is the meshes that span most of the model's
+    /// width and a third of its length (the roof fans and the spoiler on top of it, and the
+    /// shadow blob, are left out: with the fans' top, the body's roof fell under the 0.3 m
+    /// the shaders allow below it).
+    pub fn roof_height(&self) -> Option<f32> {
+        let parts = || {
+            self.meshes
+                .iter()
+                .zip(&self.mesh_boxes)
+                .filter(|(m, (lo, hi))| (hi.x > lo.x || hi.y > lo.y) && !self.model.meshes.get(m.def_index).is_some_and(|d| d.is_shadow))
+                .map(|(_, b)| *b)
+        };
+        let top = self.model_box().and_then(|(lo, hi)| {
+            let size = hi - lo;
+            parts()
+                .filter(|(a, b)| b.x - a.x >= size.x * 0.6 && b.y - a.y >= size.y * 0.33)
+                .map(|(_, b)| b.z)
+                .reduce(f32::max)
+        });
+        top.or_else(|| parts().map(|(_, b)| b.z).reduce(f32::max))
+            .or_else(|| self.def.bounding_box.map(|b| b[5] + b[2] * 0.5))
+    }
+
     /// The box the whole model takes (least, greatest corner; y forward), None without
     /// vertices.
     pub fn model_box(&self) -> Option<(Vec3, Vec3)> {
