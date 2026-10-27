@@ -37,10 +37,14 @@ pub(crate) fn texture_budget(video: u64) -> u64 {
         g => ram.min(g * 1_000_000),
     };
     let card = omsi_render::ADAPTER_VRAM_MB.load(std::sync::atomic::Ordering::Relaxed);
-    if card == 0 || omsi_cfg::flags::OMSI_SAFE_GPU.parse::<u32>().is_some_and(|n| n > 0) {
-        return automatic;
-    }
-    automatic.max(video / 2)
+    let budget = if card == 0 || omsi_cfg::flags::OMSI_SAFE_GPU.parse::<u32>().is_some_and(|n| n > 0) {
+        automatic
+    } else {
+        automatic.max(video / 2)
+    };
+    // (and no more than half of the video memory when there is a limit: a GTX 1060 3GB set
+    // to 1000 MB - 667 MB after its lost device - had 1482 MB for the textures alone, K-OMSI)
+    if video > 0 { budget.min(video / 2) } else { budget }
 }
 
 /// What the game may hold on the graphics card all together, in bytes (0 = only the driver's
@@ -91,7 +95,9 @@ mod tests {
         omsi_render::ADAPTER_VRAM_MB.store(12_288, Relaxed);
         let (big, small) = (super::texture_budget(10_000_000_000), super::texture_budget(own));
         omsi_render::ADAPTER_VRAM_MB.store(0, Relaxed);
-        assert_eq!((big, small), (5_000_000_000, own));
+        assert_eq!((big, small), (5_000_000_000, own / 2));
+        // (never more than half of a limit smaller than the automatic budget)
+        assert_eq!(super::texture_budget(1_000_000_000), own.min(500_000_000));
     }
 
     #[test]
