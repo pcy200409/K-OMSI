@@ -1,8 +1,8 @@
 diff --git a/src/app.rs b/src/app.rs
-index 61d4bc7..0d2cf9f 100644
+index efc5847..a00529d 100644
 --- a/src/app.rs
 +++ b/src/app.rs
-@@ -2353,7 +2353,8 @@ impl App {
+@@ -2511,7 +2511,8 @@ impl App {
          }
          // the changes kept every few minutes (not in the middle of an edit, nor while an
          // earlier session's autosave is still offered: there is one, it would be written over)
