@@ -1,11 +1,11 @@
 diff --git a/locales/ko.tsv b/locales/ko.tsv
-index 2d349e1..2cdb6c9 100644
+index ebca320..8b803ce 100644
 --- a/locales/ko.tsv
 +++ b/locales/ko.tsv
-@@ -2248,3 +2248,13 @@ A big or very detailed map is lighter with fewer tiles: the others are hidden un
- Hold Ctrl while drawing to join nothing. Cables, fences and footpaths never join roads or junctions.	그리는 동안 Ctrl을 누르고 있으면 아무것도 연결되지 않습니다. 케이블, 울타리, 인도는 도로나 교차로에 연결되지 않습니다.
- Auto-Adapt	자동 연결
- Where roads of different width meet, a plate tapers one into the other	폭이 다른 도로가 만나는 곳에 한쪽에서 다른 쪽으로 서서히 이어지는 판을 만들기
+@@ -2407,3 +2407,13 @@ Straight on	직진
+ A piece straight on between arms that face each other	서로 마주 보는 접속부 사이의 직선 구간
+ auto	자동
+ Built by Auto-Junction from the arms	자동 교차로가 접속부로부터 생성
 +Export a line map	노선도 내보내기
 +lines	노선도
 + (lines alone)	 (노선만)
@@ -17,10 +17,10 @@ index 2d349e1..2cdb6c9 100644
 +Which lines	표시할 노선
 +All lines	모든 노선
 diff --git a/src/app.rs b/src/app.rs
-index 95f615c..61d4bc7 100644
+index a9485fc..efc5847 100644
 --- a/src/app.rs
 +++ b/src/app.rs
-@@ -213,6 +213,11 @@ impl App {
+@@ -228,6 +228,11 @@ impl App {
          }
          // OPENMAPPER_MULTIPLAYER: File > Multiplayer open at the start
          app.collab.open = std::env::var_os("OPENMAPPER_MULTIPLAYER").is_some();
@@ -32,7 +32,7 @@ index 95f615c..61d4bc7 100644
          app
      }
  
-@@ -247,6 +252,10 @@ impl App {
+@@ -268,6 +273,10 @@ impl App {
          if self.shot.is_some() {
              attrs = attrs.with_window_level(winit::window::WindowLevel::AlwaysOnTop).with_active(false);
          }
@@ -40,10 +40,10 @@ index 95f615c..61d4bc7 100644
 +        if let Some(v) = std::env::var("OPENMAPPER_WINDOW_AT").ok().map(|c| c.split(',').filter_map(|x| x.trim().parse::<i32>().ok()).collect::<Vec<_>>()).filter(|v| v.len() == 2) {
 +            attrs = attrs.with_position(winit::dpi::PhysicalPosition::new(v[0], v[1]));
 +        }
+         crate::logging::stage("creating the window");
          let window = Arc::new(el.create_window(attrs)?);
-         let mut gpu = Gpu::new(window.clone())?;
-         let quality = crate::render::quality::Quality::from_code(&self.prefs.graphics);
-@@ -1178,6 +1187,41 @@ impl App {
+         crate::logging::stage("starting the graphics card");
+@@ -1273,6 +1282,41 @@ impl App {
                      }
                  }
              }
@@ -85,7 +85,7 @@ index 95f615c..61d4bc7 100644
              Action::MergeTiles => {
                  if let Some(r) = &self.roots {
                      self.ui.merge.show(install::list_maps(r));
-@@ -1958,6 +2002,9 @@ impl App {
+@@ -2109,6 +2153,9 @@ impl App {
              // (the pictures taken of the view are clean of them)
              if !self.snapshot {
                  crate::ui_edit::paint_names(&ctx, &self.ed, &self.lib, &self.cam, self.view);
@@ -95,7 +95,7 @@ index 95f615c..61d4bc7 100644
                  if let (Some(sel), Some(doc), Some(a)) = (self.ed.path_numbers.filter(|s| self.ed.selected == Some(*s)), self.ed.doc.as_ref(), self.assets.as_mut()) {
                      crate::ui_edit::paint_path_numbers(&ctx, &crate::lanes::of_one(doc, a, sel), &self.cam, self.view);
                  }
-@@ -2124,6 +2171,7 @@ impl App {
+@@ -2281,6 +2328,7 @@ impl App {
                  let t_x = Instant::now();
                  let mut extras = self.ed.extras(&self.cam, assets);
                  self.tt.overlay(&self.ed, &self.cam, &mut extras);
@@ -104,7 +104,7 @@ index 95f615c..61d4bc7 100644
                  self.geo.feed(&mut g.renderer.imagery, &g.gpu, &self.ed);
                  g.renderer.daytime = self.ui.daytime.map(|h| crate::render::daylight::at_map(h, &doc.traffic.timezone));
 diff --git a/src/assets.rs b/src/assets.rs
-index 9bcffa0..39dd1c3 100644
+index bf6aecf..4e83325 100644
 --- a/src/assets.rs
 +++ b/src/assets.rs
 @@ -55,6 +55,10 @@ pub struct ObjectModel {
@@ -118,7 +118,7 @@ index 9bcffa0..39dd1c3 100644
      /// `[terrainhole]` cutter meshes (object frame).
      pub holes: Vec<MeshData>,
      /// Its own lanes (`[path]`: junctions, stops), in its frame.
-@@ -332,6 +336,11 @@ pub fn texture_dirs(omsi: &Path, content: &Path, dir: &Path) -> Vec<PathBuf> {
+@@ -347,6 +351,11 @@ pub fn texture_dirs(omsi: &Path, content: &Path, dir: &Path) -> Vec<PathBuf> {
      dirs
  }
  
@@ -130,7 +130,7 @@ index 9bcffa0..39dd1c3 100644
  fn find_tex(name: &str, dirs: &[PathBuf]) -> Option<PathBuf> {
      if name.trim().is_empty() {
          return None;
-@@ -435,7 +444,15 @@ pub(crate) fn load_object(path: &Path, omsi: &Path, content: &Path) -> Option<Ob
+@@ -450,7 +459,15 @@ pub(crate) fn load_object(path: &Path, omsi: &Path, content: &Path) -> Option<Ob
                      _ => Alpha::Opaque,
                  };
                  let glow = def.and_then(|d| d.nightmap.as_ref().and_then(|n| find_tex(n, &dirs)).map(|p| (p, true)).or_else(|| d.lightmap.as_ref().and_then(|l| find_tex(&l.0, &dirs)).map(|p| (p, false))));
@@ -147,7 +147,7 @@ index 9bcffa0..39dd1c3 100644
              })
              .collect();
          parts.push(Part { mesh, materials, texts, freetex });
-@@ -507,6 +524,7 @@ pub(crate) fn load_object(path: &Path, omsi: &Path, content: &Path) -> Option<Ob
+@@ -522,6 +539,7 @@ pub(crate) fn load_object(path: &Path, omsi: &Path, content: &Path) -> Option<Ob
      }
      let attachments = sco.attachments.iter().map(crate::place::attachment_matrix).collect();
      let surface = sco.render_type.is_ground_layer() || sco.surface;
@@ -155,7 +155,7 @@ index 9bcffa0..39dd1c3 100644
      let mut holes = Vec::new();
      if sco.tree.is_none() && !sco.only_editor {
          for (dir, file) in sco.terrain_hole_sources(&model) {
-@@ -519,7 +537,7 @@ pub(crate) fn load_object(path: &Path, omsi: &Path, content: &Path) -> Option<Ob
+@@ -534,7 +552,7 @@ pub(crate) fn load_object(path: &Path, omsi: &Path, content: &Path) -> Option<Ob
      }
      // (a tree with an editor-only helper box is seen in the game: only the box is not)
      let technical = (sco.only_editor && tree.is_none()) || sco.is_entry_point || sco.is_car_park || sco.is_help_arrow || (parts.is_empty() && tree.is_none());
@@ -165,10 +165,10 @@ index 9bcffa0..39dd1c3 100644
  
  fn load_spline(path: &Path, omsi: &Path, content: &Path) -> Option<SplineModel> {
 diff --git a/src/editor.rs b/src/editor.rs
-index 393b987..0ee5c59 100644
+index 26bac90..fe9cf13 100644
 --- a/src/editor.rs
 +++ b/src/editor.rs
-@@ -467,6 +467,10 @@ pub struct Editor {
+@@ -492,6 +492,10 @@ pub struct Editor {
      pub show_lanes: bool,
      /// The names of bus stops and start points float over them in the view.
      pub show_names: bool,
@@ -179,7 +179,7 @@ index 393b987..0ee5c59 100644
      /// A window picks things on the map (the Lines window its stops): a click only notes
      /// what is under the cursor and where, nothing is selected or moved.
      pub pick_mode: bool,
-@@ -606,6 +610,8 @@ impl Default for Editor {
+@@ -644,6 +648,8 @@ impl Default for Editor {
              hide: [false; 3],
              show_lanes: false,
              show_names: true,
@@ -189,10 +189,10 @@ index 393b987..0ee5c59 100644
              picked: None,
              link_pick: None,
 diff --git a/src/icons.rs b/src/icons.rs
-index 15b1b5c..8d9f064 100644
+index d3a8128..a7d3f2d 100644
 --- a/src/icons.rs
 +++ b/src/icons.rs
-@@ -188,6 +188,25 @@ pub fn fonts() -> FontDefinitions {
+@@ -203,6 +203,25 @@ pub fn fonts() -> FontDefinitions {
      f
  }
  
@@ -983,10 +983,10 @@ index e5d9226..5d37216 100644
 +    out
 +}
 diff --git a/src/ui.rs b/src/ui.rs
-index 2c45b2d..f883cfb 100644
+index 201d0a1..20820e5 100644
 --- a/src/ui.rs
 +++ b/src/ui.rs
-@@ -181,6 +181,9 @@ pub enum Action {
+@@ -192,6 +192,9 @@ pub enum Action {
      Export,
      /// A plan of the map as an SVG picture.
      ExportPlan,
@@ -996,7 +996,7 @@ index 2c45b2d..f883cfb 100644
      /// Do it without asking about unsaved changes.
      Force(Box<Action>),
      /// Save, then do it; nothing more if the save fails.
-@@ -233,6 +236,10 @@ pub struct UiState {
+@@ -244,6 +247,10 @@ pub struct UiState {
      pub groups: crate::ui_groups::Groups,
      /// The window of the map's earlier versions (backups of its saves).
      pub versions_open: bool,
@@ -1007,7 +1007,7 @@ index 2c45b2d..f883cfb 100644
      /// The window of the edits made (undo and redo by a click).
      pub history_open: bool,
      /// The preferences' starred and recently used assets, for the catalogue.
-@@ -301,6 +308,8 @@ impl Default for UiState {
+@@ -312,6 +319,8 @@ impl Default for UiState {
              find: Default::default(),
              groups: Default::default(),
              versions_open: false,
@@ -1016,7 +1016,7 @@ index 2c45b2d..f883cfb 100644
              history_open: false,
              favourites: Vec::new(),
              recent_assets: Vec::new(),
-@@ -857,6 +866,17 @@ fn menu_bar(root: &mut egui::Ui, st: &mut UiState, ed: &mut Editor, can_undo: bo
+@@ -868,6 +877,17 @@ fn menu_bar(root: &mut egui::Ui, st: &mut UiState, ed: &mut Editor, can_undo: bo
                  if menu_item(ui, Some(Icon::Map), tr("Export a plan of the map…", "Экспорт плана карты…"), "", true) {
                      actions.push(Action::ExportPlan);
                  }
@@ -1034,7 +1034,7 @@ index 2c45b2d..f883cfb 100644
                  if menu_item(ui, Some(Icon::Import), tr("Import assets…", "Импорт ассетов…"), "", true) {
                      actions.push(Action::Import);
                  }
-@@ -928,6 +948,21 @@ fn menu_bar(root: &mut egui::Ui, st: &mut UiState, ed: &mut Editor, can_undo: bo
+@@ -939,6 +959,21 @@ fn menu_bar(root: &mut egui::Ui, st: &mut UiState, ed: &mut Editor, can_undo: bo
                  check(ui, &mut ed.show_technical, icons::labelled(icon, tr("What the game does not show", "То, чего не видно в игре")));
                  check(ui, &mut ed.show_lanes, icons::labelled(Icon::Route, tr("AI lanes", "Полосы ИИ")));
                  check(ui, &mut ed.show_names, icons::labelled(Icon::Bus, tr("Names of stops and start points", "Названия остановок и точек старта")));
@@ -1057,7 +1057,7 @@ index 2c45b2d..f883cfb 100644
                      // (what is hidden cannot be clicked either: handy in a dense town)
                      for (i, name, icon) in [(0, tr("Trees", "Деревья"), Icon::Tree), (1, tr("Objects", "Объекты"), Icon::Building), (2, tr("Roads and splines", "Дороги и сплайны"), Icon::Road)] {
 diff --git a/src/ui_timetable.rs b/src/ui_timetable.rs
-index 08bde37..b114733 100644
+index 9cbe068..21d1003 100644
 --- a/src/ui_timetable.rs
 +++ b/src/ui_timetable.rs
 @@ -32,6 +32,27 @@ const PICK_REACH: f64 = 12.0;
