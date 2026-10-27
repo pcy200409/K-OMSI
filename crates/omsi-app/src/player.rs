@@ -1076,8 +1076,14 @@ impl Player {
         let fired_vars: Vec<(String, Vec<f32>)> = std::mem::take(&mut self.vehicle.host.fired_trigger_vars);
         let fired_files: Vec<(String, String)> =
             std::mem::take(&mut self.vehicle.host.fired_file_triggers);
-        for (t, f) in &fired_files {
-            log::info!("announcement: {t} -> {f}");
+        if !fired_files.is_empty() {
+            let mut last = LAST_ANNOUNCEMENT.lock().unwrap_or_else(|e| e.into_inner());
+            let now = std::time::Instant::now();
+            for (t, f) in &fired_files {
+                for line in announcement_log(&mut last, &format!("{t} -> {f}"), now) {
+                    log::info!("{line}");
+                }
+            }
         }
         if let (Some(a), Some(ss)) = (audio, self.sounds.as_mut()) {
             let xf = self.vehicle.world_transform();
@@ -1341,6 +1347,46 @@ mod mouse_tests {
             assert!((s - last).abs() < 0.001, "step at {px}");
             last = s;
         }
+    }
+}
+
+/// The announcement logged last, when, and how often it came again since.
+static LAST_ANNOUNCEMENT: std::sync::Mutex<Option<(String, std::time::Instant, u32)>> = std::sync::Mutex::new(None);
+
+/// The log lines for an announcement `line` fired at `now`: the same one again within 10 s
+/// is only counted, and its count goes into the log with the next other one or after the
+/// 10 s (a bus script that fired one every frame wrote 60 lines a second, K-OMSI).
+fn announcement_log(last: &mut Option<(String, std::time::Instant, u32)>, line: &str, now: std::time::Instant) -> Vec<String> {
+    let mut out = Vec::new();
+    if let Some((prev, at, n)) = last.as_mut() {
+        if prev == line && now.duration_since(*at).as_secs_f32() < 10.0 {
+            *n += 1;
+            return out;
+        }
+        if *n > 0 {
+            out.push(format!("announcement: {prev} (again {n} times)"));
+        }
+    }
+    out.push(format!("announcement: {line}"));
+    *last = Some((line.to_string(), now, 0));
+    out
+}
+
+#[cfg(test)]
+mod announcement_log_tests {
+    use super::announcement_log;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn an_announcement_fired_every_frame_is_logged_with_its_count() {
+        let (mut last, t0) = (None, Instant::now());
+        assert_eq!(announcement_log(&mut last, "a -> 0.wav", t0), ["announcement: a -> 0.wav"]);
+        for i in 1..60 {
+            assert!(announcement_log(&mut last, "a -> 0.wav", t0 + Duration::from_millis(16 * i)).is_empty());
+        }
+        assert_eq!(announcement_log(&mut last, "b -> 1.wav", t0 + Duration::from_secs(1)), ["announcement: a -> 0.wav (again 59 times)", "announcement: b -> 1.wav"]);
+        // (the same one after 10 s is logged again)
+        assert_eq!(announcement_log(&mut last, "b -> 1.wav", t0 + Duration::from_secs(12)), ["announcement: b -> 1.wav"]);
     }
 }
 

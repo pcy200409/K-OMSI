@@ -1099,6 +1099,9 @@ impl Settings {
         if self.light_shadows == "all" {
             self.light_shadows = "street".into();
         }
+        // (the textures decoded to RGBA filled the card again after the new start, K-OMSI;
+        // `OMSI_NO_BC=1` still decodes them)
+        self.gpu_texture_compression = true;
         if n >= 2 {
             if graphics_mode(&self.graphics) == "enhanced" {
                 self.graphics = "vanilla_plus".into();
@@ -1109,7 +1112,7 @@ impl Settings {
             self.render_scale = if self.render_scale > 0.0 { self.render_scale.min(0.75) } else { 0.75 };
             self.mirror_size = self.mirror_size.min(128);
         }
-        log::warn!("safer graphics after a lost graphics device ({n}): msaa 1, SSAO off, shadows {} ({}), video memory {} of its limit, render scale {}", self.shadows, self.shadow_size, if n >= 2 { "half" } else { "two thirds" }, self.render_scale_text());
+        log::warn!("safer graphics after a lost graphics device ({n}): msaa 1, SSAO off, textures compressed, shadows {} ({}), video memory {} of its limit, render scale {}", self.shadows, self.shadow_size, if n >= 2 { "half" } else { "two thirds" }, self.render_scale_text());
     }
 
     /// The render scale the picture is drawn at: FSR 1's quality's, or the render scale's (0:
