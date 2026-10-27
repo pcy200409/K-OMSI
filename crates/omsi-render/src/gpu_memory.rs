@@ -191,6 +191,13 @@ pub(super) fn own_card_vram_mb(info: &wgpu::AdapterInfo, vram: Option<u64>) -> u
     vram.filter(|_| card).unwrap_or(0)
 }
 
+/// Whether a card of its own (`own_card_vram_mb`, 0 = none or not told) keeps the DXT/BC
+/// textures compressed whatever the settings say: 4 GB or less (a 4 GB card tells a little
+/// under 4096 MB) - decoded to RGBA they did not fit on a GTX 1060 3GB.
+pub(super) fn small_card_keeps_bc(own_vram_mb: u64) -> bool {
+    own_vram_mb > 0 && own_vram_mb <= 4096
+}
+
 /// The largest device-local memory heap of a Vulkan adapter (MB).
 #[cfg(target_os = "linux")]
 fn vulkan_vram_mb(adapter: &wgpu::Adapter) -> Option<u64> {
@@ -666,9 +673,19 @@ impl Renderer {
 mod tests {
     use super::{
         Ceiling, GpuMemory, Picture, Seen, allowance_with_ram, ceiling_for, chip_name,
-        dxgi_names_card, one_card, picture, shared_cap_mb, shared_chip_by_name,
+        dxgi_names_card, one_card, picture, shared_cap_mb, shared_chip_by_name, small_card_keeps_bc,
     };
     use wgpu::{Backend, DeviceType};
+
+    /// A card of 4 GB or less keeps its textures compressed; a bigger one, a shared chip
+    /// and one whose memory is not told follow the setting.
+    #[test]
+    fn a_card_of_four_gigabytes_or_less_keeps_the_textures_compressed() {
+        assert!(small_card_keeps_bc(2965));
+        assert!(small_card_keeps_bc(4096));
+        assert!(!small_card_keeps_bc(6144));
+        assert!(!small_card_keeps_bc(0));
+    }
 
     /// The game's bound on the card: the setting and nine tenths of the driver's budget,
     /// the smaller; nothing known, none.

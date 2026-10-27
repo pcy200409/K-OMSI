@@ -8761,3 +8761,5 @@ _version: 2
   en: "Folders of objects and splines that no other map uses go with it: {n}, {size}."
 "Folders of objects and splines that another map still uses stay: {n}.":
   en: "Folders of objects and splines that another map still uses stay: {n}."
+"Off takes four to eight times the video memory: only for a driver that draws them wrong. A card of 4 GB or less keeps them compressed.":
+  en: "Off takes four to eight times the video memory: only for a driver that draws them wrong. A card of 4 GB or less keeps them compressed."

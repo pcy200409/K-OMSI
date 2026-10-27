@@ -2977,3 +2977,4 @@
 "At most 5": "최대 5"
 "Folders of objects and splines that no other map uses go with it: {n}, {size}.": "다른 지도가 사용하지 않는 오브젝트 및 스플라인 폴더도 함께 삭제됩니다: {n}개, {size}."
 "Folders of objects and splines that another map still uses stay: {n}.": "다른 지도가 아직 사용하는 오브젝트 및 스플라인 폴더는 남습니다: {n}개."
+"Off takes four to eight times the video memory: only for a driver that draws them wrong. A card of 4 GB or less keeps them compressed.": "끄면 그래픽 메모리를 4~8배 씁니다. 텍스처가 깨져 보이는 드라이버에서만 끄세요. 4GB 이하 그래픽카드는 꺼도 압축을 유지합니다."
