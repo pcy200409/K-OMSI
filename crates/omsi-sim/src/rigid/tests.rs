@@ -1306,3 +1306,26 @@ fn air_bellows_hold_the_ride_height_under_load() {
     assert!(coil_empty - coil_loaded > 0.03, "a coil spring sags with 4 t: {coil_empty} -> {coil_loaded}");
     assert!((air_empty - air_loaded).abs() < 0.02, "air holds the height: {air_empty} -> {air_loaded}");
 }
+
+#[test]
+fn flood_water_holds_a_bus_back() {
+    // coasting at 30 km/h for two seconds, in the dry and through half a metre of water
+    let coast = |depth: f32| {
+        let mut rb = RigidBody::from_definition(&bus(), &[]);
+        rb.place(DVec3::ZERO, 0.0);
+        let g = road(1e9, 0.0);
+        run(&mut rb, 2.0, 0.0, 0.0, &g);
+        rb.velocity = rb.orientation.mul_vec3(Vec3::Y) * 8.3;
+        for w in rb.wheels.iter_mut() {
+            w.spin = 8.3 / w.radius;
+        }
+        rb.water_depth = depth;
+        for _ in 0..120 {
+            rb.step(1.0 / 60.0, 0.0, &[0.0; 4], 0.0, &g);
+        }
+        rb.forward_speed()
+    };
+    let (dry, wet) = (coast(0.0), coast(0.5));
+    assert!(wet < dry - 2.0, "dry {dry} m/s, through the water {wet} m/s");
+    assert!(wet >= 0.0);
+}

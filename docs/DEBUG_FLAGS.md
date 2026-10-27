@@ -375,6 +375,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_CLEAR_LAN_STORE` | bool | off | use | lan | LAN: a joining game deletes the sealed store of the mods it fetched (`~/.openomsi/lan-store`) when it ends and before the next join, so nothing of another player's mods stays on this machine (the next join fetches them again). |
 | `OMSI_ENHANCED` | bool | settings | use | app | Enhanced graphics for this run. |
 | `OMSI_ENHANCED_PLUS` | bool | settings | use | app | Enhanced+ (ray traced) graphics for this run. |
+| `OMSI_FLOOD` | text | - | use | app | K-OMSI: low ground floods in heavy rain (first stage: the basins and their water written to the log). scale[,drain]: the water's time scale (10) and the drains' capacity in mm/h (30). |
 | `OMSI_FOOT_RUN` | num | 3.8 | use | app | On foot: the pace of a run (Shift) in m/s. |
 | `OMSI_FOOT_WALK` | num | 1.4 | use | app | On foot: the walking pace in m/s. |
 | `OMSI_GRAPHICS` | text | settings | use | app | vanilla, vanilla_plus or enhanced: another renderer for one run. |
