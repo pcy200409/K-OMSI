@@ -3031,3 +3031,4 @@
 "Save under a name...": "이름을 지정해 저장..."
 "No saved situation of this map yet": "이 맵의 저장된 상황이 아직 없습니다"
 "Saved as \"{}\"": "\"{}\"(으)로 저장됨"
+"Off takes four to eight times the video memory: only for a driver that draws them wrong. A card of 4 GB or less keeps them compressed.": "끄면 그래픽 메모리를 4~8배 씁니다. 텍스처가 깨져 보이는 드라이버에서만 끄세요. 4GB 이하 그래픽카드는 꺼도 압축을 유지합니다."
