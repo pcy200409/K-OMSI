@@ -18,3 +18,4 @@ patch/c-its
 patch/roof-snow
 patch/flood
 patch/weather
+patch/korean-codepage
