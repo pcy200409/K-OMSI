@@ -1,8 +1,8 @@
 diff --git a/locales/ko.tsv b/locales/ko.tsv
-index ebca320..8b803ce 100644
+index 5f8fac5..84805bd 100644
 --- a/locales/ko.tsv
 +++ b/locales/ko.tsv
-@@ -2407,3 +2407,13 @@ Straight on	직진
+@@ -2418,6 +2418,16 @@ Straight on	직진
  A piece straight on between arms that face each other	서로 마주 보는 접속부 사이의 직선 구간
  auto	자동
  Built by Auto-Junction from the arms	자동 교차로가 접속부로부터 생성
@@ -16,11 +16,14 @@ index ebca320..8b803ce 100644
 +Lines on the map	노선 표시
 +Which lines	표시할 노선
 +All lines	모든 노선
+ the plate could not be made from these arms	이 진입로들로 판을 만들 수 없었습니다
+ Plate with kerbs and footways	연석과 보도가 있는 판
+ Junctions as the Roads tool makes them: where roads cross, one ends on another or several end at one place, they are cut back and a plate is laid with rounded kerbs, footways and lanes through it	도로 도구가 만드는 것과 같은 교차로: 도로가 교차하거나, 한 도로가 다른 도로에서 끝나거나, 여러 도로가 한곳에서 끝나는 곳에서 도로가 잘리고 둥근 연석, 보도, 통과하는 차선이 있는 판이 깔립니다
 diff --git a/src/app.rs b/src/app.rs
-index a9485fc..efc5847 100644
+index ed51b84..78459e9 100644
 --- a/src/app.rs
 +++ b/src/app.rs
-@@ -228,6 +228,11 @@ impl App {
+@@ -243,6 +243,11 @@ impl App {
          }
          // OPENMAPPER_MULTIPLAYER: File > Multiplayer open at the start
          app.collab.open = std::env::var_os("OPENMAPPER_MULTIPLAYER").is_some();
@@ -32,7 +35,7 @@ index a9485fc..efc5847 100644
          app
      }
  
-@@ -268,6 +273,10 @@ impl App {
+@@ -283,6 +288,10 @@ impl App {
          if self.shot.is_some() {
              attrs = attrs.with_window_level(winit::window::WindowLevel::AlwaysOnTop).with_active(false);
          }
@@ -43,7 +46,7 @@ index a9485fc..efc5847 100644
          crate::logging::stage("creating the window");
          let window = Arc::new(el.create_window(attrs)?);
          crate::logging::stage("starting the graphics card");
-@@ -1273,6 +1282,41 @@ impl App {
+@@ -1324,6 +1333,41 @@ impl App {
                      }
                  }
              }
@@ -85,7 +88,7 @@ index a9485fc..efc5847 100644
              Action::MergeTiles => {
                  if let Some(r) = &self.roots {
                      self.ui.merge.show(install::list_maps(r));
-@@ -2109,6 +2153,9 @@ impl App {
+@@ -2169,6 +2213,9 @@ impl App {
              // (the pictures taken of the view are clean of them)
              if !self.snapshot {
                  crate::ui_edit::paint_names(&ctx, &self.ed, &self.lib, &self.cam, self.view);
@@ -95,19 +98,19 @@ index a9485fc..efc5847 100644
                  if let (Some(sel), Some(doc), Some(a)) = (self.ed.path_numbers.filter(|s| self.ed.selected == Some(*s)), self.ed.doc.as_ref(), self.assets.as_mut()) {
                      crate::ui_edit::paint_path_numbers(&ctx, &crate::lanes::of_one(doc, a, sel), &self.cam, self.view);
                  }
-@@ -2281,6 +2328,7 @@ impl App {
+@@ -2343,6 +2390,7 @@ impl App {
                  let t_x = Instant::now();
                  let mut extras = self.ed.extras(&self.cam, assets);
                  self.tt.overlay(&self.ed, &self.cam, &mut extras);
 +                self.tt.routes_overlay(&self.ed, self.roots.as_ref(), &self.cam, &mut extras);
                  g.renderer.profile.add("extras", crate::render::profile::ms(t_x));
-                 self.geo.feed(&mut g.renderer.imagery, &g.gpu, &self.ed);
+                 self.geo.feed(&mut g.renderer.imagery, &g.gpu, &self.ed, DVec2::new(self.cam.target.x, self.cam.target.y));
                  g.renderer.daytime = self.ui.daytime.map(|h| crate::render::daylight::at_map(h, &doc.traffic.timezone));
 diff --git a/src/assets.rs b/src/assets.rs
-index bf6aecf..4e83325 100644
+index cbb4d08..b653930 100644
 --- a/src/assets.rs
 +++ b/src/assets.rs
-@@ -55,6 +55,10 @@ pub struct ObjectModel {
+@@ -71,6 +71,10 @@ pub struct ObjectModel {
      /// Laid on the ground (`[surface]` or a ground-layer `[rendertype]`): the terrain is cut
      /// under it.
      pub surface: bool,
@@ -118,7 +121,7 @@ index bf6aecf..4e83325 100644
      /// `[terrainhole]` cutter meshes (object frame).
      pub holes: Vec<MeshData>,
      /// Its own lanes (`[path]`: junctions, stops), in its frame.
-@@ -347,6 +351,11 @@ pub fn texture_dirs(omsi: &Path, content: &Path, dir: &Path) -> Vec<PathBuf> {
+@@ -370,6 +374,11 @@ pub fn texture_dirs(omsi: &Path, content: &Path, dir: &Path) -> Vec<PathBuf> {
      dirs
  }
  
@@ -130,7 +133,7 @@ index bf6aecf..4e83325 100644
  fn find_tex(name: &str, dirs: &[PathBuf]) -> Option<PathBuf> {
      if name.trim().is_empty() {
          return None;
-@@ -450,7 +459,15 @@ pub(crate) fn load_object(path: &Path, omsi: &Path, content: &Path) -> Option<Ob
+@@ -479,7 +488,15 @@ pub(crate) fn load_object(path: &Path, omsi: &Path, content: &Path) -> Option<Ob
                      _ => Alpha::Opaque,
                  };
                  let glow = def.and_then(|d| d.nightmap.as_ref().and_then(|n| find_tex(n, &dirs)).map(|p| (p, true)).or_else(|| d.lightmap.as_ref().and_then(|l| find_tex(&l.0, &dirs)).map(|p| (p, false))));
@@ -146,8 +149,8 @@ index bf6aecf..4e83325 100644
 +                Material { texture, color: mat.diffuse, alpha, glow }
              })
              .collect();
-         parts.push(Part { mesh, materials, texts, freetex });
-@@ -522,6 +539,7 @@ pub(crate) fn load_object(path: &Path, omsi: &Path, content: &Path) -> Option<Ob
+         parts.push(Part { mesh, materials, texts, freetex, visible, faded });
+@@ -551,6 +568,7 @@ pub(crate) fn load_object(path: &Path, omsi: &Path, content: &Path) -> Option<Ob
      }
      let attachments = sco.attachments.iter().map(crate::place::attachment_matrix).collect();
      let surface = sco.render_type.is_ground_layer() || sco.surface;
@@ -155,17 +158,17 @@ index bf6aecf..4e83325 100644
      let mut holes = Vec::new();
      if sco.tree.is_none() && !sco.only_editor {
          for (dir, file) in sco.terrain_hole_sources(&model) {
-@@ -534,7 +552,7 @@ pub(crate) fn load_object(path: &Path, omsi: &Path, content: &Path) -> Option<Ob
+@@ -563,7 +581,7 @@ pub(crate) fn load_object(path: &Path, omsi: &Path, content: &Path) -> Option<Ob
      }
      // (a tree with an editor-only helper box is seen in the game: only the box is not)
      let technical = (sco.only_editor && tree.is_none()) || sco.is_entry_point || sco.is_car_park || sco.is_help_arrow || (parts.is_empty() && tree.is_none());
--    Some(ObjectModel { parts, lo, hi, abs_height: sco.absolute_height(), tree, helpers, attachments, surface, holes, technical, editor_parts: sco.only_editor, paths: sco.paths.clone(), texts: model.text_textures.clone(), labels: label_names, lights: sco.traffic_lights.iter().map(|l| l.name.clone()).collect(), light_head: sco.is_traffic_light && sco.traffic_lights.is_empty() })
-+    Some(ObjectModel { parts, lo, hi, abs_height: sco.absolute_height(), tree, helpers, attachments, surface, decal, holes, technical, editor_parts: sco.only_editor, paths: sco.paths.clone(), texts: model.text_textures.clone(), labels: label_names, lights: sco.traffic_lights.iter().map(|l| l.name.clone()).collect(), light_head: sco.is_traffic_light && sco.traffic_lights.is_empty() })
+-    Some(ObjectModel { parts, lo, hi, abs_height: sco.absolute_height(), tree, helpers, attachments, surface, holes, technical, editor_parts: sco.only_editor, paths: sco.paths.clone(), texts: model.text_textures.clone(), labels: label_names, lights: sco.traffic_lights.clone(), cycle: sco.traffic_lights_group, light_head: sco.is_traffic_light && sco.traffic_lights.is_empty() })
++    Some(ObjectModel { parts, lo, hi, abs_height: sco.absolute_height(), tree, helpers, attachments, surface, decal, holes, technical, editor_parts: sco.only_editor, paths: sco.paths.clone(), texts: model.text_textures.clone(), labels: label_names, lights: sco.traffic_lights.clone(), cycle: sco.traffic_lights_group, light_head: sco.is_traffic_light && sco.traffic_lights.is_empty() })
  }
  
  fn load_spline(path: &Path, omsi: &Path, content: &Path) -> Option<SplineModel> {
 diff --git a/src/editor.rs b/src/editor.rs
-index 26bac90..fe9cf13 100644
+index f8d7c03..3a26efc 100644
 --- a/src/editor.rs
 +++ b/src/editor.rs
 @@ -492,6 +492,10 @@ pub struct Editor {
@@ -837,10 +840,10 @@ index 1e2d1f7..cd3d8f2 100644
 +    }
  }
 diff --git a/src/render/mod.rs b/src/render/mod.rs
-index 565a385..5ebe8f6 100644
+index 7394eaf..283b7bc 100644
 --- a/src/render/mod.rs
 +++ b/src/render/mod.rs
-@@ -2585,7 +2585,7 @@ fn push_object(groups: &mut Groups, key: &str, model: &Arc<ObjectModel>, label:
+@@ -2734,7 +2734,7 @@ fn push_object(groups: &mut Groups, key: &str, model: &Arc<ObjectModel>, label:
      }
      let inst = Instance::new(m, tint);
      let radius = (model.centre().length() + model.radius()) * scale;
@@ -983,7 +986,7 @@ index e5d9226..5d37216 100644
 +    out
 +}
 diff --git a/src/ui.rs b/src/ui.rs
-index 201d0a1..20820e5 100644
+index 933c7a5..1154b06 100644
 --- a/src/ui.rs
 +++ b/src/ui.rs
 @@ -192,6 +192,9 @@ pub enum Action {
@@ -1007,7 +1010,7 @@ index 201d0a1..20820e5 100644
      /// The window of the edits made (undo and redo by a click).
      pub history_open: bool,
      /// The preferences' starred and recently used assets, for the catalogue.
-@@ -312,6 +319,8 @@ impl Default for UiState {
+@@ -317,6 +324,8 @@ impl Default for UiState {
              find: Default::default(),
              groups: Default::default(),
              versions_open: false,
@@ -1016,7 +1019,7 @@ index 201d0a1..20820e5 100644
              history_open: false,
              favourites: Vec::new(),
              recent_assets: Vec::new(),
-@@ -868,6 +877,17 @@ fn menu_bar(root: &mut egui::Ui, st: &mut UiState, ed: &mut Editor, can_undo: bo
+@@ -885,6 +894,17 @@ fn menu_bar(root: &mut egui::Ui, st: &mut UiState, ed: &mut Editor, can_undo: bo
                  if menu_item(ui, Some(Icon::Map), tr("Export a plan of the map…", "Экспорт плана карты…"), "", true) {
                      actions.push(Action::ExportPlan);
                  }
@@ -1034,7 +1037,7 @@ index 201d0a1..20820e5 100644
                  if menu_item(ui, Some(Icon::Import), tr("Import assets…", "Импорт ассетов…"), "", true) {
                      actions.push(Action::Import);
                  }
-@@ -939,6 +959,21 @@ fn menu_bar(root: &mut egui::Ui, st: &mut UiState, ed: &mut Editor, can_undo: bo
+@@ -956,6 +976,21 @@ fn menu_bar(root: &mut egui::Ui, st: &mut UiState, ed: &mut Editor, can_undo: bo
                  check(ui, &mut ed.show_technical, icons::labelled(icon, tr("What the game does not show", "То, чего не видно в игре")));
                  check(ui, &mut ed.show_lanes, icons::labelled(Icon::Route, tr("AI lanes", "Полосы ИИ")));
                  check(ui, &mut ed.show_names, icons::labelled(Icon::Bus, tr("Names of stops and start points", "Названия остановок и точек старта")));
