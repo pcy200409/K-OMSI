@@ -1,6 +1,6 @@
 <p align="center"><img src="https://raw.githubusercontent.com/pcy200409/K-OMSI/branding/komsi/logo.png" alt="K-OMSI" width="470"></p>
 
-**K-OMSI 0.4** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.45를 바탕으로 K-OMSI 수정을 얹은 빌드입니다. 이번부터 K-OMSI 버전은 0.4.x로 따로 매기고, 맵 편집기 [openMapper](https://github.com/openOMSI-org/openMapper) 0.1.13(K-OMSI 수정판)을 함께 넣었습니다.
+**K-OMSI 0.4** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.45 이후 main(`0301e4b4`)을 바탕으로 K-OMSI 수정을 얹은 빌드입니다. 이번부터 K-OMSI 버전은 0.4.x로 따로 매기고, 맵 편집기 [openMapper](https://github.com/openOMSI-org/openMapper) 0.1.15(K-OMSI 수정판)을 함께 넣었습니다.
 
 > **비공식 포크입니다.** K-OMSI는 공식 openOMSI(openOMSI.org)와 관계없는 독립 프로젝트이며, openOMSI의 이름·로고는 원작자의 것입니다([TRADEMARKS.md](https://github.com/pcy200409/K-OMSI/blob/release/TRADEMARKS.md)). 문제는 공식 저장소가 아니라 [K-OMSI 이슈](https://github.com/pcy200409/K-OMSI/issues)로 알려 주세요.
 >
@@ -33,8 +33,22 @@
 - **뇌우 정전 (새, 시험 기능)**: 설정 "뇌우 정전"(기본 꺼짐)을 켜면 가까운 낙뢰가 전력을 끊어 맵의 모든 신호등과 가로등이 꺼질 수 있습니다. AI 차량은 꺼진 신호등을 없는 것으로 보고 우선 통행에 따르며, 시간이 지나면 전기가 돌아옵니다. 시험용 환경변수 `OMSI_BLACK_ICE`, `OMSI_POTHOLES`, `OMSI_STORM_CUTS`로 한 번만 켤 수도 있습니다.
 - **플레이어 버스 지붕 눈**: 눈이 내릴 때 플레이어 버스의 지붕 높이(`VehicleType::roof_height()`)와 운전석 박스 윗면에 맞춰 눈이 쌓이도록 보정했습니다.
 - **한글 정류장명 (새)**: 시간표(TTData)를 CP949로 저장한 한국 맵을 한국어 Windows가 아닌 PC(영문 Windows, Windows의 "UTF-8 베타" 설정)에서도 한글로 읽어, 정류장이 맵의 정류장 이름과 맞지 않던 문제를 고쳤습니다. 런처 시간표 편집기에서 한글 이름을 넣으면 오류 없이 CP949로 저장됩니다(원본 OMSI도 한국어 Windows에서 그대로 읽음).
-- **openMapper 동봉 (새, K-OMSI 수정판)**: Windows 묶음의 `openMapper` 폴더에 [openMapper](https://github.com/openOMSI-org/openMapper) 0.1.13(AGPL-3.0, 도로 그리기·오브젝트 배치·지형 편집)을 K-OMSI 수정을 얹어 직접 빌드해 넣었습니다. 더한 것: 보기 > 지도에 노선 표시(노선 선택 포함), 파일 > 노선도 내보내기(SVG·PNG, 도로망 위/노선만), 주차칸 등 납작한 오브젝트가 도로에 묻히던 문제와 낮 텍스처가 검정인 오브젝트(정류장 도움 화살표)의 검은 원 수정, 새 문구의 한국어 번역, 공식 릴리스로의 자동 업데이트 끄기(우리 수정판을 덮어쓰지 않도록). 수정 내용은 이 저장소의 `komsi/openmapper/*.patch`에 있습니다. `openMapper\openmapper.exe`로 실행하며 macOS 묶음에는 들어 있지 않습니다. openMapper 0.1.13 공식 변경: 복합 교차로 편집기 재구성(자동 정렬·자동 접속부·자동 교차로 생성, 곡선 도구, 미리보기), 버스 포켓 설정(폭·테이퍼), OMSI 2 에디터식 조작(보기 메뉴, 기본 꺼짐), 교차로 판이 도로 텍스처 형식을 따르고 같은 교차로는 한 오브젝트를 공유, 시작 멈춤 시 로그 기록.
+- **openMapper 동봉 (새, K-OMSI 수정판)**: Windows 묶음의 `openMapper` 폴더에 [openMapper](https://github.com/openOMSI-org/openMapper) 0.1.13(AGPL-3.0, 도로 그리기·오브젝트 배치·지형 편집)을 K-OMSI 수정을 얹어 직접 빌드해 넣었습니다. 더한 것: 보기 > 지도에 노선 표시(노선 선택 포함), 파일 > 노선도 내보내기(SVG·PNG, 도로망 위/노선만), 주차칸 등 납작한 오브젝트가 도로에 묻히던 문제와 낮 텍스처가 검정인 오브젝트(정류장 도움 화살표)의 검은 원 수정, 새 문구의 한국어 번역, 공식 릴리스로의 자동 업데이트 끄기(우리 수정판을 덮어쓰지 않도록). 수정 내용은 이 저장소의 `komsi/openmapper/*.patch`에 있습니다. `openMapper\openmapper.exe`로 실행하며 macOS 묶음에는 들어 있지 않습니다. openMapper 0.1.15 공식 변경: 신호등 머리가 교차로 신호 주기에 따라 빨강·황색·녹색 불을 켜고(연결 안 된 머리는 빨강), 보기 > 시간대에 시간 흐름(1배·5배·60배)과 하단 시계가 생기고, 맵 옆에 OMSI 에디터가 둔 항공사진(`maps/aerials/<맵>/`)을 찾아 맵 위성 이미지로 복사하며, 그래픽 장치를 열지 못하면 다음 그래픽 백엔드로 넘어가 시작합니다. 0.1.13 공식 변경: 복합 교차로 편집기 재구성(자동 정렬·자동 접속부·자동 교차로 생성, 곡선 도구, 미리보기), 버스 포켓 설정(폭·테이퍼), OMSI 2 에디터식 조작(보기 메뉴, 기본 꺼짐), 교차로 판이 도로 텍스처 형식을 따르고 같은 교차로는 한 오브젝트를 공유, 시작 멈춤 시 로그 기록.
 
+
+## openOMSI 0.3.45 이후 main 변경사항 (요약)
+
+공식 CHANGELOG에는 아직 올라오지 않았고, main에 들어온 커밋 21개의 제목 기준입니다.
+
+### 새 기능
+- **게임·런처 UI 테마 통일**: 인터페이스 테마 설정이 생겨 런처에서 정한 테마가 게임 UI에도 적용되고, 밝은/어두운 UI 팔레트가 런타임에 바뀌며 게임 패널들도 밝은 테마를 지원합니다.
+- **Stamper 유틸리티**(#3388).
+
+### 수정
+- **압축 텍스처 캐시**: 텍스처가 그대로인 업데이트에서는 캐시가 유지됩니다.
+- **GPU 진단**: 미러·데스크톱·스테레오 화면의 GPU 진단을 따로 보고합니다.
+- **스크립트**: 열린 `{if}` 안의 `{end}`는 그 지점에 닿았을 때만 블록을 벗어납니다.
+- **의존성**: zstd를 패치된 버전으로 올렸습니다. 런처가 저장된 인터페이스 테마를 시작할 때 유지합니다.
 
 ## openOMSI 0.3.43 ~ 0.3.45 공식 변경사항 (요약)
 
