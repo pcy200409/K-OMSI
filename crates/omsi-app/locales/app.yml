@@ -98687,3 +98687,39 @@ _version: 2
   it: "Torcia spenta"
   cs: "Baterka vypnuta"
   tr: "El feneri kapalı"
+"Average":
+  de: "Schnitt"
+  ko: "평균"
+"Advised":
+  de: "Empfohlen"
+  ko: "권장"
+"Prepare to stop":
+  de: "Anhalten"
+  ko: "정지 준비"
+"Red light ahead":
+  de: "Rote Ampel"
+  ko: "신호위반 주의"
+"Collision risk":
+  de: "Auffahrgefahr"
+  ko: "추돌 위험"
+"Car ahead":
+  de: "Vordermann"
+  ko: "앞차"
+"Sharp curve":
+  de: "Scharfe Kurve"
+  ko: "급커브"
+"Limit ahead":
+  de: "Tempolimit"
+  ko: "제한"
+"Signal":
+  de: "Ampel"
+  ko: "신호"
+"Section":
+  de: "Abschnitt"
+  ko: "구간"
+"Speeding":
+  de: "Tempo"
+  ko: "과속"
+"Signal and speed":
+  de: "Ampel und Tempo"
+  ko: "신호과속"
