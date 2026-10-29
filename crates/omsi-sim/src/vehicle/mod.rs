@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 mod damage;
+pub mod android_auto;
 mod engine_vars;
 mod pax_vars;
 use engine_vars::Ev;
