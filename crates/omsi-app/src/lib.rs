@@ -888,6 +888,7 @@ fn assemble_app(args: Args, settings: settings::Settings) -> App {
             plugin_voices: Vec::new(),
             plugin_seen: Default::default(),
             plugin_command: false,
+            plugins_turn_on: false,
             plugin_panels: Default::default(),
             discord: None,
             discord_t: 0.0, discord_max: Default::default(),
