@@ -1,5 +1,5 @@
 diff --git a/locales/ko.tsv b/locales/ko.tsv
-index 5f8fac5..84805bd 100644
+index bd4d0cb..d862220 100644
 --- a/locales/ko.tsv
 +++ b/locales/ko.tsv
 @@ -2418,6 +2418,16 @@ Straight on	직진
@@ -20,7 +20,7 @@ index 5f8fac5..84805bd 100644
  Plate with kerbs and footways	연석과 보도가 있는 판
  Junctions as the Roads tool makes them: where roads cross, one ends on another or several end at one place, they are cut back and a plate is laid with rounded kerbs, footways and lanes through it	도로 도구가 만드는 것과 같은 교차로: 도로가 교차하거나, 한 도로가 다른 도로에서 끝나거나, 여러 도로가 한곳에서 끝나는 곳에서 도로가 잘리고 둥근 연석, 보도, 통과하는 차선이 있는 판이 깔립니다
 diff --git a/src/app.rs b/src/app.rs
-index ed51b84..78459e9 100644
+index 24d3f4f..c784277 100644
 --- a/src/app.rs
 +++ b/src/app.rs
 @@ -243,6 +243,11 @@ impl App {
@@ -46,7 +46,7 @@ index ed51b84..78459e9 100644
          crate::logging::stage("creating the window");
          let window = Arc::new(el.create_window(attrs)?);
          crate::logging::stage("starting the graphics card");
-@@ -1324,6 +1333,41 @@ impl App {
+@@ -1333,6 +1342,41 @@ impl App {
                      }
                  }
              }
@@ -88,7 +88,7 @@ index ed51b84..78459e9 100644
              Action::MergeTiles => {
                  if let Some(r) = &self.roots {
                      self.ui.merge.show(install::list_maps(r));
-@@ -2169,6 +2213,9 @@ impl App {
+@@ -2178,6 +2222,9 @@ impl App {
              // (the pictures taken of the view are clean of them)
              if !self.snapshot {
                  crate::ui_edit::paint_names(&ctx, &self.ed, &self.lib, &self.cam, self.view);
@@ -98,14 +98,14 @@ index ed51b84..78459e9 100644
                  if let (Some(sel), Some(doc), Some(a)) = (self.ed.path_numbers.filter(|s| self.ed.selected == Some(*s)), self.ed.doc.as_ref(), self.assets.as_mut()) {
                      crate::ui_edit::paint_path_numbers(&ctx, &crate::lanes::of_one(doc, a, sel), &self.cam, self.view);
                  }
-@@ -2343,6 +2390,7 @@ impl App {
+@@ -2352,6 +2399,7 @@ impl App {
                  let t_x = Instant::now();
                  let mut extras = self.ed.extras(&self.cam, assets);
                  self.tt.overlay(&self.ed, &self.cam, &mut extras);
 +                self.tt.routes_overlay(&self.ed, self.roots.as_ref(), &self.cam, &mut extras);
                  g.renderer.profile.add("extras", crate::render::profile::ms(t_x));
+                 let t_geo = Instant::now();
                  self.geo.feed(&mut g.renderer.imagery, &g.gpu, &self.ed, DVec2::new(self.cam.target.x, self.cam.target.y));
-                 g.renderer.daytime = self.ui.daytime.map(|h| crate::render::daylight::at_map(h, &doc.traffic.timezone));
 diff --git a/src/assets.rs b/src/assets.rs
 index cbb4d08..b653930 100644
 --- a/src/assets.rs
@@ -168,10 +168,10 @@ index cbb4d08..b653930 100644
  
  fn load_spline(path: &Path, omsi: &Path, content: &Path) -> Option<SplineModel> {
 diff --git a/src/editor.rs b/src/editor.rs
-index f8d7c03..3a26efc 100644
+index 822622d..aff3663 100644
 --- a/src/editor.rs
 +++ b/src/editor.rs
-@@ -492,6 +492,10 @@ pub struct Editor {
+@@ -509,6 +509,10 @@ pub struct Editor {
      pub show_lanes: bool,
      /// The names of bus stops and start points float over them in the view.
      pub show_names: bool,
@@ -182,7 +182,7 @@ index f8d7c03..3a26efc 100644
      /// A window picks things on the map (the Lines window its stops): a click only notes
      /// what is under the cursor and where, nothing is selected or moved.
      pub pick_mode: bool,
-@@ -644,6 +648,8 @@ impl Default for Editor {
+@@ -665,6 +669,8 @@ impl Default for Editor {
              hide: [false; 3],
              show_lanes: false,
              show_names: true,
@@ -840,10 +840,10 @@ index 1e2d1f7..cd3d8f2 100644
 +    }
  }
 diff --git a/src/render/mod.rs b/src/render/mod.rs
-index 7394eaf..283b7bc 100644
+index 845b888..2aedc94 100644
 --- a/src/render/mod.rs
 +++ b/src/render/mod.rs
-@@ -2734,7 +2734,7 @@ fn push_object(groups: &mut Groups, key: &str, model: &Arc<ObjectModel>, label:
+@@ -2807,7 +2807,7 @@ fn push_object(groups: &mut Groups, key: &str, model: &Arc<ObjectModel>, label:
      }
      let inst = Instance::new(m, tint);
      let radius = (model.centre().length() + model.radius()) * scale;
@@ -986,7 +986,7 @@ index e5d9226..5d37216 100644
 +    out
 +}
 diff --git a/src/ui.rs b/src/ui.rs
-index 933c7a5..1154b06 100644
+index f0a1f3b..6d04a1e 100644
 --- a/src/ui.rs
 +++ b/src/ui.rs
 @@ -192,6 +192,9 @@ pub enum Action {
@@ -999,7 +999,7 @@ index 933c7a5..1154b06 100644
      /// Do it without asking about unsaved changes.
      Force(Box<Action>),
      /// Save, then do it; nothing more if the save fails.
-@@ -244,6 +247,10 @@ pub struct UiState {
+@@ -246,6 +249,10 @@ pub struct UiState {
      pub groups: crate::ui_groups::Groups,
      /// The window of the map's earlier versions (backups of its saves).
      pub versions_open: bool,
@@ -1010,7 +1010,7 @@ index 933c7a5..1154b06 100644
      /// The window of the edits made (undo and redo by a click).
      pub history_open: bool,
      /// The preferences' starred and recently used assets, for the catalogue.
-@@ -317,6 +324,8 @@ impl Default for UiState {
+@@ -320,6 +327,8 @@ impl Default for UiState {
              find: Default::default(),
              groups: Default::default(),
              versions_open: false,
@@ -1019,7 +1019,7 @@ index 933c7a5..1154b06 100644
              history_open: false,
              favourites: Vec::new(),
              recent_assets: Vec::new(),
-@@ -885,6 +894,17 @@ fn menu_bar(root: &mut egui::Ui, st: &mut UiState, ed: &mut Editor, can_undo: bo
+@@ -888,6 +897,17 @@ fn menu_bar(root: &mut egui::Ui, st: &mut UiState, ed: &mut Editor, can_undo: bo
                  if menu_item(ui, Some(Icon::Map), tr("Export a plan of the map…", "Экспорт плана карты…"), "", true) {
                      actions.push(Action::ExportPlan);
                  }
@@ -1037,7 +1037,7 @@ index 933c7a5..1154b06 100644
                  if menu_item(ui, Some(Icon::Import), tr("Import assets…", "Импорт ассетов…"), "", true) {
                      actions.push(Action::Import);
                  }
-@@ -956,6 +976,21 @@ fn menu_bar(root: &mut egui::Ui, st: &mut UiState, ed: &mut Editor, can_undo: bo
+@@ -959,6 +979,21 @@ fn menu_bar(root: &mut egui::Ui, st: &mut UiState, ed: &mut Editor, can_undo: bo
                  check(ui, &mut ed.show_technical, icons::labelled(icon, tr("What the game does not show", "То, чего не видно в игре")));
                  check(ui, &mut ed.show_lanes, icons::labelled(Icon::Route, tr("AI lanes", "Полосы ИИ")));
                  check(ui, &mut ed.show_names, icons::labelled(Icon::Bus, tr("Names of stops and start points", "Названия остановок и точек старта")));
