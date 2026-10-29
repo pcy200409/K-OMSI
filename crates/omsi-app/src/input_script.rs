@@ -472,6 +472,12 @@ impl App {
                     self.service_msg = Some((msg.into(), 2.5));
                     return true;
                 }
+                // the Lua plugins switched off (too slow, too many errors) on again, as the
+                // game menu's line
+                KeyCode::KeyL if ctrl && shift_now && !alt && !self.chord_bound(code, shift_now, ctrl, alt) => {
+                    self.integrations.plugins_turn_on = true;
+                    return true;
+                }
                 // the object editor (`crate::editor`)
                 KeyCode::KeyE if ctrl && shift_now && !self.chord_bound(code, shift_now, ctrl, alt) => {
                     self.toggle_editor();

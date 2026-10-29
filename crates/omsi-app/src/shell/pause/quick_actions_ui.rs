@@ -7,7 +7,8 @@ fn label(id: &str, menu: &[crate::app_impl::MenuLine]) -> String {
         .or_else(|| crate::app_impl::GAME_MENU.iter().find(|line| line.0 == id).map(|line| line.1))
         .unwrap_or(match id {
             "tobus" => "Back to my bus", "players" => "Player list...",
-            "admin" => "Administration...", "copycode" => "Copy server code", _ => id,
+            "admin" => "Administration...", "copycode" => "Copy server code",
+            "plugins_on" => "Turn switched-off plugins on again", _ => id,
         });
     plain(&omsi_ui::tr(label)).0.to_string()
 }
