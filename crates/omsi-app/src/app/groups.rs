@@ -93,6 +93,9 @@ pub(crate) struct Integrations {
     /// A plugin's `omsi.command` is running: what it does is the plugin's (the `service`
     /// event's `by`).
     pub(crate) plugin_command: bool,
+    /// The player asked to turn the Lua plugins switched off (too slow, too many errors) on
+    /// again (the game menu's line, Ctrl+Shift+L): done before the plugins' next frame.
+    pub(crate) plugins_turn_on: bool,
     /// The Lua plugins' panels and notifications on the screen (`omsi.ui`).
     pub(crate) plugin_panels: crate::plugin_ui::PluginPanels,
     /// Discord's "Playing openOMSI" status, and when it was last brought up to date.
