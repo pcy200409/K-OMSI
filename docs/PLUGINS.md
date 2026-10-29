@@ -594,8 +594,12 @@ only to ports from 1024 up. It holds at most 256 MB of memory.
 * An error in a handler is written to `game.log` and shown on the screen; the other
   plugins and the game carry on. After 10 errors the plugin is switched off until you
   change its file or restart the game.
-* A call into the plugin that runs longer than 50 ms (an endless loop) is stopped and the
-  plugin switched off, with a line in `game.log`; loading it may take a second.
+* A call into the plugin should take less than 50 ms. One that takes longer is written to
+  `game.log`; when the same handler or timer takes longer five times in a row (not counted in
+  the first 10 seconds after the plugin started) the plugin is switched off. A call that runs
+  longer than a second (an endless loop) is stopped and the plugin switched off at once;
+  loading it may take a second too. A plugin switched off can be turned on again from the
+  game menu (*Turn switched-off plugins on again*, shown while one is off) or with Ctrl+Shift+L.
 * A file that does not compile is left out, with the Lua error in `game.log`.
 
 ### Tips

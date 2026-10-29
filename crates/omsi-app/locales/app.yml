@@ -8773,3 +8773,7 @@ _version: 2
   en: "Use for {bus}"
 "Profile {name} in use":
   en: "Profile {name} in use"
+"Turn switched-off plugins on again":
+  en: "Turn switched-off plugins on again"
+"No plugin is switched off":
+  en: "No plugin is switched off"

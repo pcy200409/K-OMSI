@@ -2983,3 +2983,5 @@
 "Default for every bus": "모든 버스의 기본값"
 "Use for {bus}": "{bus}에 사용"
 "Profile {name} in use": "프로필 {name} 사용 중"
+"Turn switched-off plugins on again": "꺼진 플러그인 다시 켜기"
+"No plugin is switched off": "꺼진 플러그인이 없습니다"
