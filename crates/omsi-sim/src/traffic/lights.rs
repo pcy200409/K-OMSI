@@ -64,6 +64,20 @@ pub struct TrafficLightController {
     started: bool,
 }
 
+/// K-OMSI: the power is out (a lightning strike nearby, the "Storm power cuts" setting):
+/// every traffic light of the loaded map dark until it is back.
+static OUTAGE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// The state of a dark light (`aspect`: 12 and above).
+const DARK: i32 = 12;
+
+pub fn set_outage(on: bool) {
+    OUTAGE.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn outage() -> bool {
+    OUTAGE.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 impl TrafficLightController {
     pub fn new(lights: Vec<Vec<(i32, f32)>>, cycle: f32) -> TrafficLightController {
         let n = lights.len();
@@ -249,6 +263,10 @@ impl TrafficLightController {
 
     /// State of light `i` at position `x` of the cycle (s).
     pub fn state_at(&self, i: usize, x: f64) -> i32 {
+        // (a power cut: every lamp dark, the junction left to the right of way)
+        if outage() {
+            return DARK;
+        }
         let phases = match self.lights.get(i) {
             Some(p) if !p.is_empty() => p,
             _ => return 6,
