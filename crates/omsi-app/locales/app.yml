@@ -8863,3 +8863,7 @@ _version: 2
 "Save under a name...":
 "No saved situation of this map yet":
 "Saved as \"{}\"":
+"Turn switched-off plugins on again":
+  en: "Turn switched-off plugins on again"
+"No plugin is switched off":
+  en: "No plugin is switched off"
