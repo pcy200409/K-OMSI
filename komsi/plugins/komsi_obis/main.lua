@@ -6,7 +6,8 @@
 --   위치 = 다음 정류장 + 남은 거리 비율 (좌표계가 달라도 같은 방식, project_omsi_bis 와 동일)
 -- · 차량 설정(OBIS Client 의 "차량 설정"): 닉네임·좌석형/입석형·좌석 수·저상·막차·입석 혼잡도 (omsi.obis.prefs)
 -- OBIS Client(OMSI 2\OBIS-client\OBIS-client.exe)가 설치돼 있을 때만 작동 (omsi.komsi.original)
--- 단축키: Ctrl+Shift+O OBIS 켜기/끄기(받기·보내기·패널 전부, 다음 실행에도 유지), Ctrl+Shift+B 노선 띠
+-- 단축키: Ctrl+Shift+O OBIS 켜기/끄기(받기·보내기·패널 전부, 다음 실행에도 유지), Ctrl+Shift+B 노선 띠,
+--         Ctrl+Shift+V 패널 숨기기/보이기(받기·보내기·노선 띠는 그대로, 다음 실행에도 유지)
 
 local OBIS_URL = "wss://obis.kr/api/ws"
 local PANEL, BOARD = "obis", "line"
@@ -21,6 +22,7 @@ local settings = omsi.plugin.settings({
   { key = "in_nav", type = "bool", label = "세로형 노선 띠를 내비게이터 안에 (끄면 왼쪽 패널)", default = false },
   { key = "auto_nick", type = "bool", label = "OBIS 닉네임을 게임 차량번호로 맞춤", default = true },
   { key = "enabled", type = "bool", label = "OBIS 켜기 (Ctrl+Shift+O)", default = true },
+  { key = "panel", type = "bool", label = "OBIS 패널 보이기 (Ctrl+Shift+V, 숨겨도 받기·보내기는 계속)", default = true },
 }, "OBIS")
 
 -- OBIS Client 오리지널이 있어야 켜짐 (없으면 받기·보내기 둘 다 못 함)
@@ -29,11 +31,30 @@ local has_ws = owns and omsi.ws ~= nil
 local has_send = owns and omsi.obis ~= nil      -- K-OMSI OBIS 판
 local sender = has_send and require("sender") or nil
 local send_on = false
+-- 단말기가 운행 중이 아님 = 안 보냄: 신형 EB(EBterm_vis_model 1, EBterm_run 0) / 티머니 B800(vis_Tmoney800_Driver 1, B800C_Run 0).
+-- 단말기 없는 차량·운행 변수 없는 옛 설치는 늘 false
+local term_idle_was = nil
+local function term_idle()
+  local vm = omsi.var("EBterm_vis_model")
+  if vm ~= nil and vm >= 0.5 and (omsi.var("EBterm_run") or 0) < 0.5 then return true end
+  local b8, br = omsi.var("vis_Tmoney800_Driver"), omsi.var("B800C_Run")
+  return b8 ~= nil and b8 >= 0.5 and br ~= nil and br < 0.5
+end
+-- 단말기 운행 중인지: nil = 운행 변수 있는 단말기가 아님 / true = 운행 중 / false = 운행 시작 전·종료 뒤
+local function term_running()
+  local vm = omsi.var("EBterm_vis_model")
+  if vm ~= nil and vm >= 0.5 and omsi.var("EBterm_run") ~= nil then return omsi.var("EBterm_run") >= 0.5 end
+  local b8, br = omsi.var("vis_Tmoney800_Driver"), omsi.var("B800C_Run")
+  if b8 ~= nil and b8 >= 0.5 and br ~= nil then return br >= 0.5 end
+  return nil
+end
+local term_running_was = nil
+local set_enabled               -- 아래에서 정의 (tick 이 단말기 운행 시작·종료 때 부름)
 local shown = true
 local log = {}                 -- 활동 로그 (최근 것 위)
 
 -- ------------------------------------------------------------ 한글 정류장명 (eb_nearby 와 같은 규칙)
-local ko, obis_maps, obis_use, obis_base, obis_picked, obis_ko = {}, {}, {}, {}, "", {}
+local map_tabs, obis_use, obis_base, obis_picked, obis_ko = {}, {}, {}, "", {}
 
 local function load_json(path)
   local text = omsi.plugin.read(path)
@@ -62,43 +83,41 @@ local function base_name(n)
   return r:lower()
 end
 
--- 한글 정류장명은 지금 trip 의 OBIS 맵 하나에서만 (여러 맵을 섞으면 같은 영문명의 개인 맵
--- 'NCC(A)' 이름 '센텀광역환승센터'가 'NCC' 의 '센텀버스환승센터' 자리에 들어갔음, 2026-10-25)
--- 맵 = OBIS Client 노선 자료로 맞춘 노선의 mapId. 이름표 = Client 의 maps\<맵>\map.json, 없는 건 obis_names_ko.json
-local my_map = nil
+-- 한글 정류장명·맵 = 게임이 불러온 맵 폴더(info.map_path) 하나로 (2026-10-27, eb_nearby 와 같음).
+-- 예전 trip 파일명 판별은 trip 이름이 맵끼리 겹쳐서(101 (to ...), 120 A) OBIS 에 없는 맵(청남 등)·미등록 trip 에
+-- 다른 맵·개인 맵(NCC(A)) 이름이 들어갔음. 표 = map_names_ko.json (StopNames_DB/build_eb_names.py):
+-- {맵 폴더: {obis = mapId|nil, names}}. 표에 없는 맵 = 영문 그대로. 이름 = Client 의 그 맵 이름 > 표 > 영문
+local my_map = nil       -- 지금 맵의 OBIS mapId (OBIS 에 없는 맵·모르는 맵 = nil)
 
-local function pick_obis_names(names, trip, sid)
-  local map = sender and sender.map_of(trip, sid) or nil
-  local key = trip .. "|" .. tostring(map)
-  if obis_picked == key then return end
-  obis_picked = key
+local function map_folder_of(path)
+  path = tostring(path or ""):gsub("\\", "/")
+  return path:match("([^/]+)/[^/]+$")
+end
+
+local function pick_map()
+  local info = omsi.info and omsi.info() or nil
+  local f = info and map_folder_of(info.map_path) or nil
+  if f == obis_picked then return end
+  obis_picked = f
+  local e = f and map_tabs[f] or nil
+  my_map = e and e.obis or nil
+  -- 보내기 노선도 이 맵 것만: mapId / false = 이 PC 표에 있는 OBIS 미등록 맵(노선 안 붙임) / nil = 모르는 맵(원래 규칙)
+  if sender and sender.set_map then sender.set_map(e and (e.obis or false) or nil) end
   obis_use, obis_base = {}, {}
-  if not map then
-    -- (노선을 아직 모를 때: 이름이 가장 많이 맞는 맵 하나, 같으면 이름이 짧은 쪽 = 원래 맵)
-    local best, top = nil, 0
-    for mid, m in pairs(obis_maps) do
-      local hit = 0
-      for _, n in ipairs(names) do if m[n] then hit = hit + 1 end end
-      if hit > top or (hit == top and hit > 0 and best and #mid < #best) then best, top = mid, hit end
-    end
-    map = best
-  end
-  my_map = map
-  if map then
-    local client = omsi.obis and omsi.obis.map_names and omsi.obis.map_names(map)
+  if my_map then
+    local client = omsi.obis and omsi.obis.map_names and omsi.obis.map_names(my_map)
     if type(client) == "table" then for k, v in pairs(client) do obis_use[k] = v end end
-    for k, v in pairs(obis_maps[map] or {}) do if obis_use[k] == nil then obis_use[k] = v end end
   end
+  for k, v in pairs(e and e.names or {}) do if obis_use[k] == nil then obis_use[k] = v end end
   for k, v in pairs(obis_use) do
     local b = base_name(k)
     if not obis_base[b] then obis_base[b] = v end
   end
+  omsi.log(string.format("obis: 맵 %s -> 한글표 %s, OBIS %s", tostring(f), e and "있음" or "없음(영문 그대로)", tostring(my_map)))
 end
 
 local function stop_name(id, name)
   name = name or ""
-  local k = ko[name]
-  if k and k:match("%S") then return k end
   local live = my_map and obis_ko[my_map]
   if live and live[id] then return live[id] end
   return obis_use[trim(name)] or obis_base[base_name(name)] or name
@@ -170,13 +189,11 @@ local function pos_of(stops, nxt, dist, at)       -- nxt: 1부터, 결과 0 = �
 end
 
 local function my_state()
+  pick_map()
   local duty = omsi.duty.get()
   if not duty or not duty.next_stop then return nil end
   local stops = omsi.duty.stops()
   if type(stops) ~= "table" or #stops < 2 then return nil end
-  local names = {}
-  for i, s in ipairs(stops) do names[i] = s.name end
-  pick_obis_names(names, duty.trip_name or "", duty.next_stop.id)
   local bx, by = omsi.position()
   local ns = duty.next_stop
   local dist = (bx and ns.x) and math.sqrt((bx - ns.x) ^ 2 + (by - ns.y) ^ 2) or 0
@@ -256,6 +273,7 @@ local function build_panel(hint)
       { type = "row", gap = 6, children = {
         { type = "button", id = "b_board", text = "노선 띠", icon = "route", grow = true },
         { type = "button", id = "b_set", icon = "settings" },
+        { type = "button", id = "b_min", icon = "remove" },
         { type = "button", id = "b_hide", icon = "power_settings_new" },
       } },
     },
@@ -353,6 +371,7 @@ local function refresh_panel(me, mine)
   local hint
   if not has_ws then hint = "이 게임 버전엔 OBIS 연결이 없습니다. K-OMSI OBIS 판이 필요해요."
   elseif sst == "no_token" then hint = "OBIS 기기 등록에 실패했어요. 잠시 뒤 다시 시도합니다."
+  elseif settings.send and not send_on and term_idle() then hint = "단말기 운행 시작 전(운행종료)이라 내 버스는 보내지 않아요."
   elseif me and ws == "open" and not mine then
     hint = send_on and "보내는 중인데 서버에 아직 안 보여요. 노선이 OBIS 에 없는 노선일 수 있어요."
       or "서버에 내 버스가 안 보여요. 설정에서 '직접 보냄'을 켜거나 OBIS Client 를 켜 두세요."
@@ -421,7 +440,7 @@ local function others_of(me)
   local idx, out = {}, {}
   for i, s in ipairs(me.stops) do if not idx[s.id] then idx[s.id] = i end end
   for _, b in ipairs(buses) do
-    if fresh(b) and b.id ~= my_id and b.trip == me.trip and idx[b.next_id] then
+    if fresh(b) and b.id ~= my_id and my_map and b.map == my_map and b.trip == me.trip and idx[b.next_id] then   -- 같은 맵 유저만
       out[#out + 1] = { p = pos_of(me.stops, idx[b.next_id], b.dist, b.at), label = short(b.nick ~= "" and b.nick or b.id), user = true }
     end
   end
@@ -582,6 +601,13 @@ end
 
 -- ------------------------------------------------------------ 주기
 local function tick()
+  -- 단말기 운행 시작 → OBIS 켬, 운행 종료 → 끔 (바뀌는 순간만: 그 사이 손으로 켜고 끈 건 그대로 둠)
+  local run = term_running()
+  if run ~= nil and term_running_was ~= nil and run ~= term_running_was and run ~= settings.enabled then
+    omsi.log("obis: 단말기 " .. (run and "운행 시작 → OBIS 켬" or "운행 종료 → OBIS 끔"))
+    set_enabled(run)
+  end
+  term_running_was = run
   if not settings.enabled then return end
   if has_ws then
     local m = omsi.ws.poll()
@@ -593,15 +619,20 @@ local function tick()
     end
   end
   local me = my_state()
-  -- 직접 송신 (OBIS 판)
+  -- 직접 송신 (OBIS 판). 신형 EB 단말기 차량은 단말기 운행 시작~운행 종료 동안만 (EBterm_run)
   if has_send then
-    if settings.send and not send_on then
+    local idle = term_idle()
+    local want = settings.send and not idle
+    if want and not send_on then
       local ok, why = omsi.obis.start()
       send_on = ok and true or false
-      add_log(ok and "직접 송신 시작" or ("송신 시작 못 함: " .. tostring(why)))
-    elseif not settings.send and send_on then
-      omsi.obis.stop(); send_on = false; add_log("직접 송신 끔")
+      add_log(ok and (term_idle_was and "단말기 운행 시작 → 직접 송신 시작" or "직접 송신 시작")
+        or ("송신 시작 못 함: " .. tostring(why)))
+    elseif not want and send_on then
+      omsi.obis.stop(); send_on = false; add_log(idle and "단말기 운행 종료 → 송신 멈춤" or "직접 송신 끔")
     end
+    if term_idle_was ~= nil and idle ~= term_idle_was then omsi.log("obis: 단말기 " .. (idle and "운행 종료 → 송신 멈춤" or "운행 시작 → 송신")) end
+    term_idle_was = idle
     if send_on then
       local bx, by, bz = omsi.position()
       local text = sender.snapshot({ duty = me and me.duty or nil, x = bx or 0, y = by or 0, z = bz or 0,
@@ -622,8 +653,8 @@ local function switch_on()
     local ok, why = omsi.ws.open(OBIS_URL)
     if not ok then add_log("OBIS 연결 못 함: " .. tostring(why)) end
   end
-  shown = true
-  build_panel()
+  shown = settings.panel
+  if shown then build_panel() end
 end
 
 local function switch_off()
@@ -634,11 +665,22 @@ local function switch_off()
   draft = nil
 end
 
-local function set_enabled(on)
+function set_enabled(on)
   omsi.plugin.set_setting("enabled", on)
   settings.enabled = on
   if on then switch_on() else switch_off() end
   omsi.ui.toast(on and "OBIS 켬" or "OBIS 끔 (받기·보내기 멈춤)", { title = "OBIS", icon = "directions_bus", seconds = 3 })
+end
+
+-- 패널만 숨기기/보이기: 받기·보내기·노선 띠는 tick 이 그대로 돌림
+local function set_panel(on)
+  omsi.plugin.set_setting("panel", on)
+  settings.panel = on
+  if not settings.enabled then return end
+  shown = on
+  if on then build_panel(panel_hint) else omsi.ui.remove(PANEL) end
+  omsi.ui.toast(on and "OBIS 패널 보임" or "OBIS 패널 숨김 (받기·보내기는 계속, Ctrl+Shift+V 로 다시 보기)",
+    { title = "OBIS", icon = "directions_bus", seconds = 3 })
 end
 
 function on_start()
@@ -646,8 +688,8 @@ function on_start()
     omsi.log("obis: OBIS Client(OBIS-client/OBIS-client.exe)가 없어 OBIS 기능을 끔")
     return
   end
-  ko = load_json("stop_names_ko.json") or {}
-  obis_maps = load_json("obis_names_ko.json") or {}
+  local mt = load_json("map_names_ko.json")
+  map_tabs = mt and mt.maps or {}
   if settings.enabled then switch_on() end
   omsi.every(1, tick)
   omsi.input.hotkey("Ctrl+Shift+KeyO", function() set_enabled(not settings.enabled) end)
@@ -655,6 +697,9 @@ function on_start()
     if not settings.enabled then return end
     omsi.plugin.set_setting("board", not settings.board)
     settings.board = not settings.board
+  end)
+  omsi.input.hotkey("Ctrl+Shift+KeyV", function()
+    if settings.enabled then set_panel(not settings.panel) end
   end)
 end
 
@@ -673,12 +718,14 @@ omsi.on("ui_click", function(panel, el)
   if el == "b_prefs" then open_prefs(); return end
   if el == "b_board" then omsi.plugin.set_setting("board", not settings.board); settings.board = not settings.board
   elseif el == "b_set" then omsi.plugin.show_settings(true); omsi.ui.focus(true)
+  elseif el == "b_min" then set_panel(false)
   elseif el == "b_hide" then set_enabled(false)
   end
 end)
 
 omsi.on("setting", function(key, value)
   if key == "enabled" and owns and value ~= settings.enabled then set_enabled(value); return end
+  if key == "panel" and owns and value ~= settings.panel then set_panel(value); return end
   settings[key] = value
 end)
 
