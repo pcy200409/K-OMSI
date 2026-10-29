@@ -4,6 +4,7 @@
 -- · 채점·리포트는 하지 않음 → 외부 TACO 분석기(taco_gui.py / taco_score.py replay)가 이 파일을 읽어 채점
 --   (램프는 운전 중 알림일 뿐, 횟수·점수는 화면에도 파일에도 남기지 않음)
 -- 단축키: Ctrl+Shift+T 운행기록계 켜기/끄기(끄면 녹화도 저장하고 멈춤, 다음 실행에도 유지). 설정은 패널의 톱니바퀴.
+--         Ctrl+Shift+Y 패널만 숨기기/보이기(숨겨도 녹화·램프 판정은 계속, 다음 실행에도 유지).
 -- Light-TACO(OMSI2_Scheduler.exe, OMSI Addon Patch 아래)가 설치돼 있을 때만 작동 (omsi.komsi.original)
 
 local PANEL = "dtg"
@@ -34,11 +35,12 @@ local settings = omsi.plugin.settings({
   { key = "dir", type = "choice", label = "방향", choices = { "상행", "하행" }, default = "상행" },
   { key = "period", type = "number", label = "샘플링 주기(초)", min = 0.1, max = 1.0, step = 0.1, default = 0.2 },
   { key = "enabled", type = "bool", label = "운행기록계 켜기 (Ctrl+Shift+T)", default = true },
+  { key = "panel", type = "bool", label = "운행기록계 패널 보이기 (Ctrl+Shift+Y, 숨겨도 녹화·판정은 계속)", default = true },
 }, "디지털 운행기록계")
 
 -- Light-TACO 오리지널이 있어야 켜짐
 local owns = omsi.komsi ~= nil and omsi.komsi.original("taco")
-local shown = settings.enabled
+local shown = settings.enabled and settings.panel
 local rec = nil                -- 녹화 중: { file, lines = {}, n, t0 }
 local trip_km, last_odo, last_x, last_y = 0, nil, nil, nil
 local odo_km = 0
@@ -237,6 +239,7 @@ local function build()
         { type = "button", id = "rec", text = "녹화", icon = "videocam", color = "#3A3D3A" },
         { type = "button", id = "trip", text = "TRIP 초기화", icon = "restart_alt" },
         { type = "button", id = "set", icon = "settings" },
+        { type = "button", id = "b_min", icon = "remove" },
       } },
     },
   })
@@ -278,9 +281,9 @@ local cur = nil
 local function set_enabled(on)
   omsi.plugin.set_setting("enabled", on)
   settings.enabled = on
-  shown = on
+  shown = on and settings.panel
   if on then
-    build(); refresh(cur)
+    if shown then build(); refresh(cur) end
   else
     rec_stop()
     omsi.ui.remove(PANEL)
@@ -288,12 +291,23 @@ local function set_enabled(on)
   omsi.ui.toast(on and "운행기록계 켬" or "운행기록계 끔", { title = "TACO", icon = "speed", seconds = 3 })
 end
 
+-- 패널만 숨기기/보이기: 녹화·램프 판정은 every 가 그대로 돌림
+local function set_panel(on)
+  omsi.plugin.set_setting("panel", on)
+  settings.panel = on
+  if not settings.enabled then return end
+  shown = on
+  if on then build(); refresh(cur) else omsi.ui.remove(PANEL) end
+  omsi.ui.toast(on and "운행기록계 패널 보임" or "운행기록계 패널 숨김 (녹화·판정은 계속, Ctrl+Shift+Y 로 다시 보기)",
+    { title = "TACO", icon = "speed", seconds = 3 })
+end
+
 function on_start()
   if not owns then
     omsi.log("taco: Light-TACO(OMSI2_Scheduler.exe)가 없어 운행기록계를 끔")
     return
   end
-  if settings.enabled then build() end
+  if shown then build() end
   omsi.every(DETECT_DT, function()
     if not settings.enabled then return end
     cur = read()
@@ -307,6 +321,9 @@ function on_start()
   omsi.every(0.25, function() if shown then refresh(cur) end end)
   omsi.every(FLUSH_EVERY, flush)
   omsi.input.hotkey("Ctrl+Shift+KeyT", function() set_enabled(not settings.enabled) end)
+  omsi.input.hotkey("Ctrl+Shift+KeyY", function()
+    if settings.enabled then set_panel(not settings.panel) end
+  end)
 end
 
 omsi.on("ui_click", function(panel, el)
@@ -320,11 +337,13 @@ omsi.on("ui_click", function(panel, el)
   elseif el == "p_up" then set_period(settings.period + 0.1)
   elseif el == "p_dn" then set_period(settings.period - 0.1)
   elseif el == "set" then omsi.plugin.show_settings(true); omsi.ui.focus(true)
+  elseif el == "b_min" then set_panel(false)
   end
 end)
 
 omsi.on("setting", function(key, value)
   if key == "enabled" and owns and value ~= settings.enabled then set_enabled(value); return end
+  if key == "panel" and owns and value ~= settings.panel then set_panel(value); return end
   settings[key] = value
   if key == "period" then omsi.ui.update(PANEL, "period", { text = string.format("%.1f 초", value) }) end
 end)
