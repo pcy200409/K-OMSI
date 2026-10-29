@@ -52,9 +52,15 @@ local term_running_was = nil
 local set_enabled               -- 아래에서 정의 (tick 이 단말기 운행 시작·종료 때 부름)
 local shown = true
 local log = {}                 -- 활동 로그 (최근 것 위)
+-- 한 호출 50 ms 한도(넘으면 플러그인이 꺼짐): 게임 불러온 직후 3초는 쉬고, 무거운 일 뒤 20 ms 넘으면 나머지는 다음 초로 (eb_nearby 와 같음)
+local start_ms, call_t0 = 0, 0
+local owe_refresh = false      -- 지난 tick 에 패널·노선 띠를 못 그림
+local function busy() return omsi.util.ms() - call_t0 > 20 end
+local function resting() return omsi.util.ms() - start_ms < 3000 end
 
 -- ------------------------------------------------------------ 한글 정류장명 (eb_nearby 와 같은 규칙)
-local map_tabs, obis_use, obis_base, obis_picked, obis_ko = {}, {}, {}, "", {}
+local map_tabs, obis_use, obis_base, obis_picked, obis_ko = nil, {}, {}, "", {}   -- map_tabs: 첫 tick 에 읽음
+local pick_job = nil           -- obis_base 만드는 중: {key = 다음 시작 키}
 
 local function load_json(path)
   local text = omsi.plugin.read(path)
@@ -97,7 +103,7 @@ end
 local function pick_map()
   local info = omsi.info and omsi.info() or nil
   local f = info and map_folder_of(info.map_path) or nil
-  if f == obis_picked then return end
+  if f == obis_picked or not map_tabs then return end
   obis_picked = f
   local e = f and map_tabs[f] or nil
   my_map = e and e.obis or nil
@@ -109,11 +115,21 @@ local function pick_map()
     if type(client) == "table" then for k, v in pairs(client) do obis_use[k] = v end end
   end
   for k, v in pairs(e and e.names or {}) do if obis_use[k] == nil then obis_use[k] = v end end
-  for k, v in pairs(obis_use) do
+  pick_job = { key = nil }       -- 접미사 뗀 이름표는 pick_step 이 나눠 만듦
+  omsi.log(string.format("obis: 맵 %s -> 한글표 %s, OBIS %s", tostring(f), e and "있음" or "없음(영문 그대로)", tostring(my_map)))
+end
+
+-- 이름표(obis_base)를 n 개씩: 한 번에 다 하면 50 ms 넘길 수 있음 (eb_nearby 가 2026-10-27 남천 맵에서 꺼졌던 것)
+local function pick_step(n)
+  if not pick_job then return end
+  local k, v = pick_job.key, nil
+  for _ = 1, n do
+    k, v = next(obis_use, k)
+    if k == nil then pick_job = nil; return end
     local b = base_name(k)
     if not obis_base[b] then obis_base[b] = v end
   end
-  omsi.log(string.format("obis: 맵 %s -> 한글표 %s, OBIS %s", tostring(f), e and "있음" or "없음(영문 그대로)", tostring(my_map)))
+  pick_job.key = k
 end
 
 local function stop_name(id, name)
@@ -161,12 +177,13 @@ local function take(text)
         list[#list].stnames = names
         for _, s in ipairs(rt.stations) do
           local sid = math.floor(tonumber(s.id) or 0)
-          names[sid] = has_hangul(s.name_ko) and s.name_ko or s.name
-          if has_hangul(s.name_ko) and rt.mapId then
+          local ko = has_hangul(s.name_ko)
+          names[sid] = ko and s.name_ko or s.name
+          if ko and rt.mapId then
             obis_ko[rt.mapId] = obis_ko[rt.mapId] or {}
             obis_ko[rt.mapId][sid] = s.name_ko
             list[#list].names = list[#list].names or {}
-            list[#list].names[math.floor(tonumber(s.id) or 0)] = s.name_ko
+            list[#list].names[sid] = s.name_ko
           end
         end
       end
@@ -190,6 +207,7 @@ end
 
 local function my_state()
   pick_map()
+  pick_step(300)
   local duty = omsi.duty.get()
   if not duty or not duty.next_stop then return nil end
   local stops = omsi.duty.stops()
@@ -202,16 +220,44 @@ local function my_state()
 end
 
 -- 피드에서 내 버스 찾기: 같은 trip·같은 다음 정류장·거리 차 5m 이내 (eb_nearby 와 같음)
+-- 닉네임이 나인가: 내 OBIS 닉네임 그대로, 또는 게임 차량번호(숫자 끝 4자리, eb_nearby 의 num4 와 같음)
+local function digits4(s)
+  local d = tostring(s or ""):gsub("%D", "")
+  return #d > 4 and d:sub(-4) or d
+end
+local function my_nick()
+  local p = send_on and omsi.obis.prefs() or nil
+  return type(p) == "table" and trim(p.nickname or "") or ""
+end
+local function nick_is_me(b, nick, num)
+  if b.nick == "" then return false end
+  return (nick ~= "" and b.nick == nick) or (num ~= "" and digits4(b.nick) == num)
+end
+-- 내 자리(같은 trip·다음 정류장, 5 m 안)에 있는 버스
+local function at_my_spot(b, me)
+  return b.trip == me.trip and b.next_id == me.next_id and math.abs(b.dist - me.dist) < 5
+end
+
+-- 피드에서 내 버스 찾기 (2026-10-30): ① 같은 trip 에 닉네임이 나인 버스가 하나면 그것 ② 아는 id
+-- ③ 닉네임 모르는(빈) 버스 하나만 내 자리에 있으면 그것. 같은 정류장에 두 대가 서 있을 때 남의 버스를
+-- '나'로 잡던 것(자리만 봄) 고침. 확실하지 않으면 정하지 않음
 local function find_me(me)
   local now = omsi.util.ms()
   if me then
+    local nick, num = my_nick(), digits4(omsi.bus.number())
+    local by_nick, by_pos, by_id = {}, {}, nil
     for _, b in ipairs(buses) do
-      if fresh(b) and ((my_id ~= "" and b.id == my_id)
-          or (b.trip == me.trip and b.next_id == me.next_id and math.abs(b.dist - me.dist) < 5)) then
-        if b.id ~= my_id then my_id = b.id; add_log("서버에서 내 버스 확인 (" .. (b.nick ~= "" and b.nick or b.id) .. ")") end
-        my_seen = now
-        return b
+      if fresh(b) then
+        if my_id ~= "" and b.id == my_id then by_id = b end
+        if b.trip == me.trip and nick_is_me(b, nick, num) then by_nick[#by_nick + 1] = b end
+        if at_my_spot(b, me) and b.nick == "" then by_pos[#by_pos + 1] = b end
       end
+    end
+    local b = (#by_nick == 1 and by_nick[1]) or (#by_nick == 0 and by_id) or (#by_nick == 0 and #by_pos == 1 and by_pos[1]) or nil
+    if b then
+      if b.id ~= my_id then my_id = b.id; add_log("서버에서 내 버스 확인 (" .. (b.nick ~= "" and b.nick or b.id) .. ")") end
+      my_seen = now
+      return b
     end
   end
   if my_id ~= "" and my_seen and now - my_seen > 15000 then my_id = ""; add_log("서버에 내 버스가 안 보임") end
@@ -439,8 +485,11 @@ end
 local function others_of(me)
   local idx, out = {}, {}
   for i, s in ipairs(me.stops) do if not idx[s.id] then idx[s.id] = i end end
+  local nick, num = my_nick(), digits4(omsi.bus.number())
   for _, b in ipairs(buses) do
-    if fresh(b) and b.id ~= my_id and my_map and b.map == my_map and b.trip == me.trip and idx[b.next_id] then   -- 같은 맵 유저만
+    -- 내 차는 띠에 안 그림: 아는 id·닉네임이 나·내 자리에 있는 버스 전부 (확실하지 않아도 빼는 쪽)
+    local mine = b.id == my_id or nick_is_me(b, nick, num) or at_my_spot(b, me)
+    if fresh(b) and not mine and my_map and b.map == my_map and b.trip == me.trip and idx[b.next_id] then   -- 같은 맵 유저만
       out[#out + 1] = { p = pos_of(me.stops, idx[b.next_id], b.dist, b.at), label = short(b.nick ~= "" and b.nick or b.id), user = true }
     end
   end
@@ -601,6 +650,13 @@ end
 
 -- ------------------------------------------------------------ 주기
 local function tick()
+  call_t0 = omsi.util.ms()
+  if resting() then return end
+  if not map_tabs then                              -- 한글표(270 KB)는 on_start 말고 여기서: 불러오기 직후 한 호출에 몰리지 않게
+    local mt = load_json("map_names_ko.json")
+    map_tabs = mt and mt.maps or {}
+    return                                          -- 이번 호출은 이것만
+  end
   -- 단말기 운행 시작 → OBIS 켬, 운행 종료 → 끔 (바뀌는 순간만: 그 사이 손으로 켜고 끈 건 그대로 둠)
   local run = term_running()
   if run ~= nil and term_running_was ~= nil and run ~= term_running_was and run ~= settings.enabled then
@@ -609,7 +665,7 @@ local function tick()
   end
   term_running_was = run
   if not settings.enabled then return end
-  if has_ws then
+  if has_ws and not owe_refresh then               -- 지난번에 패널을 미뤘으면 이번엔 받기 쉬고(다음 초에 몰아 읽음) 패널부터
     local m = omsi.ws.poll()
     if m and #m > 0 then
       msgs = msgs + #m
@@ -642,6 +698,9 @@ local function tick()
       auto_nickname()
     end
   end
+  -- 받기·보내기는 위에서 끝남. 피드가 커서 여기까지 20 ms 넘었으면 패널·노선 띠는 다음 초에
+  if busy() and not owe_refresh then owe_refresh = true; return end
+  owe_refresh = false
   local mine = find_me(me)
   if shown then refresh_panel(me, mine) end
   refresh_board(me)
@@ -688,8 +747,7 @@ function on_start()
     omsi.log("obis: OBIS Client(OBIS-client/OBIS-client.exe)가 없어 OBIS 기능을 끔")
     return
   end
-  local mt = load_json("map_names_ko.json")
-  map_tabs = mt and mt.maps or {}
+  start_ms = omsi.util.ms()
   if settings.enabled then switch_on() end
   omsi.every(1, tick)
   omsi.input.hotkey("Ctrl+Shift+KeyO", function() set_enabled(not settings.enabled) end)
