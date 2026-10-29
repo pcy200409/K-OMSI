@@ -94,6 +94,12 @@ pub fn publish(player: Option<&crate::player::Player>, duty: Option<&PlayerDuty>
             "tile_x": tx_ as i64, "tile_y": ty_ as i64,
             "local_x": pos.x - tx_ * ts, "local_y": pos.y - ty_ * ts,
             "heading": pl.vehicle.heading,
+            // pedals 0..1 (a controller wins over the keys, as in the cab) and the bus's total
+            // mileage, for outside scoring tools (the Korean "light taco" / DTG apps)
+            "throttle": pl.analog.throttle.unwrap_or(pl.axes.throttle),
+            "brake": pl.analog.brake.unwrap_or(pl.axes.brake),
+            "clutch": pl.analog.clutch.unwrap_or(pl.axes.clutch),
+            "odometer_km": pl.vehicle.odometer_km(),
             "speed_kmh": pl.vehicle.physics.velocity_kmh(),
             "delay_s": pl.vehicle.host.tt_delay,
             "passengers": humans.map(|h| h.riding()),
