@@ -95,9 +95,21 @@ local function stop_order(key, sid)
   return nil
 end
 
+-- 지금 맵의 OBIS mapId (main 의 pick_map 이 정함). mapId = 그 맵 노선만 / false = OBIS 에 없는 맵(노선 안 붙임) /
+-- nil = 모르는 맵(원래 규칙). trip 파일명은 맵끼리 겹쳐서(청남·남천 101 (to ...)) 다른 맵 노선으로 보내는 걸 막음 (2026-10-27)
+local cur_map = nil
+function M.set_map(id) cur_map = id end
+local function map_ok(key)
+  if cur_map == nil then return true end
+  if cur_map == false then return false end
+  local info = load_index().routes[key]
+  return info ~= nil and info.map == cur_map
+end
+
 -- _route_key_for_trip_file: trip 파일명 일치가 최종 권위, 여러 맵에 같은 이름이면 다음 정류장 id 로 좁힘
 local function key_for_trip(trip, sid)
-  local cands = load_index().trips[norm_trip(trip)] or {}
+  local cands = {}
+  for _, k in ipairs(load_index().trips[norm_trip(trip)] or {}) do if map_ok(k) then cands[#cands + 1] = k end end
   if #cands == 1 then return cands[1] end
   if #cands > 1 and sid and sid ~= 0 then
     local narrowed = {}
@@ -114,7 +126,7 @@ local function key_by_position(line, sid, sidx)
   if not sid or sid == 0 then return nil end
   local best, bestd = nil, math.huge
   for key, info in pairs(load_index().routes) do
-    if base_line(info.line) == base_line(line) and has_stop(key, sid) then
+    if map_ok(key) and base_line(info.line) == base_line(line) and has_stop(key, sid) then
       local d = math.abs((stop_order(key, sid) or 0) - (sidx or 0))
       if d < bestd or (d == bestd and best and key < best) then best, bestd = key, d end
     end
