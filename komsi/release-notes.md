@@ -1,6 +1,6 @@
 <p align="center"><img src="https://raw.githubusercontent.com/pcy200409/K-OMSI/branding/komsi/logo.png" alt="K-OMSI" width="470"></p>
 
-**K-OMSI 0.4** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.45 이후 main(`0301e4b4`)을 바탕으로 K-OMSI 수정을 얹은 빌드입니다. 이번부터 K-OMSI 버전은 0.4.x로 따로 매기고, 맵 편집기 [openMapper](https://github.com/openOMSI-org/openMapper) 0.1.15(K-OMSI 수정판)을 함께 넣었습니다.
+**K-OMSI 0.4** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.45 이후 main(`17be2298`)을 바탕으로 K-OMSI 수정을 얹은 빌드입니다. 이번부터 K-OMSI 버전은 0.4.x로 따로 매기고, 맵 편집기 [openMapper](https://github.com/openOMSI-org/openMapper) 0.1.15(K-OMSI 수정판)을 함께 넣었습니다.
 
 > **비공식 포크입니다.** K-OMSI는 공식 openOMSI(openOMSI.org)와 관계없는 독립 프로젝트이며, openOMSI의 이름·로고는 원작자의 것입니다([TRADEMARKS.md](https://github.com/pcy200409/K-OMSI/blob/release/TRADEMARKS.md)). 문제는 공식 저장소가 아니라 [K-OMSI 이슈](https://github.com/pcy200409/K-OMSI/issues)로 알려 주세요.
 >
@@ -38,16 +38,23 @@
 
 ## openOMSI 0.3.45 이후 main 변경사항 (요약)
 
-공식 CHANGELOG에는 아직 올라오지 않았고, main에 들어온 커밋 21개의 제목 기준입니다.
+공식 CHANGELOG에는 아직 올라오지 않았고, main에 들어온 커밋의 제목 기준입니다.
 
 ### 새 기능
 - **게임·런처 UI 테마 통일**: 인터페이스 테마 설정이 생겨 런처에서 정한 테마가 게임 UI에도 적용되고, 밝은/어두운 UI 팔레트가 런타임에 바뀌며 게임 패널들도 밝은 테마를 지원합니다.
 - **Stamper 유틸리티**(#3388).
+- **도로에 눈이 쌓임**: 눈이 오면 도로에 눈이 쌓이고 바퀴 자국·바퀴 흔적이 남으며 지붕에도 눈이 쌓입니다. 게임 설정과 런처에 쌓인 눈을 켜고 끄는 항목이 생겼습니다.
+- **런처에 플러그인 없이 시작하는 선택 항목**(#3379).
 
 ### 수정
 - **압축 텍스처 캐시**: 텍스처가 그대로인 업데이트에서는 캐시가 유지됩니다.
 - **GPU 진단**: 미러·데스크톱·스테레오 화면의 GPU 진단을 따로 보고합니다.
 - **스크립트**: 열린 `{if}` 안의 `{end}`는 그 지점에 닿았을 때만 블록을 벗어납니다.
+- **조명**: Enhanced에서 도로 위 전조등이 너무 세던 것을 줄였고, 손상된 `[light_enh_2]`가 거대한 빛번짐을 그리지 않습니다(런던 Lower Marsh).
+- **시작·멈춤**: SuperRadio를 설치한 채 버스 라디오를 켜면 게임이 멈추던 문제, DXC 없는 DirectX 12에서 Enhanced 장면 셰이더가 FXC 최적화기를 넘치게 해 시작하지 못하던 문제를 고쳤습니다.
+- **투어·시간표**(#3142): 서버 플레이어가 투어를 바꾸거나 끝낼 수 있고, 투어 버스는 내린 자리에서 첫 정류장까지 올 때까지 기다리며, 구간 끝에 붙들린 버스는 정차 시간을 유지합니다.
+- **AI·물리**(#3161): 단단한 스프링의 AI 차량(GT6M, Schiff1)이 NaN이 되던 문제와 NaN 위치의 장애물이 버스를 NaN으로 만들던 문제를 고쳤습니다.
+- **기타**: 잘못된 글꼴 문자를 공백으로 그리고, 빈 소리 파일은 거부하며 없는 texchanges 파일은 한 번만 알립니다(#3354), 게이트웨이 주소를 파싱하고 ws(s) 주소는 `/ws`를 씁니다, 세르비아어 번역을 다듬었습니다.
 - **의존성**: zstd를 패치된 버전으로 올렸습니다. 런처가 저장된 인터페이스 테마를 시작할 때 유지합니다.
 
 ## openOMSI 0.3.43 ~ 0.3.45 공식 변경사항 (요약)
