@@ -207,8 +207,10 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_NAV_SCHEDULE` | bool | off | use | app | Navigation map shows the schedule. |
 | `OMSI_NO_MAP_CACHE` | bool | off | use | scene | Read the map's navigator layers (houses, ground, paving) again instead of from the cache. |
 | `OMSI_OBIS_CLIENT_DIR` | text | - | use | plugin | K-OMSI: the OBIS client's folder (the one with OBIS-client.exe), instead of looking for it under the OMSI folders. |
+| `OMSI_OBIS_FETCHED_DIR` | text | - | use | plugin | K-OMSI: where the routes fetched from OBIS for a line the OBIS client lacks are kept, instead of ~/.openomsi/obis_routes (tests). |
 | `OMSI_OBIS_INGEST_URL` | text | - | use | plugin | K-OMSI: another address the player's bus is sent to instead of OBIS (tests, a local stand-in). |
 | `OMSI_OBIS_PREFS_URL` | text | - | use | plugin | K-OMSI: another address of the OBIS vehicle settings (tests, a local stand-in). |
+| `OMSI_OBIS_ROUTES_URL` | text | - | use | plugin | K-OMSI: another address of the OBIS routes (https://obis.kr/api/routes) a missing line is fetched from (tests, a local stand-in). |
 | `OMSI_OBIS_TOKEN` | text | - | use | plugin | K-OMSI: the device token sent to OBIS instead of the OBIS client's own (tests). |
 | `OMSI_ONLY_MESH` | text | - | use | scene | a\|b: draw only the meshes whose file names contain one of the parts. |
 | `OMSI_ONLY_OBJECT` | text | - | use | scene | Load only the objects whose file name contains this text. |

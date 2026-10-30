@@ -2402,6 +2402,136 @@
       "permission": "ui"
     },
     {
+      "name": "obis.fetch_routes",
+      "group": "network",
+      "since": "0.2.22",
+      "doc": "Fetches from OBIS (`https://obis.kr/api/routes`) the routes of a line number the OBIS client's `data\\routes` lacks (an old or empty one), in the background, keeps them in `~/.openomsi/obis_routes` (fetched again after a week) and has `obis.routes` read again with them. `nil` while fetching, then how many routes were added (0: none to add, or OBIS did not answer). Once a session per line number; a request at most every 0.6 s.",
+      "params": [
+        {
+          "name": "line",
+          "type": "string",
+          "optional": false
+        }
+      ],
+      "returns": "number or nil",
+      "multi": false,
+      "permission": "network_remote"
+    },
+    {
+      "name": "obis.map_names",
+      "group": "network",
+      "since": "0.2.22",
+      "doc": "A map's stop names as the OBIS client has them: the map's name of a stop -> the Korean one (its `maps\\<map>\\map.json`). `map` is a route's `map` of `obis.routes`. `nil` without the OBIS client or the map.",
+      "params": [
+        {
+          "name": "map",
+          "type": "string",
+          "optional": false
+        }
+      ],
+      "returns": "table or nil",
+      "multi": false,
+      "permission": "network_remote"
+    },
+    {
+      "name": "obis.prefs",
+      "group": "network",
+      "since": "0.2.22",
+      "doc": "The vehicle settings OBIS has for this device, as the OBIS client's \"차량 설정\" shows them: `nickname`, `crowdType` (`\"seat\"`, `\"stand\"`), `seatCapacity` (1 to 80), `showStandCrowd`, `lowFloor`, `vehicleBody` (`\"normal\"`, `\"night\"`: the last bus). `nil` before they are read (after `obis.start`).",
+      "params": [],
+      "returns": "table or nil",
+      "multi": false,
+      "permission": "network_remote"
+    },
+    {
+      "name": "obis.route_text",
+      "group": "network",
+      "since": "0.2.22",
+      "doc": "One route of the OBIS client (a `file` of `obis.routes`) as its JSON text.",
+      "params": [
+        {
+          "name": "file",
+          "type": "string",
+          "optional": false
+        }
+      ],
+      "returns": "string or nil",
+      "multi": false,
+      "permission": "network_remote"
+    },
+    {
+      "name": "obis.routes",
+      "group": "network",
+      "since": "0.2.22",
+      "doc": "The OBIS client's routes, to match the player's trip to one: `{default_map, routes = {[key] = {file, line, map, stops}}, trips = {[trip file] = {keys}}}` (`stops` the stop object ids in order; a trip file lower case, without `.ttp`). Read from the client's `data\\routes` on a worker the first time: `nil` until then, and without the OBIS client.",
+      "params": [],
+      "returns": "table or nil",
+      "multi": false,
+      "permission": "network_remote"
+    },
+    {
+      "name": "obis.send",
+      "group": "network",
+      "since": "0.2.22",
+      "doc": "Hands OBIS the state of the player's bus: the OBIS client's snapshot as JSON text, at most 256 kB. Only the newest is sent, at most twice a second; one not sent yet is replaced.",
+      "params": [
+        {
+          "name": "snapshot",
+          "type": "string",
+          "optional": false
+        }
+      ],
+      "returns": "true, or false and the reason",
+      "multi": true,
+      "permission": "network_remote"
+    },
+    {
+      "name": "obis.set_prefs",
+      "group": "network",
+      "since": "0.2.22",
+      "doc": "Saves vehicle settings on OBIS (the keys of `obis.prefs`, any of them), in the background; `obis.prefs` has them once OBIS took them.",
+      "params": [
+        {
+          "name": "prefs",
+          "type": "table",
+          "optional": false
+        }
+      ],
+      "returns": "true, or false and the reason",
+      "multi": false,
+      "permission": "network_remote"
+    },
+    {
+      "name": "obis.start",
+      "group": "network",
+      "since": "0.2.22",
+      "doc": "Starts sending the player's bus to OBIS (`wss://obis.kr/api/ingest`) in the background, as the OBIS client does. The device's token is the OBIS client's (its `config.local.json` next to the game) or K-OMSI's own (`~/.openomsi/obis_device.json`, registered once when there is none); the plugin never sees it. Give the snapshots with `omsi.obis.send`.",
+      "params": [],
+      "returns": "true, or false and the reason",
+      "multi": true,
+      "permission": "network_remote"
+    },
+    {
+      "name": "obis.state",
+      "group": "network",
+      "since": "0.2.22",
+      "doc": "The sending: `\"connecting\"`, `\"open\"`, `\"waiting\"` (broken, opened again soon), `\"no_token\"` (no token and registering failed: tried again soon) or `\"closed\"`; how many snapshots went; where the token came from (`\"obis_client\"`, `\"komsi\"`, `\"komsi_registered\"`; empty before it is known).",
+      "params": [],
+      "returns": "state, sent, token",
+      "multi": false,
+      "permission": "network_remote"
+    },
+    {
+      "name": "obis.stop",
+      "group": "network",
+      "since": "0.2.22",
+      "doc": "Stops sending (OBIS shows the bus as gone after a while).",
+      "params": [],
+      "returns": "nil",
+      "multi": false,
+      "permission": "network_remote"
+    },
+    {
       "name": "object.info",
       "group": "object",
       "since": "0.2.22",
