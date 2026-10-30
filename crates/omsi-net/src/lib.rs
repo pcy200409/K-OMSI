@@ -90,6 +90,8 @@ mod paths;
 pub use paths::{human_path, vehicle_path};
 mod join_target;
 pub use join_target::{describe_join, parse_join, JoinTarget};
+mod version_notice;
+pub use version_notice::version_mismatch_text;
 pub mod addrs;
 pub mod bridge;
 pub mod wire;
@@ -1605,7 +1607,7 @@ impl LanSession {
             JoinTarget::Direct { addrs, session, protocol } => {
                 if let Some(p) = protocol {
                     if p as u32 != PROTOCOL {
-                        return Err(format!("the session code was made by a game with LAN protocol {p}, this game speaks protocol {PROTOCOL} - both players need the same version"));
+                        return Err(version_mismatch_text(p as u32, PROTOCOL, None));
                     }
                 }
                 Self::join_addr(addrs, session, name, world).map_err(|e| format!("cannot open a network socket: {e}"))
@@ -2786,7 +2788,7 @@ impl LanSession {
                 ("HELLO", Role::Client) | ("DISCOVER", Role::Client) => {}
                 // an older game that got past the hello somehow (or sends its poses blindly)
                 ("POSE", Role::Host) if !self.peers.values().any(|p| p.addr == Some(from)) => {
-                    self.reject(from, &format!("the host runs LAN protocol {PROTOCOL}, your game an older one - both players need the same version of the game"));
+                    self.reject(from, &version_mismatch_text(PROTOCOL, 0, version_notice::this_version()));
                 }
                 _ => {}
             }
@@ -3021,8 +3023,8 @@ impl LanSession {
             n => n,
         };
         if proto != PROTOCOL {
-            log::warn!("LAN: {from} speaks protocol {proto}, we speak {PROTOCOL}; turned away");
-            self.reject(from, &format!("the host runs LAN protocol {PROTOCOL}, your game protocol {proto} - both players need the same version of the game"));
+            log::warn!("LAN: {from} speaks protocol {proto}, we speak {PROTOCOL}; turned away ({} game)", if proto < PROTOCOL { "an older" } else { "a newer" });
+            self.reject(from, &version_mismatch_text(PROTOCOL, proto, version_notice::this_version()));
             return;
         }
         let asked = field(parts, 2);
@@ -3211,7 +3213,7 @@ impl LanSession {
         let was_timed_out = self.timed_out;
         let proto = field(parts, 1).parse::<u32>().unwrap_or(1);
         if proto != PROTOCOL {
-            let why = format!("the host runs LAN protocol {proto}, this game protocol {PROTOCOL}");
+            let why = version_mismatch_text(proto, PROTOCOL, None);
             self.turned_away = Some(why.clone());
             self.rejected = Some(why);
             return;
