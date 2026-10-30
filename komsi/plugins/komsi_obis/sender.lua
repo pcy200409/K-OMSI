@@ -201,6 +201,19 @@ end
 
 -- ------------------------------------------------------------ 한 번의 snapshot
 -- game: { duty, stops, x, y, z, passengers, next_dist, has_bus }
+-- 이 PC 의 OBIS Client 노선 자료(data\routes)에 내 노선이 없으면(옛판·빈 폴더) K-OMSI 가 OBIS 에서 그 노선번호만
+-- 받아 옴 → 받으면 색인을 다시 읽음. 노선번호마다 한 번. (2026-10-30 제보: 노선 '-'·다음 정류장 ID 로 올라가던 버스)
+local fetched = {}
+local function fetch_missing(line)
+  line = tostring(line or ""):gsub("^%s+", ""):gsub("%s+$", "")
+  if line == "" or fetched[line] or cur_map == false then return end   -- (OBIS 에 없는 맵은 노선을 안 붙임)
+  if not (omsi.obis and omsi.obis.fetch_routes) then fetched[line] = true; return end
+  local n = omsi.obis.fetch_routes(line)
+  if n == nil then return end                    -- 받는 중
+  fetched[line] = true
+  if n > 0 then idx = nil end
+end
+
 function M.snapshot(g)
   local now = omsi.util.now()
   local duty = g.duty
@@ -212,6 +225,7 @@ function M.snapshot(g)
     local sid = math.floor(tonumber(ns.id) or 0)
     local sidx = math.max(0, (ns.number or 1) - 1)
     local key = key_for_trip(duty.trip_name, sid) or key_by_position(duty.line, sid, sidx)
+    if not key then fetch_missing(duty.line) end
     if key ~= st.key then st.key = key end
     r = route(key)
     -- 노선 화면 좌표: 이전·다음 정류장 사이를 남은 거리 비율만큼 (호환판 _route_frame_xy, 단 이 노선의 정류장 좌표로)
