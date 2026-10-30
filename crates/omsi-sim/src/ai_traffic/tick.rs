@@ -512,6 +512,7 @@ impl TrafficSim {
         let (stop_at, why) = self.service_and_park(i, ts, &way, kerb_swerve, park, stop_at, why);
         let (stop_at, why) = self.end_of_way(i, ts, &way, stop_at, why);
         let (stop_at, why) = self.scenery_stop(i, ts, stop_at, why);
+        let (stop_at, why) = self.flood_stop(i, &way, stop_at, why);
         self.drive_car(i, ts, lead, stop_at, why, light, yield_at, merge_wait)
     }
 
@@ -1014,6 +1015,45 @@ impl TrafficSim {
 
     /// The end of the way: a timetable bus at the end of its trip drives on as ordinary
     /// traffic until it is out of sight; a dead end is a place to stop.
+    /// K-OMSI: flood water deeper than `FLOOD_STOP` on car `i`'s way ahead: it stops short of
+    /// it, as a driver does at a flooded underpass (one already in the water drives on out).
+    fn flood_stop(&self, i: usize, way: &[(usize, f32)], stop_at: Option<f32>, why: (&'static str, f32)) -> (Option<f32>, (&'static str, f32)) {
+        const FLOOD_STOP: f32 = 0.3;
+        const LOOK: f32 = 80.0;
+        const STEP: f32 = 4.0;
+        if !crate::flood::any_water() {
+            return (stop_at, why);
+        }
+        let st = &self.cars[i].state;
+        if self.net.lanes[st.lane].kind != LaneKind::Street {
+            return (stop_at, why);
+        }
+        for &(l, d) in way {
+            let lane = &self.net.lanes[l];
+            let len = lane.length();
+            if d > LOOK || stop_at.is_some_and(|s| d > s) {
+                break;
+            }
+            let mut s = ((st.front - d).max(0.0) / STEP).ceil() * STEP;
+            while s <= len && d + s <= LOOK {
+                let (p, _) = lane.at(s);
+                if crate::flood::water_depth(p.x, p.y) > FLOOD_STOP {
+                    let at = d + s - 3.0;
+                    if at <= st.front + 0.5 {
+                        // (its front is in the water already)
+                        return (stop_at, why);
+                    }
+                    return match stop_at {
+                        Some(x) if x <= at => (stop_at, why),
+                        _ => (Some(at), if at < why.1 { ("flood", at) } else { why }),
+                    };
+                }
+                s += STEP;
+            }
+        }
+        (stop_at, why)
+    }
+
     fn end_of_way(&mut self, i: usize, ts: &TickScene, way: &[(usize, f32)], mut stop_at: Option<f32>, mut why: (&'static str, f32)) -> (Option<f32>, (&'static str, f32)) {
         let debug = ts.debug;
         // the end of the way: a timetable bus at the end of its trip drives on as
