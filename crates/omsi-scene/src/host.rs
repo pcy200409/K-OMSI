@@ -111,12 +111,12 @@ pub fn install_sim_decoder() {
             .map(|i| omsi_sim::image_decode::DecodedImage { width: i.width, height: i.height, rgba: i.rgba, has_alpha: i.has_alpha })
             .map_err(|e| e.to_string())
     });
-    // (the classic engine runs every page unless the page asks for the modern one)
+    // (the classic engine (and the K-OMSI Auto browser display) runs every page unless the page asks for the modern one)
     omsi_sim::htmltex::set_backend(|width, height, html, api| {
         if omsi_htmlpage::wanted(html) {
             Box::new(omsi_htmlpage::EngineRenderer::with_api(width, height, html, api))
         } else {
-            Box::new(omsi_htmlengine::EngineRenderer::with_api(width, height, html, api))
+            omsi_htmlengine::vehicle_renderer(width, height, html, api)
         }
     });
 }
