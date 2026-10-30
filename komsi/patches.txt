@@ -19,3 +19,8 @@ patch/roof-snow
 patch/flood
 patch/weather
 patch/korean-codepage
+patch/low-vram
+patch/lan-version-notice
+patch/mirror-weather-light
+patch/nav-first-stop
+patch/obis-route-fallback
