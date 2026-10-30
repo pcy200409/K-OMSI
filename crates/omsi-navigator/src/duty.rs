@@ -12,9 +12,10 @@ pub fn duty_parts(duty: Option<&omsi_sim::timetable_run::PlayerDuty>) -> (Option
     let stops = trip
         .stops
         .iter()
+        .enumerate()
         .skip(d.next_stop)
-        .filter(|s| s.stops)
-        .map(|s| NavStop { object_id: s.object_id, position: s.position.unwrap_or(DVec3::ZERO), name: s.name.clone(), arrival: s.arr, closed: s.closed.clone() })
+        .filter(|(_, s)| s.stops)
+        .map(|(i, s)| NavStop { object_id: s.object_id, position: s.position.unwrap_or(DVec3::ZERO), name: s.name.clone(), arrival: s.arr, closed: s.closed.clone(), start: i == 0 })
         .collect();
     (Some(line.to_string()), Some(trip.terminus.clone()), stops, Some((format!("{}/{}", d.trip_index, trip.name), trip.name.clone())))
 }
@@ -28,7 +29,7 @@ impl Navigator {
         let Some(trip) = d.trips.get(d.trip_index) else { return };
         self.completed_stops = trip.stops.iter().enumerate()
             .filter(|(i, s)| s.stops && (*i < d.next_stop || self.trip_completed))
-            .map(|(_, s)| NavStop { object_id: s.object_id, position: s.position.unwrap_or(DVec3::ZERO), name: s.name.clone(), arrival: s.arr, closed: s.closed.clone() })
+            .map(|(i, s)| NavStop { object_id: s.object_id, position: s.position.unwrap_or(DVec3::ZERO), name: s.name.clone(), arrival: s.arr, closed: s.closed.clone(), start: i == 0 })
             .collect();
     }
 }
