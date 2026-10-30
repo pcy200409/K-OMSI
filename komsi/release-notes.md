@@ -1,6 +1,6 @@
 <p align="center"><img src="https://raw.githubusercontent.com/pcy200409/K-OMSI/branding/komsi/logo.png" alt="K-OMSI" width="470"></p>
 
-**K-OMSI 0.4** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.45 이후 main(`17be2298`)을 바탕으로 K-OMSI 수정을 얹은 빌드입니다. 이번부터 K-OMSI 버전은 0.4.x로 따로 매기고, 맵 편집기 [openMapper](https://github.com/openOMSI-org/openMapper) 0.1.17(K-OMSI 수정판)을 함께 넣었습니다.
+**K-OMSI 0.4** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.45 이후 main(`d2e1d3e8`, 0.3.46 포함)을 바탕으로 K-OMSI 수정을 얹은 빌드입니다. 이번부터 K-OMSI 버전은 0.4.x로 따로 매기고, 맵 편집기 [openMapper](https://github.com/openOMSI-org/openMapper) 0.1.17(K-OMSI 수정판)을 함께 넣었습니다.
 
 > **비공식 포크입니다.** K-OMSI는 공식 openOMSI(openOMSI.org)와 관계없는 독립 프로젝트이며, openOMSI의 이름·로고는 원작자의 것입니다([TRADEMARKS.md](https://github.com/pcy200409/K-OMSI/blob/release/TRADEMARKS.md)). 문제는 공식 저장소가 아니라 [K-OMSI 이슈](https://github.com/pcy200409/K-OMSI/issues)로 알려 주세요.
 >
@@ -45,6 +45,7 @@
 - **Stamper 유틸리티**(#3388).
 - **도로에 눈이 쌓임**: 눈이 오면 도로에 눈이 쌓이고 바퀴 자국·바퀴 흔적이 남으며 지붕에도 눈이 쌓입니다. 게임 설정과 런처에 쌓인 눈을 켜고 끄는 항목이 생겼습니다.
 - **런처에 플러그인 없이 시작하는 선택 항목**(#3379).
+- **멀티플레이 호스트 포트 예약**: 두 전송(transport) 포트를 모두 예약한 뒤 세션을 알리고, 예약된 포트 범위에서도 찾아 접속합니다. 한 컴퓨터에서의 접속 거부는 바로 알려 줍니다.
 
 ### 수정
 - **압축 텍스처 캐시**: 텍스처가 그대로인 업데이트에서는 캐시가 유지됩니다.
@@ -55,6 +56,7 @@
 - **투어·시간표**(#3142): 서버 플레이어가 투어를 바꾸거나 끝낼 수 있고, 투어 버스는 내린 자리에서 첫 정류장까지 올 때까지 기다리며, 구간 끝에 붙들린 버스는 정차 시간을 유지합니다.
 - **AI·물리**(#3161): 단단한 스프링의 AI 차량(GT6M, Schiff1)이 NaN이 되던 문제와 NaN 위치의 장애물이 버스를 NaN으로 만들던 문제를 고쳤습니다.
 - **기타**: 잘못된 글꼴 문자를 공백으로 그리고, 빈 소리 파일은 거부하며 없는 texchanges 파일은 한 번만 알립니다(#3354), 게이트웨이 주소를 파싱하고 ws(s) 주소는 `/ws`를 씁니다, 세르비아어 번역을 다듬었습니다.
+- **표시·배경**: 정보 바의 온도를 소수점 한 자리로 표시하고, 배경 그림(파노라마)이 다가갈수록 비켜서 도로 위에 흐릿하게 서 있지 않으며, F4 지도에서 옮긴 버스가 카메라가 보는 방향을 향해 섭니다.
 - **의존성**: zstd를 패치된 버전으로 올렸습니다. 런처가 저장된 인터페이스 테마를 시작할 때 유지합니다.
 
 ## openOMSI 0.3.43 ~ 0.3.45 공식 변경사항 (요약)
