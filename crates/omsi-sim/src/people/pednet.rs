@@ -423,6 +423,10 @@ impl PedNet {
                 }
             }
         }
+        // not onto a pavement the map gives no foot traffic (`[rule] trafficdensity 0`),
+        // unless that leaves nowhere to go
+        let open: Vec<Leg> = list.iter().copied().filter(|o| net.lanes[o.lane].density > 0.0).collect();
+        let list = if open.is_empty() { list } else { open };
         // the way on rather than back: a path leaving the junction within 110° of the way
         // the walker came (there usually is one - a pavement goes on past a side street),
         // else any. Picked from all, a stroller would turn round at every corner and walk
