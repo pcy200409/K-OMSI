@@ -151,7 +151,7 @@ const graphics = {
         { type: 'select', key: 'video_memory', label: 'Video memory', options: videoMemory, help: 'Everything the game keeps on the graphics card: textures, models and the picture itself. Automatic is nine tenths of the card.' },
         { type: 'toggle', key: 'texture_compression', label: 'Compress textures on loading' },
         // (off: block formats decoded on loading, for a driver that mishandles them)
-        { type: 'toggle', key: 'gpu_texture_compression', label: 'DXT/BC textures stay compressed on the GPU' },
+        { type: 'toggle', key: 'gpu_texture_compression', label: 'DXT/BC textures stay compressed on the GPU', help: 'Off takes four to eight times the video memory: only for a driver that draws them wrong. A card of 4 GB or less keeps them compressed.' },
         { type: 'section', title: 'Profiles' },
         { type: 'custom', id: 'profiles' },
       ],
