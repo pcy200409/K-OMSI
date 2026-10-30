@@ -190,12 +190,21 @@ fn field<'a>(m: &'a [(String, Value)], key: &str) -> Option<&'a Value> {
 fn build_route_index(dir: &std::path::Path) -> Value {
     let mut maps: Vec<String> = std::fs::read_dir(dir.join("maps")).map(|rd| rd.flatten().filter(|d| d.path().is_dir()).map(|d| d.file_name().to_string_lossy().into_owned()).collect()).unwrap_or_default();
     maps.sort();
-    let mut files: Vec<String> = std::fs::read_dir(dir.join("data/routes")).map(|rd| rd.flatten().map(|d| d.file_name().to_string_lossy().into_owned()).filter(|n| route_file_ok(n)).collect()).unwrap_or_default();
-    files.sort();
+    let names = |d: &std::path::Path| -> Vec<String> {
+        let mut v: Vec<String> = std::fs::read_dir(d).map(|rd| rd.flatten().map(|d| d.file_name().to_string_lossy().into_owned()).filter(|n| route_file_ok(n)).collect()).unwrap_or_default();
+        v.sort();
+        v
+    };
+    // the client's own first, then those fetched from OBIS for a line it lacks
+    let client = dir.join("data/routes");
+    let mut files: Vec<(PathBuf, String)> = names(&client).into_iter().map(|f| (client.clone(), f)).collect();
+    if let Some(fetched) = fetched_dir() {
+        files.extend(names(&fetched).into_iter().map(|f| (fetched.clone(), f)));
+    }
     let mut routes: Vec<(String, Value)> = Vec::new();
     let mut trips: Vec<(String, Value)> = Vec::new();
-    for f in files {
-        let Ok(text) = std::fs::read_to_string(dir.join("data/routes").join(&f)) else { continue };
+    for (folder, f) in files {
+        let Ok(text) = std::fs::read_to_string(folder.join(&f)) else { continue };
         let Ok(Value::Map(r)) = crate::api::json::decode(&text, false) else { continue };
         let s = |k: &str| match field(&r, k) {
             Some(Value::Str(t)) => t.clone(),
@@ -204,6 +213,9 @@ fn build_route_index(dir: &std::path::Path) -> Value {
             _ => String::new(),
         };
         let key = Some(s("routeKey")).filter(|k| !k.is_empty()).unwrap_or_else(|| f.trim_end_matches(".json").to_string());
+        if routes.iter().any(|(k, _)| *k == key) {
+            continue; // (a fetched copy of a route the client has)
+        }
         let stops: Vec<Value> = match field(&r, "stations") {
             Some(Value::List(l)) => l.iter().filter_map(|st| match st {
                 Value::Map(m) => match field(m, "id") {
@@ -229,7 +241,7 @@ fn build_route_index(dir: &std::path::Path) -> Value {
             ("stops".into(), Value::List(stops)),
         ])));
     }
-    log::info!("plugin obis: {} routes of the OBIS client read ({})", routes.len(), dir.display());
+    log::info!("plugin obis: {} routes of the OBIS client read ({}, and those fetched from OBIS)", routes.len(), dir.display());
     Value::Map(vec![
         ("default_map".into(), maps.first().map(|m| Value::Str(m.clone())).unwrap_or(Value::Nil)),
         ("routes".into(), Value::Map(routes)),
@@ -264,9 +276,11 @@ fn map_names(map: &str) -> Value {
     }
 }
 
+/// The index: not read yet (`None`), being read (`Some(None)`), read.
+static INDEX: Mutex<Option<Option<Value>>> = Mutex::new(None);
+
 /// The index, read on a worker the first time it is asked for (`nil` until it is there).
 fn route_index() -> Value {
-    static INDEX: Mutex<Option<Option<Value>>> = Mutex::new(None);
     let mut g = INDEX.lock().unwrap_or_else(|e| e.into_inner());
     match &*g {
         Some(Some(v)) => return v.clone(),
@@ -279,6 +293,150 @@ fn route_index() -> Value {
     let _ = std::thread::Builder::new().name("plugin obis routes".into()).spawn(move || {
         let v = build_route_index(&dir);
         *INDEX.lock().unwrap_or_else(|e| e.into_inner()) = Some(Some(v));
+    });
+    Value::Nil
+}
+
+// ------------------------------------------------------------ routes the client lacks
+
+const ROUTES_URL: &str = "https://obis.kr/api/routes";
+/// Between two requests to OBIS (it answers too many with 429).
+const FETCH_GAP: Duration = Duration::from_millis(600);
+/// A fetched route older than this is fetched again.
+const FETCH_KEEP: Duration = Duration::from_secs(7 * 24 * 3600);
+/// At most this many routes of one line number (its directions, on each map that has one so numbered).
+const FETCH_MAX: usize = 12;
+
+/// Where the routes fetched from OBIS are kept: `~/.openomsi/obis_routes`.
+fn fetched_dir() -> Option<PathBuf> {
+    if let Some(d) = std::env::var_os("OMSI_OBIS_FETCHED_DIR") {
+        return Some(PathBuf::from(d)); // (tests)
+    }
+    home().map(|h| h.join(".openomsi/obis_routes"))
+}
+
+/// A route's file: the client's `data/routes`, else the fetched one.
+fn route_file(name: &str) -> Option<PathBuf> {
+    if !route_file_ok(name) {
+        return None;
+    }
+    let own = obis_client_dir().map(|d| d.join("data/routes").join(name)).filter(|p| p.is_file());
+    own.or_else(|| fetched_dir().map(|d| d.join(name)).filter(|p| p.is_file()))
+}
+
+/// A route key as it may go into the address and a file name.
+fn route_key_ok(key: &str) -> bool {
+    !key.is_empty() && key.len() <= 120 && !key.contains("..") && key.chars().all(|c| c.is_alphanumeric() || " -_.()&,'".contains(c))
+}
+
+fn url_part(s: &str) -> String {
+    s.bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect()
+}
+
+/// The keys of the one-direction routes OBIS has for this line number (on any map).
+fn line_routes(list: &str, line: &str) -> Vec<String> {
+    let Ok(Value::Map(m)) = crate::api::json::decode(list, false) else { return Vec::new() };
+    let Some(Value::List(all)) = field(&m, "routes") else { return Vec::new() };
+    let mut keys: Vec<String> = Vec::new();
+    for r in all {
+        let Value::Map(r) = r else { continue };
+        if !matches!(field(r, "lineNumber"), Some(Value::Str(n)) if n.trim() == line) {
+            continue;
+        }
+        match field(r, "subRoutes") {
+            Some(Value::List(subs)) if !subs.is_empty() => keys.extend(subs.iter().filter_map(|k| match k {
+                Value::Str(k) => Some(k.clone()),
+                _ => None,
+            })),
+            _ => {
+                if let Some(Value::Str(k)) = field(r, "routeKey") {
+                    keys.push(k.clone());
+                }
+            }
+        }
+    }
+    keys.retain(|k| route_key_ok(k));
+    keys.dedup();
+    keys.truncate(FETCH_MAX);
+    keys
+}
+
+/// Whether a route need not be fetched: the client has it, or it was fetched lately.
+fn have_route(key: &str) -> bool {
+    let name = format!("{key}.json");
+    if obis_client_dir().is_some_and(|d| d.join("data/routes").join(&name).is_file()) {
+        return true;
+    }
+    let fresh = |p: PathBuf| std::fs::metadata(p).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age < FETCH_KEEP);
+    fetched_dir().is_some_and(|d| fresh(d.join(&name)))
+}
+
+/// Fetches the routes of a line number the client lacks; how many were added.
+fn fetch_line(base: &str, line: &str) -> Result<usize, String> {
+    let get = |url: &str| -> Result<String, String> {
+        ureq::get(url).timeout(Duration::from_secs(15)).call().map_err(|e| e.to_string())?.into_string().map_err(|e| e.to_string())
+    };
+    let keys: Vec<String> = line_routes(&get(base)?, line).into_iter().filter(|k| !have_route(k)).collect();
+    if keys.is_empty() {
+        return Ok(0);
+    }
+    let dir = fetched_dir().ok_or("no home folder")?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let mut added = 0;
+    for key in keys {
+        std::thread::sleep(FETCH_GAP);
+        let text = match get(&format!("{base}/{}", url_part(&key))) {
+            Ok(t) => t,
+            Err(e) => {
+                log::warn!("plugin obis: route {key} not fetched: {e}");
+                continue;
+            }
+        };
+        // only a route as the client keeps them: one direction with its stations
+        let Ok(Value::Map(r)) = crate::api::json::decode(&text, false) else { continue };
+        if !matches!(field(&r, "stations"), Some(Value::List(l)) if !l.is_empty()) {
+            continue;
+        }
+        if std::fs::write(dir.join(format!("{key}.json")), &text).is_ok() {
+            added += 1;
+        }
+    }
+    Ok(added)
+}
+
+/// `obis.fetch_routes`: `nil` while fetching (started on the first call for a line), then how
+/// many routes were added. Once a session per line.
+fn fetch_routes(line: &str) -> Value {
+    static FETCHES: Mutex<Vec<(String, Option<usize>)>> = Mutex::new(Vec::new());
+    let line = line.trim().to_string();
+    if line.is_empty() || line.len() > 32 || obis_client_dir().is_none() {
+        return Value::Nil;
+    }
+    let mut g = FETCHES.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((_, done)) = g.iter().find(|(l, _)| *l == line) {
+        return done.map(|n| Value::Int(n as i64)).unwrap_or(Value::Nil);
+    }
+    g.push((line.clone(), None));
+    drop(g);
+    let _ = std::thread::Builder::new().name("plugin obis fetch".into()).spawn(move || {
+        // (tests: OMSI_OBIS_ROUTES_URL names a local server)
+        let base = std::env::var("OMSI_OBIS_ROUTES_URL").unwrap_or_else(|_| ROUTES_URL.to_string());
+        let n = match fetch_line(&base, &line) {
+            Ok(n) => n,
+            Err(e) => {
+                log::warn!("plugin obis: the routes of line {line} not fetched: {e}");
+                0
+            }
+        };
+        log::info!("plugin obis: line {line}: {n} routes fetched from OBIS");
+        if n > 0 {
+            // read again, with them
+            *INDEX.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        }
+        let mut g = FETCHES.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(e) = g.iter_mut().find(|(l, _)| *l == line) {
+            e.1 = Some(n);
+        }
     });
     Value::Nil
 }
@@ -690,9 +848,13 @@ pub static FNS: &[ApiFn] = &[
     def!("obis.routes", "network", [], "table or nil", "The OBIS client's routes, to match the player's trip to one: `{default_map, routes = {[key] = {file, line, map, stops}}, trips = {[trip file] = {keys}}}` (`stops` the stop object ids in order; a trip file lower case, without `.ttp`). Read from the client's `data\\routes` on a worker the first time: `nil` until then, and without the OBIS client.", NEW, NetworkRemote, false, |c, a| {
         if has_original("obis") { route_index() } else { Value::Nil }
     }),
+    def!("obis.fetch_routes", "network", [p("line", "string")], "number or nil", "Fetches from OBIS (`https://obis.kr/api/routes`) the routes of a line number the OBIS client's `data\\routes` lacks (an old or empty one), in the background, keeps them in `~/.openomsi/obis_routes` (fetched again after a week) and has `obis.routes` read again with them. `nil` while fetching, then how many routes were added (0: none to add, or OBIS did not answer). Once a session per line number; a request at most every 0.6 s.", NEW, NetworkRemote, false, |c, a| {
+        let line = a.str(0)?;
+        Ok::<_, ApiError>(if has_original("obis") { fetch_routes(&line) } else { Value::Nil })
+    }),
     def!("obis.route_text", "network", [p("file", "string")], "string or nil", "One route of the OBIS client (a `file` of `obis.routes`) as its JSON text.", NEW, NetworkRemote, false, |c, a| {
         let name = a.str(0)?;
-        let text = (has_original("obis") && route_file_ok(&name)).then(obis_client_dir).flatten().and_then(|d| std::fs::read_to_string(d.join("data/routes").join(&name)).ok());
+        let text = has_original("obis").then(|| route_file(&name)).flatten().and_then(|p| std::fs::read_to_string(p).ok());
         Ok::<_, ApiError>(text.map(Value::Str).unwrap_or(Value::Nil))
     }),
     def!("obis.map_names", "network", [p("map", "string")], "table or nil", "A map's stop names as the OBIS client has them: the map's name of a stop -> the Korean one (its `maps\\<map>\\map.json`). `map` is a route's `map` of `obis.routes`. `nil` without the OBIS client or the map.", NEW, NetworkRemote, false, |c, a| {
@@ -711,6 +873,34 @@ pub static FNS: &[ApiFn] = &[
 #[cfg(test)]
 mod tests {
     use super::check_url;
+
+    /// The real OBIS (three requests): `OMSI_OBIS_CLIENT_DIR` an empty folder, `OMSI_OBIS_FETCHED_DIR`
+    /// where they go; `cargo test -p omsi-plugin --lib fetches_a_line_from_obis -- --ignored`.
+    #[test]
+    #[ignore]
+    fn fetches_a_line_from_obis() {
+        let n = super::fetch_line(super::ROUTES_URL, "173-2").unwrap();
+        assert!(n >= 1, "{n}");
+        let dir = super::fetched_dir().unwrap();
+        let text = std::fs::read_to_string(dir.join("NCC_173-2_a.json")).unwrap();
+        assert!(text.contains("173-2 (to Hwasang-ri).ttp"));
+        assert_eq!(super::fetch_line(super::ROUTES_URL, "173-2").unwrap(), 0, "fetched lately: not again");
+    }
+
+    #[test]
+    fn a_missing_line_is_its_directions_on_every_map() {
+        let list = r#"{"routes":[
+            {"routeKey":"NCC_173_combined","mapId":"NCC","lineNumber":"173","subRoutes":["NCC_173_a","NCC_173_b"]},
+            {"routeKey":"NCC_173-1_combined","mapId":"NCC","lineNumber":"173-1","subRoutes":["NCC_173-1_a"]},
+            {"routeKey":"X_173","mapId":"X","lineNumber":" 173 "},
+            {"routeKey":"Y_173_combined","mapId":"Y","lineNumber":"173","subRoutes":["../evil","AM_Munsan Stn."]}
+        ]}"#;
+        assert_eq!(super::line_routes(list, "173"), ["NCC_173_a", "NCC_173_b", "X_173", "AM_Munsan Stn."]);
+        assert!(super::line_routes(list, "17").is_empty());
+        assert!(super::line_routes("not json", "173").is_empty());
+        assert_eq!(super::url_part("AM_Munsan Stn."), "AM_Munsan%20Stn.");
+        assert_eq!(super::url_part("NCC_173-2_a"), "NCC_173-2_a");
+    }
 
     #[test]
     fn only_the_listed_host_over_wss() {

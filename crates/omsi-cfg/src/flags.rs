@@ -427,8 +427,10 @@ flags! {
     OMSI_NO_VAR_SYNC: Bool, Switch, Use, "off", "LAN: no variable sync.";
     OMSI_NO_WHEEL_SLIP: Bool, Switch, Use, "off", "Every wheel grips, as before wheels turned on their own (A/B).";
     OMSI_OBIS_CLIENT_DIR: Text, Test, Use, "-", "K-OMSI: the OBIS client's folder (the one with OBIS-client.exe), instead of looking for it under the OMSI folders.";
+    OMSI_OBIS_FETCHED_DIR: Text, Test, Use, "-", "K-OMSI: where the routes fetched from OBIS for a line the OBIS client lacks are kept, instead of ~/.openomsi/obis_routes (tests).";
     OMSI_OBIS_INGEST_URL: Text, Test, Use, "-", "K-OMSI: another address the player's bus is sent to instead of OBIS (tests, a local stand-in).";
     OMSI_OBIS_PREFS_URL: Text, Test, Use, "-", "K-OMSI: another address of the OBIS vehicle settings (tests, a local stand-in).";
+    OMSI_OBIS_ROUTES_URL: Text, Test, Use, "-", "K-OMSI: another address of the OBIS routes (https://obis.kr/api/routes) a missing line is fetched from (tests, a local stand-in).";
     OMSI_OBIS_TOKEN: Text, Test, Use, "-", "K-OMSI: the device token sent to OBIS instead of the OBIS client's own (tests).";
     OMSI_OFFICIAL_KEY: Text, Setup, Use, "-", "File of the official server's signing key.";
     OMSI_OLD_WORLD_GRID: Bool, Switch, Use, "off", "Maps with world coordinates take the one tile size of 371.9 m (comparison).";
