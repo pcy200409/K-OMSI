@@ -165,6 +165,37 @@ pub(crate) fn follow_camera(traffic: Option<&traffic::Traffic>, id: u64) -> Opti
 /// as bright).
 const MIRROR_NIGHT_DIM: f32 = 0.8;
 
+/// How much of the light the weather took from the plain shading a mirror of an enhanced
+/// picture gives back by day (0 none, 1 all): the window's exposure lifts an overcast or
+/// rainy street most of the way to a clear day's level, the plainly lit mirrors kept the
+/// weather's gloom and showed a dark street beside a bright one.
+const MIRROR_WEATHER_LIFT: f32 = 0.8;
+
+/// The most the weather lift brightens a mirror (a downpour under a closed sky loses some
+/// two thirds of the plain light).
+const MIRROR_WEATHER_MAX: f32 = 2.5;
+
+/// What the plain light of a mirror is multiplied by to undo the weather's darkening as the
+/// window's exposure does (`omsi_scene::lights::apply_weather` turned round, by its overcast
+/// and rain): the light a white surface gets now against the same without the weather.
+fn mirror_weather_gain(l: &omsi_render::Lighting) -> f32 {
+    let (o, r) = (l.overcast.clamp(0.0, 1.0), l.rain.clamp(0.0, 1.0));
+    if o <= 0.0 && r <= 0.0 {
+        return 1.0;
+    }
+    let lum = |c: Vec3| c.dot(Vec3::new(0.3, 0.59, 0.11));
+    let sun = l.sun_dir.normalize_or_zero().z.max(0.0) * lum(l.sun_color);
+    let now = lum(l.ambient) + lum(l.secondary) + l.sun_intensity * sun;
+    // (apply_weather's factors; greying keeps the luminance)
+    let clear = lum(l.ambient) / ((1.0 + 0.25 * o) * (1.0 - 0.28 * r))
+        + lum(l.secondary) / ((1.0 - 0.15 * o) * (1.0 - 0.32 * r))
+        + sun;
+    if now <= 1e-4 {
+        return 1.0;
+    }
+    (clear / now).max(1.0).powf(MIRROR_WEATHER_LIFT).min(MIRROR_WEATHER_MAX)
+}
+
 /// The least radius a mirror's camera counts with in the visibility test (m). A mirror's
 /// camera sits in the middle of its glass; with the file's radius 0 (`[add_camera_reflexion]`)
 /// a mirror whose lower half shows at the edge of the picture - the SD200's right mirror
@@ -266,7 +297,10 @@ pub(crate) fn render_mirrors(
     if lighting.enhanced && !omsi_cfg::flags::OMSI_MIRROR_ENHANCED.is_set() && !renderer.options.mirror_enhanced {
         let alt = lighting.sun_dir.z.clamp(-1.0, 1.0).asin().to_degrees();
         let dark = 1.0 - ((alt + 6.0) / 12.0).clamp(0.0, 1.0);
-        let k = 1.0 - MIRROR_NIGHT_DIM * dark;
+        // (by day the weather's gloom is taken back as the window's exposure takes it; the
+        // night keeps its own dimming)
+        let lift = 1.0 + (mirror_weather_gain(&lighting) - 1.0) * (1.0 - dark);
+        let k = (1.0 - MIRROR_NIGHT_DIM * dark) * lift;
         lighting.ambient *= k;
         lighting.secondary *= k;
         lighting.sun_color *= k;
@@ -324,3 +358,29 @@ pub(crate) fn render_mirrors(
     seen.len()
 }
 
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn day() -> omsi_render::Lighting {
+        omsi_render::Lighting { sun_dir: Vec3::new(0.0, 0.5, 0.85), sun_intensity: 1.0, sun_color: Vec3::splat(0.6), secondary: Vec3::splat(0.4), ambient: Vec3::splat(0.35), ..Default::default() }
+    }
+
+    #[test]
+    fn clear_mirror_keeps_its_light() {
+        assert_eq!(mirror_weather_gain(&day()), 1.0);
+    }
+
+    #[test]
+    fn rainy_mirror_is_lifted_within_bounds() {
+        let mut l = day();
+        omsi_scene::lights::apply_weather(&mut l, 1.0, 1, 1.0, 0.0);
+        let g = mirror_weather_gain(&l);
+        assert!(g > 1.5 && g <= MIRROR_WEATHER_MAX, "{g}");
+        let mut light = day();
+        omsi_scene::lights::apply_weather(&mut light, 0.7, 1, 0.3, 0.0);
+        let g2 = mirror_weather_gain(&light);
+        assert!(g2 > 1.0 && g2 < g, "{g2} {g}");
+    }
+}
