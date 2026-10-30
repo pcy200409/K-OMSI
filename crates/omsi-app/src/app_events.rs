@@ -170,6 +170,22 @@ impl ApplicationHandler for App {
             WindowEvent::KeyboardInput { ref event, .. }
                 if event.state == ElementState::Released
                     && matches!(event.physical_key, PhysicalKey::Code(c) if input_script::is_modifier(c) && !self.input.keys.contains(&c)) => {}
+            // what an input method composes goes into the text field that has the keyboard
+            WindowEvent::Ime(ime) => self.on_ime(ime),
+            // a key the IME takes for its composing (a Hangul jamo, Backspace taking one
+            // back) is neither the field's nor the bus's
+            WindowEvent::KeyboardInput { ref event, .. }
+                if event.state == ElementState::Pressed
+                    && event.logical_key == winit::keyboard::Key::Named(winit::keyboard::NamedKey::Process)
+                    && self.input.ime_on =>
+            {
+                if let PhysicalKey::Code(code) = event.physical_key {
+                    self.input.ime_held.insert(code);
+                }
+            }
+            WindowEvent::KeyboardInput { ref event, .. }
+                if event.state == ElementState::Released
+                    && matches!(event.physical_key, PhysicalKey::Code(c) if self.input.ime_held.remove(&c)) => {}
             WindowEvent::KeyboardInput { event, .. } => {
                 // a plugin's text field being typed into takes the keys pressed (their
                 // releases go on, so that nothing held stays held)
@@ -394,6 +410,7 @@ impl ApplicationHandler for App {
             WindowEvent::Touch(t) => self.on_touch(event_loop, t),
             // (while the renderer is still being built, the window's start goes on instead)
             WindowEvent::RedrawRequested => {
+                self.sync_ime();
                 if !self.drive_window_start(event_loop) {
                     self.frame(event_loop);
                 }

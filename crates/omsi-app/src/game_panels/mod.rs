@@ -52,6 +52,16 @@ impl GamePanels {
     pub(crate) fn focused(&self) -> bool {
         self.ui.focused()
     }
+
+    /// Whether a field of the panels is being typed into.
+    pub(crate) fn typing(&self) -> bool {
+        self.ui.typing().is_some()
+    }
+
+    /// Text typed into the field being typed into (`None`: one character rubbed out).
+    pub(crate) fn type_text(&mut self, text: Option<&str>) {
+        self.ui.type_text(text);
+    }
 }
 
 // --- the elements --------------------------------------------------------------------------

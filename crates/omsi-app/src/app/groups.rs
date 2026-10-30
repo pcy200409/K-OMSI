@@ -291,6 +291,13 @@ pub(crate) struct InputState {
     /// The window lost the focus or was minimised or hidden: the keyboard and the mouse
     /// work nothing until it has the focus again (`App::input_lost` / `input_back`).
     pub(crate) input_away: bool,
+    /// The window lets the IME type (a text field has the keyboard, `App::sync_ime`).
+    pub(crate) ime_on: bool,
+    /// Characters of the IME's syllable being composed that stand in the field (put back
+    /// with its next change, `App::on_ime`).
+    pub(crate) ime_preedit: usize,
+    /// Keys the IME took for its composing: their release is its too.
+    pub(crate) ime_held: hashbrown::HashSet<KeyCode>,
     pub(crate) keys: hashbrown::HashSet<KeyCode>,
     /// Door trigger groups currently held by the Shift+number shortcut. Keeping the
     /// release until physical key-up prevents latched button states and door chatter.
