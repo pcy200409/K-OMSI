@@ -588,3 +588,58 @@ fn a_frame_panel_s_map_stays_inside_the_navigator() {
     let n = Navigator::new(true, 0.85, "bottom-left");
     assert_eq!((n.frame_panel, n.framed, n.frame_card), (None, None, None));
 }
+
+fn route_frame(bus: DVec3, heading: f64, stops: Vec<NavStop>) -> NavFrame<'static> {
+    NavFrame {
+        traffic: None,
+        touch: false,
+        players: vec![],
+        bus,
+        heading,
+        speed_kmh: 30.0,
+        outside_temp: 20.0,
+        inside_temp: 20.0,
+        line: None,
+        terminus: None,
+        stops,
+        delay: None,
+        passengers: None,
+        stop_requested: false,
+        time: 0.0,
+        weekday: 0,
+        date: 20261020,
+        language: "ENG",
+        screen: (1280.0, 720.0),
+        ui_scale: 1.0,
+        follow_window: false,
+        dt: 0.1,
+        info_rect: None,
+        touch_gap: None,
+    }
+}
+
+/// A route north from its first stop; the bus is on it 150 m on. Left the first stop (out of
+/// the depot before the departure) it has joined the route there, and is not sent round the
+/// block back to the stop (Dasan's 83 out of Yonggok garage); a stop in the middle of the
+/// trip it drove past is still led back to.
+#[test]
+fn the_route_past_the_trips_first_stop_counts_as_joined() {
+    let lanes: Vec<Lane> = (0..6).map(|i| straight((0.0, i as f64 * 50.0), (0.0, (i + 1) as f64 * 50.0))).collect();
+    let mut net = Network { lanes, ..Default::default() };
+    for i in 0..5 {
+        net.lanes[i].next = vec![i + 1];
+    }
+    net.build_grid();
+    let net = std::sync::Arc::new(net);
+    let stop = |start| NavStop { object_id: 1, position: DVec3::new(3.0, 5.0, 0.0), name: "Garage".into(), arrival: 0.0, closed: None, start };
+    for (start, joined) in [(true, true), (false, false)] {
+        let mut n = Navigator::new(true, 0.85, "bottom-left");
+        n.global = Some(net.clone());
+        n.set_route("0/83", (0..6).collect(), true, 1);
+        n.follow(&route_frame(DVec3::new(0.0, 160.0, 0.0), 0.0, vec![stop(start)]));
+        assert_eq!(n.route.on_route, joined, "first stop {start}");
+        if joined {
+            assert_eq!(n.route.progress, 3);
+        }
+    }
+}
