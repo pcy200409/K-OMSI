@@ -1,6 +1,6 @@
 <p align="center"><img src="https://raw.githubusercontent.com/pcy200409/K-OMSI/branding/komsi/logo.png" alt="K-OMSI" width="470"></p>
 
-**K-OMSI 0.4** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.45 이후 main(`d2e1d3e8`, 0.3.46 포함)을 바탕으로 K-OMSI 수정을 얹은 빌드입니다. 이번부터 K-OMSI 버전은 0.4.x로 따로 매기고, 맵 편집기 [openMapper](https://github.com/openOMSI-org/openMapper) 0.1.17(K-OMSI 수정판)을 함께 넣었습니다.
+**K-OMSI 0.4** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.45 이후 main(`a85c2abb`, 0.3.46 포함)을 바탕으로 K-OMSI 수정을 얹은 빌드입니다. 이번부터 K-OMSI 버전은 0.4.x로 따로 매기고, 맵 편집기 [openMapper](https://github.com/openOMSI-org/openMapper) 0.1.17(K-OMSI 수정판)을 함께 넣었습니다.
 
 > **비공식 포크입니다.** K-OMSI는 공식 openOMSI(openOMSI.org)와 관계없는 독립 프로젝트이며, openOMSI의 이름·로고는 원작자의 것입니다([TRADEMARKS.md](https://github.com/pcy200409/K-OMSI/blob/release/TRADEMARKS.md)). 문제는 공식 저장소가 아니라 [K-OMSI 이슈](https://github.com/pcy200409/K-OMSI/issues)로 알려 주세요.
 >
@@ -20,7 +20,7 @@
 - **HTML 페이지 한글 글꼴 지정**: `openomsi.exe` 옆 `fonts/html_fallback.ttf`(굵은 글씨는 `html_fallback_bold.ttf`)가 있으면 HTML 페이지(정류장 안내기, 단말기 화면 등)의 한글을 그 글꼴로 그립니다(없으면 기존대로 맑은 고딕). 업데이트해도 이 파일은 지워지지 않습니다.
 - **하이거 Auto 화면 (시험 기능)**: 하이거 1611P 문 CCTV 화면을 눌러 여는 안드로이드 오토 풍 차량 화면입니다. 게임 도로 지도·노선·차량 위치, 다음 정류장 3곳과 운행표 시각, 정류장 접근·문 열림 표시, YouTube 링크 재생을 보여 줍니다. 설치된 Edge 또는 Chrome이 필요하고, 차량 옆에 `HigerHypers1611P.android-auto.cfg`(예시: `docs/examples/android-auto`)를 두어야 켜집니다. 자세한 내용과 한계: [docs/android-auto.md](https://github.com/pcy200409/K-OMSI/blob/release/docs/android-auto.md)
 - **맵 규칙 존중**: AI 차량의 희망 속도가 맵의 `[rule] speedlimit`을 넘지 않고(최대 제한속도의 100%), 보행자가 맵에서 `trafficdensity 0`으로 둔 보도는 갈 곳이 따로 없을 때가 아니면 걷지 않습니다.
-- **AI 버스 하차벨**: AI가 모는 버스에서 승객이 하차벨을 누르면 차량의 int_haltewunsch 트리거가 한 번 울립니다(기존에는 플레이어 버스만 해당).
+- **AI 버스 하차벨**: 멀티플레이에서 사람 승객이 AI가 모는 버스에서 하차를 요청해도 그 차량의 int_haltewunsch 트리거가 한 번 울립니다. (AI 승객의 하차벨은 이번부터 공식 openOMSI가 직접 처리합니다, #3442)
 - **한국어 번역 보완**: 공식 번역에도 아직 없던 인터페이스 문구 977개(런처, 설정, 날씨, 컨트롤러, LAN 등)를 기계 번역으로 채웠습니다. 어색한 표현은 이슈로 알려 주세요.
 - **LAN 받은 모드 지우기 (새)**: 환경변수 `OMSI_CLEAR_LAN_STORE=1`을 두면, 남의 세션에 들어간 게임이 끝날 때와 다음 접속 전에 받아 온 모드 저장소(`~/.openomsi/lan-store`)를 지웁니다. 다음 접속 때는 다시 받습니다. 호스트·서버의 저장소는 건드리지 않습니다.
 - **OBIS 연동 (새)**: OBIS 클라이언트(`OBIS-client\OBIS-client.exe`)가 설치되어 있을 때만 켜집니다. 플러그인용 `omsi.ws`(OBIS 실시간 피드 `wss://obis.kr`만 읽기 전용으로 받음, 권한 `network_remote`)와 `omsi.obis`(내 버스를 OBIS로 보냄, 차량 설정 읽기·저장, OBIS 클라이언트의 노선 읽기)를 더했고, 동봉 플러그인 `komsi_obis`가 패널·노선 띠(세로/가로, 앞·뒤 차)·한글 다음 정류장과 남은 거리를 보여 줍니다. Ctrl+Shift+O로 통째로 켜고 끕니다. OBIS 데이터는 포함하지 않습니다. (0.4.1: 한글 정류장명이 같은 영문 이름을 쓰는 다른 맵의 이름과 섞이던 문제를 고쳤습니다. 이제 지금 노선의 OBIS 맵 이름만 씁니다. 예: 173번 첫 정류장 센텀버스환승센터)
@@ -41,7 +41,18 @@
 - **openMapper 동봉 (새, K-OMSI 수정판)**: Windows 묶음의 `openMapper` 폴더에 [openMapper](https://github.com/openOMSI-org/openMapper) 0.1.17(AGPL-3.0, 도로 그리기·오브젝트 배치·지형 편집)을 K-OMSI 수정을 얹어 직접 빌드해 넣었습니다. 더한 것: 보기 > 지도에 노선 표시(노선 선택 포함), 파일 > 노선도 내보내기(SVG·PNG, 도로망 위/노선만), 주차칸 등 납작한 오브젝트가 도로에 묻히던 문제와 낮 텍스처가 검정인 오브젝트(정류장 도움 화살표)의 검은 원 수정, 새 문구의 한국어 번역, 공식 릴리스로의 자동 업데이트 끄기(우리 수정판을 덮어쓰지 않도록). 수정 내용은 이 저장소의 `komsi/openmapper/*.patch`에 있습니다. `openMapper\openmapper.exe`로 실행하며 macOS 묶음에는 들어 있지 않습니다. openMapper 0.1.17 공식 변경(릴리스 제목 기준): 도로 표시를 그리는 드로잉 보드, 교차로 편집기의 칠한 선, 호수·강 도구, Tab 패널, 에셋 관리자가 더해졌고 대중교통망은 다시 빠졌습니다. openMapper 0.1.16 공식 변경: 맵 자신의 항공사진을 제 크기로(카메라 둘레 창에 든 사진 수에 따라 1024·2048로 표시), 큰 맵에서 더 빠름(개요 지도의 도로를 한 번만 그림), 오래된 GL 드라이버(GTX 550 Ti 등)에서 시작이 막히던 문제 수정. openMapper 0.1.15 공식 변경: 신호등 머리가 교차로 신호 주기에 따라 빨강·황색·녹색 불을 켜고(연결 안 된 머리는 빨강), 보기 > 시간대에 시간 흐름(1배·5배·60배)과 하단 시계가 생기고, 맵 옆에 OMSI 에디터가 둔 항공사진(`maps/aerials/<맵>/`)을 찾아 맵 위성 이미지로 복사하며, 그래픽 장치를 열지 못하면 다음 그래픽 백엔드로 넘어가 시작합니다. 0.1.13 공식 변경: 복합 교차로 편집기 재구성(자동 정렬·자동 접속부·자동 교차로 생성, 곡선 도구, 미리보기), 버스 포켓 설정(폭·테이퍼), OMSI 2 에디터식 조작(보기 메뉴, 기본 꺼짐), 교차로 판이 도로 텍스처 형식을 따르고 같은 교차로는 한 오브젝트를 공유, 시작 멈춤 시 로그 기록.
 
 
-## openOMSI 0.3.45 이후 main 변경사항 (요약)
+## openOMSI main 변경사항 (`d2e1d3e8` 이후, 요약)
+
+공식 CHANGELOG에는 아직 올라오지 않았고, main에 들어온 커밋 기준입니다.
+
+### 새 기능
+- **AI 버스 하차벨**(#3442): 시간표 AI 버스의 승객이 내릴 정류장을 요청하면 그 버스 스크립트에 `int_haltewunsch` 트리거가 전달되어, 이를 확인하는 차량 스크립트가 하차문을 엽니다.
+
+### 수정
+- **재질 바꾸기**(#3475): `[matl_item]` 없는 재질 슬롯에서 프리텍스처 일부만 다시 만들 때 바뀐 재질이 반영되지 않던 문제를 고쳤습니다.
+- **안정성·보안 묶음**(#3457): 전용 서버 웹 관리에서 작업 기록의 관리자 주소는 관리자에게만 보이고, `/admin` 명령은 대소문자와 관계없이 채팅으로 나가지 않습니다. 승인한 뒤 내용이 바뀐 플러그인은 그대로 실행되지 않습니다. 크기 0인 사진이나 운행이 끝난(빈) 시간표 종이에서 멈추지 않고, 이름이 빈 컨트롤러를 아무 장치와 짝짓지 않으며, 로그를 줄일 때 한글 등 UTF-8 글자 중간에서 자르지 않고, 성능 측정 단계 시간이 계속 쌓이던 문제를 고쳤습니다.
+
+## openOMSI 0.3.45 이후 main 변경사항 (`d2e1d3e8`까지, 요약)
 
 공식 CHANGELOG에는 아직 올라오지 않았고, main에 들어온 커밋의 제목 기준입니다.
 
