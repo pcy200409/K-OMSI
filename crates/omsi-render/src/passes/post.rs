@@ -59,7 +59,9 @@ impl Renderer {
         self.queue
             .write_buffer(&self.tone.post_buf, 0, bytemuck::bytes_of(&pu));
         // (a mirror's small picture goes without FXAA)
+        // (nor a picture for DLSS: it smooths the edges itself, from the jittered frames)
         let fxaa = with_overlays
+            && !f.dlss_frame
             && self.options.fxaa
             && self.options.msaa <= 1
             && !f.env.no_fxaa;
@@ -183,7 +185,8 @@ impl Renderer {
     /// FSR 1 scales this view's picture up: asked for and built, the window's picture or an
     /// eye's (not a mirror's, nor with vanilla FXAA), drawn smaller than its target.
     pub(crate) fn fsr_draws(&self, f: &FrameCtx) -> bool {
-        self.options.fsr1 && (f.with_overlays || f.xr_view) && !f.vanilla_fxaa
+        // (K-OMSI: a DLSS frame is DLSS's to scale)
+        self.options.fsr1 && (f.with_overlays || f.xr_view) && !f.vanilla_fxaa && !f.dlss_frame
             && f.scene_target.is_some() && f.width < f.full_w && f.height < f.target.texture().height()
             && self.scale.fsr.is_some()
     }
@@ -199,7 +202,7 @@ impl Renderer {
 
     // --- the smaller picture scaled up to the window, the HUD on top at full size;
     // the smaller the picture, the more it is sharpened
-    pub(crate) fn encode_upscale(&self, encoder: &mut wgpu::CommandEncoder, scene: &Scene, f: &FrameCtx, timers: &mut PassTimers) {
+    pub(crate) fn encode_upscale(&mut self, encoder: &mut wgpu::CommandEncoder, scene: &Scene, f: &FrameCtx, timers: &mut PassTimers) {
         let (width, height, full_w) = (f.width, f.height, f.full_w);
         let overlays = &f.overlays;
         if let Some((_, bg)) = &f.scene_target {
@@ -221,6 +224,12 @@ impl Renderer {
                 0,
                 bytemuck::cast_slice(&[width as f32, height as f32, sharpen, if f.vanilla_fxaa { 1.0 } else { 0.0 }]),
             );
+            if f.dlss_frame {
+                // DLSS reads the picture after this submit, and the HUD is drawn over its
+                // result after DLSS (see `dlss_present`)
+                self.dlss_end_of_scene(encoder, scene);
+                return;
+            }
             if fsr {
                 // At sharpness 0 RCAS gives its input back (its lobe is 0): EASU then draws
                 // the window's picture itself - a full-screen pass and its intermediate saved.
