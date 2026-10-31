@@ -6,8 +6,8 @@
 //!
 //! `omsi.obis` (K-OMSI): the player's own bus to OBIS, as the OBIS client
 //! does - `wss://obis.kr/api/ingest` with the device's token. The token never reaches the
-//! plugin: it is read here from the OBIS client's `config.local.json` (next to the game) or
-//! from `~/.openomsi/obis_device.json`, or the device is registered once and kept there.
+//! plugin: it is read here from the OBIS client's `config.local.json` (next to the game), and
+//! K-OMSI never registers a device of its own: without the client's token nothing is sent.
 //! Only this one address, only the latest snapshot the plugin gave, at most twice a second.
 //!
 //! These parts work only for a player who has the originals: OBIS (`omsi.ws`, `omsi.obis`)
@@ -361,9 +361,8 @@ fn run(s: Arc<Shared>, url: String) {
 
 // ------------------------------------------------------------------ omsi.obis (sending)
 
-/// Where the player's bus goes, and where a new device registers.
+/// Where the player's bus goes.
 const INGEST_URL: &str = "wss://obis.kr/api/ingest";
-const REGISTER_URL: &str = "https://obis.kr/api/register";
 /// The device's vehicle settings on OBIS (what the OBIS client's "차량 설정" edits).
 const PREFS_URL: &str = "https://obis.kr/api/me/prefs";
 /// Largest snapshot taken; the OBIS client's are a few kB (the route's stations).
@@ -477,10 +476,6 @@ impl ObisSender {
     }
 }
 
-fn home() -> Option<PathBuf> {
-    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from)
-}
-
 /// A text field of a small JSON object (the token files are flat).
 fn json_str(text: &str, key: &str) -> Option<String> {
     match crate::api::json::decode(text, false).ok()? {
@@ -506,60 +501,15 @@ fn obis_client_configs() -> Vec<PathBuf> {
     roots.into_iter().flat_map(|r| [r.join("OBIS-client/config.local.json"), r.join("OBIS-client/_internal/client/config.local.json")]).collect()
 }
 
-fn own_device_file() -> Option<PathBuf> {
-    home().map(|h| h.join(".openomsi/obis_device.json"))
-}
-
-/// The device token and where it came from; registers a new device when there is none.
+/// The OBIS client's device token, the only one used: K-OMSI never registers a device itself
+/// (one player, one device on OBIS), so a client that never registered sends nothing yet.
 fn device_token() -> Result<(String, &'static str), String> {
     for f in obis_client_configs() {
         if let Some(t) = std::fs::read_to_string(&f).ok().and_then(|t| json_str(&t, "deviceToken")) {
             return Ok((t, "obis_client"));
         }
     }
-    let own = own_device_file().ok_or("no home folder")?;
-    let kept = std::fs::read_to_string(&own).unwrap_or_default();
-    if let Some(t) = json_str(&kept, "deviceToken") {
-        return Ok((t, "komsi"));
-    }
-    // a new device, registered as the OBIS client does: POST /api/register {deviceId}
-    let id = json_str(&kept, "deviceId").unwrap_or_else(new_device_id);
-    let body = crate::api::json::encode(&Value::Map(vec![("deviceId".into(), Value::Str(id.clone()))]));
-    let answer = ureq::post(REGISTER_URL)
-        .timeout(Duration::from_secs(10))
-        .set("X-Device-Id", &id)
-        .set("Content-Type", "application/json")
-        .send_string(&body)
-        .map_err(|e| format!("register: {e}"))?
-        .into_string()
-        .map_err(|e| format!("register: {e}"))?;
-    let token = json_str(&answer, "deviceToken").ok_or("register: the answer has no deviceToken")?;
-    let keep = Value::Map(vec![
-        ("deviceId".into(), Value::Str(id)),
-        ("deviceToken".into(), Value::Str(token.clone())),
-        ("recoveryCode".into(), Value::Str(json_str(&answer, "recoveryCode").unwrap_or_default())),
-    ]);
-    if let Some(dir) = own.parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
-    std::fs::write(&own, crate::api::json::encode_pretty(&keep)).map_err(|e| format!("{}: {e}", own.display()))?;
-    log::info!("plugin obis: registered a new OBIS device ({})", own.display());
-    Ok((token, "komsi_registered"))
-}
-
-/// A random UUID (version 4), from the randomly keyed hasher of the standard library.
-fn new_device_id() -> String {
-    use std::hash::{BuildHasher, Hasher};
-    let mut b = [0u8; 16];
-    for (i, chunk) in b.chunks_mut(8).enumerate() {
-        let mut h = std::collections::hash_map::RandomState::new().build_hasher();
-        h.write_u128(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos()) ^ i as u128);
-        chunk.copy_from_slice(&h.finish().to_le_bytes());
-    }
-    b[6] = (b[6] & 0x0f) | 0x40;
-    b[8] = (b[8] & 0x3f) | 0x80;
-    let h: String = b.iter().map(|x| format!("{x:02x}")).collect();
-    format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
+    Err("the OBIS client has no device token yet (run OBIS-client.exe once)".into())
 }
 
 /// The settings OBIS has for the device (GET), or saves them (PUT `{"prefs": ...}`); the
@@ -672,14 +622,14 @@ pub static FNS: &[ApiFn] = &[
     def!("ws.close", "network", [], "nil", "Ends the connection.", NEW, NetworkRemote, false, |c, a| {
         c.state().ws.close();
     }),
-    def!("obis.start", "network", [], "true, or false and the reason", "Starts sending the player's bus to OBIS (`wss://obis.kr/api/ingest`) in the background, as the OBIS client does. The device's token is the OBIS client's (its `config.local.json` next to the game) or K-OMSI's own (`~/.openomsi/obis_device.json`, registered once when there is none); the plugin never sees it. Give the snapshots with `omsi.obis.send`.", NEW, NetworkRemote, true, |c, a| {
+    def!("obis.start", "network", [], "true, or false and the reason", "Starts sending the player's bus to OBIS (`wss://obis.kr/api/ingest`) in the background, as the OBIS client does. The device's token is the OBIS client's (its `config.local.json` next to the game; K-OMSI never registers a device of its own); the plugin never sees it. Give the snapshots with `omsi.obis.send`.", NEW, NetworkRemote, true, |c, a| {
         Ok::<_, ApiError>(ok_or_reason(c.state().obis.start()))
     }),
     def!("obis.send", "network", [p("snapshot", "string")], "true, or false and the reason", "Hands OBIS the state of the player's bus: the OBIS client's snapshot as JSON text, at most 256 kB. Only the newest is sent, at most twice a second; one not sent yet is replaced.", NEW, NetworkRemote, true, |c, a| {
         let text = a.str(0)?;
         Ok::<_, ApiError>(ok_or_reason(c.state().obis.send(text)))
     }),
-    def!("obis.state", "network", [], "state, sent, token", "The sending: `\"connecting\"`, `\"open\"`, `\"waiting\"` (broken, opened again soon), `\"no_token\"` (no token and registering failed: tried again soon) or `\"closed\"`; how many snapshots went; where the token came from (`\"obis_client\"`, `\"komsi\"`, `\"komsi_registered\"`; empty before it is known).", NEW, NetworkRemote, false, |c, a| {
+    def!("obis.state", "network", [], "state, sent, token", "The sending: `\"connecting\"`, `\"open\"`, `\"waiting\"` (broken, opened again soon), `\"no_token\"` (the OBIS client has no token yet, as before it is first run: looked for again soon) or `\"closed\"`; how many snapshots went; where the token came from (`\"obis_client\"`; empty before it is known).", NEW, NetworkRemote, false, |c, a| {
         let st = c.state().obis.state();
         let (sent, src) = c.state().obis.info();
         multi(Some([Value::Str(st.into()), Value::Num(sent), Value::Str(src.into())]))
