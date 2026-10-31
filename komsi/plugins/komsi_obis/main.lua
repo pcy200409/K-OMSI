@@ -416,7 +416,7 @@ local function refresh_panel(me, mine)
   -- 안내: 운행 중인데 서버에 안 보일 때
   local hint
   if not has_ws then hint = "이 게임 버전엔 OBIS 연결이 없습니다. K-OMSI OBIS 판이 필요해요."
-  elseif sst == "no_token" then hint = "OBIS 기기 등록에 실패했어요. 잠시 뒤 다시 시도합니다."
+  elseif sst == "no_token" then hint = "OBIS Client에 기기 등록이 없어요. OBIS Client를 한 번 실행해 주세요."
   elseif settings.send and not send_on and term_idle() then hint = "단말기 운행 시작 전(운행종료)이라 내 버스는 보내지 않아요."
   elseif me and ws == "open" and not mine then
     hint = send_on and "보내는 중인데 서버에 아직 안 보여요. 노선이 OBIS 에 없는 노선일 수 있어요."
