@@ -71,6 +71,8 @@ pub enum Perm {
     Audio,
     /// UDP to other programs on this computer.
     NetworkLocal,
+    /// A read-only WebSocket to a public live feed (omsi.ws).
+    NetworkRemote,
     /// Messages to the other players of a LAN game.
     Lan,
     /// Launching native programs outside the plugin sandbox.
@@ -90,6 +92,7 @@ impl Perm {
             Perm::Camera => "camera",
             Perm::Audio => "audio",
             Perm::NetworkLocal => "network_local",
+            Perm::NetworkRemote => "network_remote",
             Perm::Lan => "lan",
             Perm::Process => "process",
         }
@@ -99,7 +102,7 @@ impl Perm {
         Self::ALL.into_iter().find(|p| p.as_str() == s)
     }
 
-    pub const ALL: [Perm; 10] = [Perm::Ui, Perm::Storage, Perm::VehicleWrite, Perm::TrafficWrite, Perm::WorldWrite, Perm::Camera, Perm::Audio, Perm::NetworkLocal, Perm::Lan, Perm::Process];
+    pub const ALL: [Perm; 11] = [Perm::Ui, Perm::Storage, Perm::VehicleWrite, Perm::TrafficWrite, Perm::WorldWrite, Perm::Camera, Perm::Audio, Perm::NetworkLocal, Perm::NetworkRemote, Perm::Lan, Perm::Process];
 }
 
 /// The handler of a function.
