@@ -266,8 +266,8 @@ on and off. The API parts behind them, with the permission `network_remote`:
 * `omsi.obis.start()` / `send(snapshot)` / `state()` / `stop()`: sends the player's bus to OBIS
   (`wss://obis.kr/api/ingest`), as the OBIS client does: `send` takes the client's snapshot as
   JSON text, only the newest goes, at most twice a second. The device's token is the OBIS
-  client's (`OBIS-client/config.local.json`) or K-OMSI's own (`~/.openomsi/obis_device.json`);
-  the plugin never sees it.
+  client's (`OBIS-client/config.local.json`) and no other: K-OMSI never registers a device of
+  its own, so nothing is sent until the client has registered once; the plugin never sees it.
 * `omsi.obis.routes()` / `route_text(file)`: the OBIS client's routes (its `data/routes`), to
   match the player's trip to one.
 * `omsi.obis.prefs()` / `set_prefs(table)`: the vehicle settings OBIS keeps for the device, as
@@ -1025,8 +1025,8 @@ On macOS, helpers extracted from ZIP files may need their executable bit restore
 | `omsi.obis.routes()` | table or nil | The OBIS client's routes, to match the player's trip to one: `{default_map, routes = {[key] = {file, line, map, stops}}, trips = {[trip file] = {keys}}}` (`stops` the stop object ids in order; a trip file lower case, without `.ttp`). Read from the client's `data\routes` on a worker the first time: `nil` until then, and without the OBIS client. *Permission: `network_remote`.* | 0.2.22 |
 | `omsi.obis.send(snapshot)` | true, or false and the reason | Hands OBIS the state of the player's bus: the OBIS client's snapshot as JSON text, at most 256 kB. Only the newest is sent, at most twice a second; one not sent yet is replaced. *Permission: `network_remote`.* | 0.2.22 |
 | `omsi.obis.set_prefs(prefs)` | true, or false and the reason | Saves vehicle settings on OBIS (the keys of `obis.prefs`, any of them), in the background; `obis.prefs` has them once OBIS took them. *Permission: `network_remote`.* | 0.2.22 |
-| `omsi.obis.start()` | true, or false and the reason | Starts sending the player's bus to OBIS (`wss://obis.kr/api/ingest`) in the background, as the OBIS client does. The device's token is the OBIS client's (its `config.local.json` next to the game) or K-OMSI's own (`~/.openomsi/obis_device.json`, registered once when there is none); the plugin never sees it. Give the snapshots with `omsi.obis.send`. *Permission: `network_remote`.* | 0.2.22 |
-| `omsi.obis.state()` | state, sent, token | The sending: `"connecting"`, `"open"`, `"waiting"` (broken, opened again soon), `"no_token"` (no token and registering failed: tried again soon) or `"closed"`; how many snapshots went; where the token came from (`"obis_client"`, `"komsi"`, `"komsi_registered"`; empty before it is known). *Permission: `network_remote`.* | 0.2.22 |
+| `omsi.obis.start()` | true, or false and the reason | Starts sending the player's bus to OBIS (`wss://obis.kr/api/ingest`) in the background, as the OBIS client does. The device's token is the OBIS client's (its `config.local.json` next to the game; K-OMSI never registers a device of its own); the plugin never sees it. Give the snapshots with `omsi.obis.send`. *Permission: `network_remote`.* | 0.2.22 |
+| `omsi.obis.state()` | state, sent, token | The sending: `"connecting"`, `"open"`, `"waiting"` (broken, opened again soon), `"no_token"` (the OBIS client has no token yet, as before it is first run: looked for again soon) or `"closed"`; how many snapshots went; where the token came from (`"obis_client"`; empty before it is known). *Permission: `network_remote`.* | 0.2.22 |
 | `omsi.obis.stop()` | nil | Stops sending (OBIS shows the bus as gone after a while). *Permission: `network_remote`.* | 0.2.22 |
 | `omsi.send(port, data)` | true, or false and the reason | Sends `data` as one UDP datagram to `127.0.0.1:port`: to another program on this computer, never over the network. Not sent when the port is below 1024 or one of the game's multiplayer ports (27015-27024), the message is longer than 8 KB, or the plugin sent 100 in the last second. *Permission: `network_local`.* | 0.2.21 |
 | `omsi.ws.close()` | nil | Ends the connection. *Permission: `network_remote`.* | 0.2.22 |
