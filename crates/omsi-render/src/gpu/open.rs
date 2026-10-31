@@ -204,9 +204,15 @@ impl Renderer {
         }
         // DXT textures stay compressed on the GPU where it takes them (Apple silicon does);
         // OMSI_NO_BC=1 uploads everything as RGBA (the old way, for comparisons), and so does
-        // the settings' `gpu_texture_compression` off
-        if !omsi_cfg::flags::OMSI_NO_BC.is_set() && options.gpu_texture_compression {
+        // the settings' `gpu_texture_compression` off - but not on a card of 4 GB or less:
+        // decoded, they take four to eight times the memory, and a GTX 1060 3GB with it off
+        // ran out of memory and lost its device twice before the first stop (K-OMSI)
+        let small_card = gpu_memory::small_card_keeps_bc(discrete_vram);
+        if !omsi_cfg::flags::OMSI_NO_BC.is_set() && (options.gpu_texture_compression || small_card) {
             required_features |= adapter.features() & wgpu::Features::TEXTURE_COMPRESSION_BC;
+            if !options.gpu_texture_compression {
+                log::warn!("GPU texture compression off in the settings, kept on: this card has {discrete_vram} MB of its own (OMSI_NO_BC=1 decodes them all the same)");
+            }
         } else if !options.gpu_texture_compression {
             log::info!("GPU texture compression off in the settings: DXT/BC textures are decoded to RGBA");
         }
