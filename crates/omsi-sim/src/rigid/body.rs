@@ -3,6 +3,10 @@
 
 use super::*;
 
+/// Flood water (kg/m³) and the drag coefficient of a bus's flat front pushing through it.
+const WATER_DENSITY: f32 = 1000.0;
+const WATER_CD: f32 = 1.0;
+
 impl RigidBody {
     /// `hub_heights[a]`: unloaded hub height of axle `a` above the model origin; the tyre
     /// radius when the model does not say (see `VehicleType::wheel_geometry`).
@@ -52,7 +56,7 @@ impl RigidBody {
         let inv_min_turn_radius = if def.inv_min_turn_radius > 0.0 { def.inv_min_turn_radius } else { max_steer_deg.to_radians().tan() / s };
         let springs: f32 = def.axles.iter().map(|a| 2.0 * if a.spring > 0.0 { a.spring } else { 150.0 }).sum();
         let body_freq = (springs / (mass / 1000.0)).max(0.0).sqrt();
-        RigidBody { mass, inertia, cog, position: DVec3::ZERO, orientation: Quat::IDENTITY, velocity: Vec3::ZERO, omega: Vec3::ZERO, wheels, wheel_axle, steer_deg: 0.0, kappa: 0.0, max_steer_deg, rot_pnt_long: def.rot_pnt_long, inv_min_turn_radius, body_freq, holding: true, rolling_resistance: if def.rolling_resistance > 0.0 { def.rolling_resistance } else { 0.008 * mass * 9.81 }, accel_body: Vec3::ZERO, friction: 0.85, wheel_impacts: Vec::new(), coupled: Vec::new(), spawned_inside: None, wheel_walls: true, aero: realism::Aero::of(def.bounding_box.map(|b| [b[0], b[1], b[2]]), mass), air_density: realism::air_density(20.0, 0.0), wind: Vec3::ZERO, wetness: 0.0, road_s: 0.0, realistic: realistic_default() }
+        RigidBody { mass, inertia, cog, position: DVec3::ZERO, orientation: Quat::IDENTITY, velocity: Vec3::ZERO, omega: Vec3::ZERO, wheels, wheel_axle, steer_deg: 0.0, kappa: 0.0, max_steer_deg, rot_pnt_long: def.rot_pnt_long, inv_min_turn_radius, body_freq, holding: true, rolling_resistance: if def.rolling_resistance > 0.0 { def.rolling_resistance } else { 0.008 * mass * 9.81 }, accel_body: Vec3::ZERO, friction: 0.85, wheel_impacts: Vec::new(), coupled: Vec::new(), spawned_inside: None, wheel_walls: true, aero: realism::Aero::of(def.bounding_box.map(|b| [b[0], b[1], b[2]]), mass), air_density: realism::air_density(20.0, 0.0), wind: Vec3::ZERO, wetness: 0.0, water_depth: 0.0, road_s: 0.0, realistic: realistic_default() }
     }
 
     /// Place the body at rest with its wheels on the ground plane at `origin.z`: heading
@@ -527,6 +531,16 @@ impl RigidBody {
             let v = self.velocity;
             let area = (self.mass / 2200.0).clamp(2.0, 8.5);
             force = -v * v.length() * (0.5 * 1.2 * 0.6 * area);
+        }
+        // K-OMSI: standing flood water - the body pushes it aside, a bow wave's drag on the
+        // front under the water (at most what stops the body within this substep)
+        if self.water_depth > 0.0 {
+            let v = Vec3::new(self.velocity.x, self.velocity.y, 0.0);
+            let width = self.wheels.iter().map(|w| w.attach.x.abs()).fold(0.0f32, f32::max) * 2.0 + 0.4;
+            let area = width * self.water_depth.min(1.5);
+            let drag = 0.5 * WATER_DENSITY * WATER_CD * area * v.length_squared();
+            let most = self.mass * v.length() / h.max(1e-4);
+            force -= v.normalize_or_zero() * drag.min(most);
         }
         // where on the road's unevenness the body stands (a reversing bus retraces it)
         let ds = self.velocity.dot(rot.mul_vec3(Vec3::Y)) as f64 * h as f64;
