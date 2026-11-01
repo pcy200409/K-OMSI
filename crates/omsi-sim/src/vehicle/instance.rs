@@ -41,7 +41,11 @@ impl VehicleInstance {
             .iter()
             .map(|d| {
                 let dirs = [ty.model_dir.as_path(), ty.def.dir()];
-                let html = crate::htmltex::load_page(&dirs, &d.path);
+                let html = if let Some(uv) = d.path.strip_prefix(&format!("{}#uv=",android_auto::PAGE)) {
+                    android_auto::HTML.replace("</head>",&format!("<meta name=\"komsi-display-uv\" content=\"{uv}\"></head>"))
+                } else if d.path == android_auto::PAGE {
+                    android_auto::HTML.to_string()
+                } else { crate::htmltex::load_page(&dirs, &d.path) };
                 crate::htmltex::HtmlTexture::new(d.script_index, d.width, d.height, &html)
                     .with_asset_dirs(crate::htmltex::asset_dirs(&dirs, &d.path))
             })
