@@ -385,14 +385,15 @@ fn session_codes() {
         protocol: 2,
         ..c.clone()
     };
+    // (in Korean, K-OMSI: the host's older game is the one to update)
     assert!(describe_join(&old.encode())
         .unwrap_err()
-        .contains("protocol 2"));
+        .contains("LAN 프로토콜 2"));
     assert!(
         LanSession::join(&old.encode(), "x", world("m"), Duration::from_millis(10))
             .err()
             .unwrap()
-            .contains("same version")
+            .contains("호스트에게")
     );
     // several addresses: Hamachi, Tailscale and the LAN, as on the Mac this was written on
     let multi = SessionCode {
@@ -1201,7 +1202,8 @@ fn old_protocol_is_turned_away() {
         .unwrap();
     let mut buf = [0u8; 512];
     // a protocol 2 game: its hello, and its poses sent blindly
-    let told = format!("protocol {PROTOCOL}, your game protocol 2");
+    // (in Korean, K-OMSI: an older game shows the host's words untranslated)
+    let told = "내 게임은 LAN 프로토콜 2이라".to_string();
     for (msg, want) in [
         (
             "HELLO|2|-|someone|Vehicles/x.bus|m|1989-05-30|32400||0|0|0|0|12|2.5",
@@ -1209,7 +1211,7 @@ fn old_protocol_is_turned_away() {
         ),
         (
             "POSE|2|someone|Vehicles/x.bus||1|2|3|0|0|0|0|0000|0|0|||12|2.5|-|0",
-            "older one",
+            "내 게임은 더 오래된 버전",
         ),
     ] {
         let mut answers = Vec::new();
