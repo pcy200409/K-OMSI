@@ -296,7 +296,9 @@ pub fn write_text(path: &Path, text: &str) -> std::io::Result<()> {
     if let Some(page) = path.parent().and_then(timetable_code_page) {
         pages.push(page);
     }
-    pages.extend([CodePage::Windows1252, CodePage::Windows1250, CodePage::Windows1251]);
+    // CP949 last: Korean names typed for a map whose timetable is still plain ASCII (the
+    // page Omsi.exe reads on a Korean Windows, and which every system tells by its Hangul)
+    pages.extend([CodePage::Windows1252, CodePage::Windows1250, CodePage::Windows1251, CodePage::EucKr]);
     for page in pages {
         let (bytes, _, unmappable) = page.encoding().encode(text);
         if !unmappable && omsi_cfg::decode_text(&bytes) == text {
@@ -590,6 +592,18 @@ mod line_tests {
         let d = folder("plain");
         line_of("5_Площадь-Вокзал").save(&d.join("5.ttl")).unwrap();
         assert_eq!(Line::load(&d.join("5.ttl")).unwrap().tours[0].trips[0].trip, "5_Площадь-Вокзал");
+        std::fs::remove_dir_all(&d).ok();
+    }
+
+    #[test]
+    fn a_new_line_with_korean_trips_in_an_ascii_folder_is_written_in_cp949() {
+        let d = folder("korean");
+        std::fs::write(d.join("Busstops.cfg"), "[busstop]\r\nYugok\r\n0\r\n7977\r\n").unwrap();
+        line_of("124 시영아파트").save(&d.join("124.ttl")).unwrap();
+        let bytes = std::fs::read(d.join("124.ttl")).unwrap();
+        assert!(bytes.windows(2).any(|w| w == [0xBD, 0xC3]), "시 in CP949");
+        assert_eq!(omsi_cfg::codepage::detect(&bytes), omsi_cfg::codepage::CodePage::EucKr);
+        assert_eq!(Line::load(&d.join("124.ttl")).unwrap().tours[0].trips[0].trip, "124 시영아파트");
         std::fs::remove_dir_all(&d).ok();
     }
 
