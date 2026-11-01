@@ -104,8 +104,8 @@ pub(crate) fn with_fonts<R>(f: impl FnOnce(&FontRef<'static>, &FontRef<'static>)
 }
 
 /// The bytes of the face for the characters Inter lacks (Hangul, CJK ...): the file in
-/// `OMSI_HTML_FALLBACK_FONT` (and `..._BOLD`), else Malgun Gothic from the Windows fonts or
-/// AppleGothic on macOS.
+/// `OMSI_HTML_FALLBACK_FONT` (and `..._BOLD`), else `fonts/html_fallback.ttf` (and `html_fallback_bold.ttf`)
+/// beside the game exe, else Malgun Gothic from the Windows fonts or AppleGothic on macOS.
 /// Read once per process; `None` when there is none.
 fn fallback_bytes() -> Option<&'static (Vec<u8>, Vec<u8>)> {
     static BYTES: std::sync::OnceLock<Option<(Vec<u8>, Vec<u8>)>> = std::sync::OnceLock::new();
@@ -118,6 +118,15 @@ fn fallback_bytes() -> Option<&'static (Vec<u8>, Vec<u8>)> {
                     .and_then(|p| read(p.as_ref()))
                     .unwrap_or_else(|| reg.clone());
                 return Some((reg, bold));
+            }
+            // K-OMSI: a font file next to the game (fonts/html_fallback.ttf, and html_fallback_bold.ttf for
+            // bold), so a content pack can choose the face without an environment variable. The updater
+            // only removes the files it ships, so this one stays across updates.
+            if let Some(dir) = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("fonts"))) {
+                if let Some(reg) = read(&dir.join("html_fallback.ttf")) {
+                    let bold = read(&dir.join("html_fallback_bold.ttf")).unwrap_or_else(|| reg.clone());
+                    return Some((reg, bold));
+                }
             }
             if cfg!(target_os = "macos") {
                 let reg = read(std::path::Path::new("/System/Library/Fonts/Supplemental/AppleGothic.ttf"))?;
