@@ -1,0 +1,26 @@
+﻿# Branches merged into `release`, in this order (one per line, # = comment).
+# `branding` is always first. Add a new patch branch here to keep it.
+branding
+patch/telemetry-pedals
+patch/pax-seat-choice
+patch/lan-fleet-number
+patch/korean-translation
+patch/ai-lane-signal
+patch/dlss
+patch/reshade
+patch/html-font-file
+patch/android-auto
+patch/map-rule-limits
+patch/ai-stop-request
+patch/lan-clear-store
+patch/obis-taco
+patch/c-its
+patch/roof-snow
+patch/flood
+patch/weather
+patch/korean-codepage
+patch/low-vram
+patch/lan-version-notice
+patch/mirror-weather-light
+patch/nav-first-stop
+patch/obis-route-fallback
