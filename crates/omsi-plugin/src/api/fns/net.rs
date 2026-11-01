@@ -315,6 +315,10 @@ fn fetched_dir() -> Option<PathBuf> {
     home().map(|h| h.join(".openomsi/obis_routes"))
 }
 
+fn home() -> Option<PathBuf> {
+    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from)
+}
+
 /// A route's file: the client's `data/routes`, else the fetched one.
 fn route_file(name: &str) -> Option<PathBuf> {
     if !route_file_ok(name) {
