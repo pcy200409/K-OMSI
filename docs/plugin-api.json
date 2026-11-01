@@ -2577,7 +2577,7 @@
       "name": "obis.send",
       "group": "network",
       "since": "0.2.22",
-      "doc": "Hands OBIS the state of the player's bus: the OBIS client's snapshot as JSON text, at most 256 kB. Only the newest is sent, at most twice a second; one not sent yet is replaced.",
+      "doc": "Hands OBIS the state of the player's bus: the OBIS client's snapshot as JSON text, at most 256 kB. Only the newest is sent, at most twice a second; one not sent yet is replaced. With none new for a second (the game paused or in photo mode: the plugins stand still) the last goes again every second with its `posTs` made now, for at most 30 minutes, so OBIS keeps the bus.",
       "params": [
         {
           "name": "snapshot",
