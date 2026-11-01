@@ -213,6 +213,10 @@ pub struct PluginState {
     pub storage: Option<super::fns::storage::Store>,
     /// `omsi.send`'s socket and rate.
     pub sender: super::fns::core::Sender,
+    /// omsi.ws's connection.
+    pub ws: super::fns::net::WsClient,
+    /// omsi.obis's connection.
+    pub obis: super::fns::net::ObisSender,
     /// The plugin's settings (`plugin.settings`).
     pub settings: super::fns::plugin::Settings,
     /// Sounds it started (stopped when it stops).
@@ -250,6 +254,8 @@ impl PluginState {
             disabled: false,
             storage: None,
             sender: Default::default(),
+                    ws: Default::default(),
+                    obis: Default::default(),
             settings: Default::default(),
             voices: Vec::new(),
             processes: Default::default(),
