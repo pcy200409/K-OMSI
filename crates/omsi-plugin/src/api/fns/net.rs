@@ -694,6 +694,23 @@ const PREFS_URL: &str = "https://obis.kr/api/me/prefs";
 const MAX_SNAPSHOT: usize = 256 * 1024;
 /// Least time between two snapshots sent.
 const SEND_GAP: Duration = Duration::from_millis(500);
+/// With no new snapshot for this long (the game paused, in photo mode: the plugins stand still),
+/// the last one goes again with its time made now, as the OBIS client sends while OMSI 2 is paused.
+const HOLD_GAP: Duration = Duration::from_secs(1);
+/// ... for at most this long; then the bus is let go as gone.
+const HOLD_MAX: Duration = Duration::from_secs(30 * 60);
+
+/// `text` with its `"posTs":<seconds>` made `now` (the snapshot's position time; OBIS takes an
+/// old one for a bus gone).
+fn with_pos_ts(text: &str, now: f64) -> String {
+    const KEY: &str = "\"posTs\":";
+    let Some(i) = text.find(KEY).map(|i| i + KEY.len()) else { return text.to_string() };
+    let end = text[i..].find([',', '}']).map_or(text.len(), |e| i + e);
+    if !text[i..end].trim().parse::<f64>().is_ok() {
+        return text.to_string(); // (null: no position to hold)
+    }
+    format!("{}{now}{}", &text[..i], &text[end..])
+}
 
 const NO_TOKEN: u8 = 4;
 
@@ -885,6 +902,8 @@ fn run_sender(s: Arc<SendShared>) {
                 log::info!("plugin obis: sending to {url}");
                 s.state.store(OPEN, Ordering::Relaxed);
                 let mut last: Option<Instant> = None;
+                // the last snapshot sent, and when a new one last came
+                let mut held: Option<(String, Instant)> = None;
                 while !s.stop.load(Ordering::Relaxed) {
                     let save = s.save.lock().unwrap_or_else(|e| e.into_inner()).take();
                     if let Some(body) = save {
@@ -897,7 +916,15 @@ fn run_sender(s: Arc<SendShared>) {
                         }
                     }
                     if last.is_none_or(|t| t.elapsed() >= SEND_GAP) {
-                        let next = s.latest.lock().unwrap_or_else(|e| e.into_inner()).take();
+                        let mut next = s.latest.lock().unwrap_or_else(|e| e.into_inner()).take();
+                        if let Some(text) = &next {
+                            held = Some((text.clone(), Instant::now()));
+                        } else if let Some((text, since)) = &held {
+                            if last.is_some_and(|t| t.elapsed() >= HOLD_GAP) && since.elapsed() < HOLD_MAX {
+                                let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_secs_f64());
+                                next = Some(with_pos_ts(text, now));
+                            }
+                        }
                         if let Some(text) = next {
                             if let Err(e) = ws.send(Message::text(text)) {
                                 log::warn!("plugin obis: {e}");
@@ -950,7 +977,7 @@ pub static FNS: &[ApiFn] = &[
     def!("obis.start", "network", [], "true, or false and the reason", "Starts sending the player's bus to OBIS (`wss://obis.kr/api/ingest`) in the background, as the OBIS client does. The device's token is the OBIS client's (its `config.local.json` next to the game; K-OMSI never registers a device of its own); the plugin never sees it. Give the snapshots with `omsi.obis.send`.", NEW, NetworkRemote, true, |c, a| {
         Ok::<_, ApiError>(ok_or_reason(c.state().obis.start()))
     }),
-    def!("obis.send", "network", [p("snapshot", "string")], "true, or false and the reason", "Hands OBIS the state of the player's bus: the OBIS client's snapshot as JSON text, at most 256 kB. Only the newest is sent, at most twice a second; one not sent yet is replaced.", NEW, NetworkRemote, true, |c, a| {
+    def!("obis.send", "network", [p("snapshot", "string")], "true, or false and the reason", "Hands OBIS the state of the player's bus: the OBIS client's snapshot as JSON text, at most 256 kB. Only the newest is sent, at most twice a second; one not sent yet is replaced. With none new for a second (the game paused or in photo mode: the plugins stand still) the last goes again every second with its `posTs` made now, for at most 30 minutes, so OBIS keeps the bus.", NEW, NetworkRemote, true, |c, a| {
         let text = a.str(0)?;
         Ok::<_, ApiError>(ok_or_reason(c.state().obis.send(text)))
     }),
@@ -1106,6 +1133,50 @@ mod tests {
         assert!(dir.join("maps/NCC/map.json").is_file());
         assert!(!super::sync_pack_from(super::PACK_URL, &token, &dir).unwrap(), "the same pack is not fetched again");
         assert!(super::sync_pack_from(super::PACK_URL, "not-a-token", &temp("bad").join("p")).unwrap_err().contains("token"));
+    }
+
+    #[test]
+    fn a_held_snapshot_gets_the_time_now() {
+        let snap = r#"{"vehicles":[],"lastPosition":{"posTs":1761999999.25,"x":1.5,"y":2},"tripPhase":"running"}"#;
+        assert_eq!(super::with_pos_ts(snap, 1762000100.5), r#"{"vehicles":[],"lastPosition":{"posTs":1762000100.5,"x":1.5,"y":2},"tripPhase":"running"}"#);
+        let last = r#"{"lastPosition":{"x":1,"posTs":1761999999}}"#;
+        assert_eq!(super::with_pos_ts(last, 5.0), r#"{"lastPosition":{"x":1,"posTs":5}}"#);
+        let none = r#"{"lastPosition":null,"tripPhase":"idle"}"#;
+        assert_eq!(super::with_pos_ts(none, 5.0), none);
+    }
+
+    /// A stand-in of OBIS on this machine: one snapshot given, then the plugins stand still (paused).
+    #[test]
+    fn the_last_snapshot_goes_on_while_the_game_is_paused() {
+        use super::*;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        // SAFETY: only this test sets these, before the sender reads them
+        unsafe {
+            std::env::set_var("OMSI_OBIS_INGEST_URL", format!("ws://127.0.0.1:{port}/api/ingest"));
+            std::env::set_var("OMSI_OBIS_PREFS_URL", "http://127.0.0.1:9/");
+            std::env::set_var("OMSI_OBIS_TOKEN", "test");
+        }
+        let got = std::thread::spawn(move || {
+            let (tcp, _) = listener.accept().unwrap();
+            let mut ws = tungstenite::accept(tcp).unwrap();
+            let mut ts = Vec::new();
+            while ts.len() < 4 {
+                if let Message::Text(t) = ws.read().unwrap() {
+                    let v: serde_json::Value = serde_json::from_str(t.as_str()).unwrap();
+                    ts.push(v["lastPosition"]["posTs"].as_f64().unwrap());
+                }
+            }
+            ts
+        });
+        let s = Arc::new(SendShared { stop: AtomicBool::new(false), state: AtomicU8::new(CONNECTING), latest: Mutex::new(Some(r#"{"lastPosition":{"posTs":100.0,"x":1}}"#.into())), sent: AtomicU64::new(0), source: Mutex::new(""), prefs: Mutex::new(None), save: Mutex::new(None) });
+        let t = { let s = s.clone(); std::thread::spawn(move || run_sender(s)) };
+        let ts = got.join().unwrap();
+        s.stop.store(true, Ordering::Relaxed);
+        let _ = t.join();
+        assert_eq!(ts[0], 100.0, "the snapshot as given first");
+        assert!(ts[1] > 1.7e9 && ts[2] > ts[1] && ts[3] > ts[2], "then again, each with the time now: {ts:?}");
+        assert!(ts[3] - ts[1] >= 1.8, "about a second apart: {ts:?}");
     }
 
     #[test]
