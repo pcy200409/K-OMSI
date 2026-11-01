@@ -24,7 +24,12 @@ impl App {
             // (a preset picked in the paused menu: the change goes over in real time)
             self.tick_weather(dt);
         }
-        let daylight = omsi_sim::Daylight::compute(&self.clock, self.session.envir.as_ref());
+        let mut daylight = omsi_sim::Daylight::compute(&self.clock, self.session.envir.as_ref());
+        // (a thunderstorm's power cut puts the street lamps out)
+        self.session.outage.tick(self.settings.storm_outage || omsi_cfg::flags::OMSI_STORM_CUTS.is_set(), self.clock.run_time);
+        if self.session.outage.active() {
+            daylight.lamps_on = false;
+        }
         // (the avatars' faces yawn late in the evening)
         crate::view_sync::people::set_hour((self.clock.time / 3600.0).rem_euclid(24.0) as f32);
         let lamps = self.session.lamps_on != Some(daylight.lamps_on);
@@ -145,6 +150,11 @@ pub(super) fn lights(cx: LightsCx, dt: f32, daylight: omsi_sim::Daylight, behind
             // puddles and the wet asphalt the renderer draws (the same wetness:
             // none under snow, OMSI_WETNESS as the picture takes it)
             let wetness = puddles::road_wetness(*cx.weather.wetness, wt.snow);
+            // the spray of the vehicles just ahead, onto the player's windscreen
+            if let Some(p) = cx.player.player.as_mut() {
+                let others = cx.traffic.traffic.iter().flat_map(|t| t.cars.iter()).map(|c| (c.vehicle.position, c.state.speed, c.state.length));
+                p.vehicle.host.spray_ahead = crate::spray_screen::spray_ahead(&p.vehicle, others, if wt.snow || kind == 2 { 0.0 } else { wetness });
+            }
             // (the vehicles' own wheel spray goes with the same water: only through puddles -
             // in snow it keeps the scripts' own slush)
             let flood = cx.weather.flood.water_at();
@@ -225,6 +235,7 @@ pub(super) fn lights(cx: LightsCx, dt: f32, daylight: omsi_sim::Daylight, behind
                     if let Some(r) = cx.gfx.renderer.as_mut() {
                         for (delay, distance, dir) in r.take_strikes() {
                             s.thunder(delay, distance, dir, cam.position);
+                            cx.weather.outage.strike(cx.common.settings.storm_outage || omsi_cfg::flags::OMSI_STORM_CUTS.is_set(), distance, cx.clock.clock.run_time);
                         }
                     }
                     s.update(

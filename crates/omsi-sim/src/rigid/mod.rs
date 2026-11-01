@@ -527,6 +527,8 @@ pub struct RigidBody {
     pub wetness: f32,
     /// K-OMSI: the flood water the body stands in (m deep).
     pub water_depth: f32,
+    /// K-OMSI: black ice under the tyres (0..1): it takes up to `road_ice::GRIP_LOSS` of their grip.
+    pub ice: f32,
     /// Distance driven along the road (m, signed): where on the road's unevenness the
     /// body's origin is. An axle at `y` metres from the origin is at `road_s + y`.
     pub road_s: f64,
