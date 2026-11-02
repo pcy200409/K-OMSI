@@ -33680,6 +33680,10 @@ _version: 2
   sr: "DKST/BC teksture ostaju komprimovane na GPU-u"
   ka: "DXT/BC ტექსტურები GPU-ზე შეკუმშული რჩება"
 
+"Off takes four to eight times the video memory: only for a driver that draws them wrong. A card of 4 GB or less keeps them compressed.":
+  ko: "끄면 그래픽 메모리를 4~8배 씁니다. 텍스처가 깨져 보이는 드라이버에서만 끄세요. 4GB 이하 그래픽카드는 꺼도 압축을 유지합니다."
+  ja: "オフにするとビデオメモリを4〜8倍使います。テクスチャを正しく描けないドライバーのときだけ。4GB以下のカードでは圧縮のままです。"
+
 "CAVOK":
   es: "CAVOK"
   zh-tw: "晴空"
