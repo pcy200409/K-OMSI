@@ -14,6 +14,9 @@ const JOINT_BLEND: f32 = 6.0;
 /// Seconds of signalling before a lane change begins to move sideways (two, as a driver
 /// signals before moving over; the indicator is on from the decision).
 pub const SIGNAL_BEFORE_CHANGE: f32 = 2.0;
+/// Seconds of signalling before pulling out round a standing obstacle: openOMSI's 1.2 (a car
+/// standing behind it creeps on while it signals, and longer would bring its corner too close).
+pub const SIGNAL_BEFORE_BYPASS: f32 = 1.2;
 
 /// One AI vehicle moving on the network: where it is along its lanes and which way it is
 /// going. The body that follows this way is `ai_motion::AiBody`.
@@ -631,6 +634,7 @@ impl AiState {
         self.start_change(net, to, dir);
         if let Some(c) = self.change.as_mut() {
             c.length = 8.0;
+            c.wait = c.wait.min(SIGNAL_BEFORE_BYPASS);
             c.bypass = true;
         }
     }
