@@ -24,3 +24,4 @@ patch/lan-version-notice
 patch/mirror-weather-light
 patch/nav-first-stop
 patch/obis-route-fallback
+patch/map-list-dup
