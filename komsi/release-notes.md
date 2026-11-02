@@ -1,6 +1,6 @@
 <p align="center"><img src="https://raw.githubusercontent.com/pcy200409/K-OMSI/branding/komsi/logo.png" alt="K-OMSI" width="470"></p>
 
-**K-OMSI 0.4** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.47(main `b5d29ecd`)을 바탕으로 K-OMSI 수정을 얹은 빌드입니다. 이번부터 K-OMSI 버전은 0.4.x로 따로 매기고, 맵 편집기 [openMapper](https://github.com/openOMSI-org/openMapper) 0.1.17(K-OMSI 수정판)을 함께 넣었습니다.
+**K-OMSI 0.4** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.47(main `b5d29ecd`)을 바탕으로 K-OMSI 수정을 얹은 빌드입니다. 이번부터 K-OMSI 버전은 0.4.x로 따로 매깁니다. 맵 편집기 [openMapper](https://github.com/openOMSI-org/openMapper)는 이번 판부터 함께 넣지 않습니다.
 
 > **비공식 포크입니다.** K-OMSI는 공식 openOMSI(openOMSI.org)와 관계없는 독립 프로젝트이며, openOMSI의 이름·로고는 원작자의 것입니다([TRADEMARKS.md](https://github.com/pcy200409/K-OMSI/blob/release/TRADEMARKS.md)). 문제는 공식 저장소가 아니라 [K-OMSI 이슈](https://github.com/pcy200409/K-OMSI/issues)로 알려 주세요.
 >
@@ -39,7 +39,6 @@
 - **미러 날씨 밝기 (새)**: 향상 그래픽에서 일반 미러(미러 품질 "표준")가 흐리거나 비 오는 낮에 창밖보다 어둡던 문제를 고쳤습니다. 창밖 화면의 자동 노출처럼, 날씨로 어두워진 만큼을 미러에서도 되돌립니다.
 - **내비 첫 정류장 합류 (새)**: 운행의 첫 정류장(차고지)을 지나 이미 경로 위를 달리는 버스는 경로에 합류한 것으로 보고, 첫 정류장으로 되돌아가는 우회 안내를 하지 않습니다.
 - **서버 맵 목록 누락 수정 (새)**: 전용 서버의 맵 목록(`run-server`, `--list-maps`)에서 한 번 플레이한 맵이 빠지고 "설치되지 않음"으로 나오던 문제를 고쳤습니다. 게임이 콘텐츠 폴더에 `global.cfg` 없이 `laststn.osn`만 든 맵 폴더를 만들면 그 폴더가 같은 이름의 진짜 맵을 가렸습니다.
-- **openMapper 동봉 (새, K-OMSI 수정판)**: Windows 묶음의 `openMapper` 폴더에 [openMapper](https://github.com/openOMSI-org/openMapper) 0.1.17(AGPL-3.0, 도로 그리기·오브젝트 배치·지형 편집)을 K-OMSI 수정을 얹어 직접 빌드해 넣었습니다. 더한 것: 보기 > 지도에 노선 표시(노선 선택 포함), 파일 > 노선도 내보내기(SVG·PNG, 도로망 위/노선만), 주차칸 등 납작한 오브젝트가 도로에 묻히던 문제와 낮 텍스처가 검정인 오브젝트(정류장 도움 화살표)의 검은 원 수정, 새 문구의 한국어 번역, 공식 릴리스로의 자동 업데이트 끄기(우리 수정판을 덮어쓰지 않도록). 수정 내용은 이 저장소의 `komsi/openmapper/*.patch`에 있습니다. `openMapper\openmapper.exe`로 실행하며 macOS 묶음에는 들어 있지 않습니다. openMapper 0.1.17 공식 변경(릴리스 제목 기준): 도로 표시를 그리는 드로잉 보드, 교차로 편집기의 칠한 선, 호수·강 도구, Tab 패널, 에셋 관리자가 더해졌고 대중교통망은 다시 빠졌습니다. openMapper 0.1.16 공식 변경: 맵 자신의 항공사진을 제 크기로(카메라 둘레 창에 든 사진 수에 따라 1024·2048로 표시), 큰 맵에서 더 빠름(개요 지도의 도로를 한 번만 그림), 오래된 GL 드라이버(GTX 550 Ti 등)에서 시작이 막히던 문제 수정. openMapper 0.1.15 공식 변경: 신호등 머리가 교차로 신호 주기에 따라 빨강·황색·녹색 불을 켜고(연결 안 된 머리는 빨강), 보기 > 시간대에 시간 흐름(1배·5배·60배)과 하단 시계가 생기고, 맵 옆에 OMSI 에디터가 둔 항공사진(`maps/aerials/<맵>/`)을 찾아 맵 위성 이미지로 복사하며, 그래픽 장치를 열지 못하면 다음 그래픽 백엔드로 넘어가 시작합니다. 0.1.13 공식 변경: 복합 교차로 편집기 재구성(자동 정렬·자동 접속부·자동 교차로 생성, 곡선 도구, 미리보기), 버스 포켓 설정(폭·테이퍼), OMSI 2 에디터식 조작(보기 메뉴, 기본 꺼짐), 교차로 판이 도로 텍스처 형식을 따르고 같은 교차로는 한 오브젝트를 공유, 시작 멈춤 시 로그 기록.
 
 
 ## openOMSI 0.3.47 변경사항 (`8a0f61fb` 이후 main `b5d29ecd`까지, 요약)
