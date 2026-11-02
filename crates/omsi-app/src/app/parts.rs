@@ -53,6 +53,9 @@ pub(crate) struct WeatherPart<'p> {
     pub(crate) weather: &'p mut Option<omsi_content::weather::Weather>,
     pub(crate) wetness: &'p mut f32,
     pub(crate) flood: &'p mut crate::flood::FloodState,
+    pub(crate) ice: &'p mut crate::road_ice::IceState,
+    pub(crate) potholes: &'p mut crate::potholes::PotholeState,
+    pub(crate) outage: &'p mut crate::storm_outage::Outage,
     pub(crate) cloud_drift: &'p mut [f64; 4],
     pub(crate) weather_blend: &'p mut Option<crate::weather_cycle::Blend>,
     pub(crate) weather_cycle: &'p mut Option<crate::weather_cycle::Cycle>,
@@ -176,7 +179,7 @@ impl App {
             placed, world_day, traffic, schedule, timetable_book, humans, duty, duty_places, rain,
             cabin_air, spray, lamps_on, populate_t, humans_populate_t, traffic_heavy_frame,
             first_populate, envir, weather, clock_jump, seat_bus, on_foot, safe_pose, safe_age,
-            pending_time, autosave_t, pumping, career, journey, wetness, flood, cloud_drift, weather_blend,
+            pending_time, autosave_t, pumping, career, journey, wetness, flood, ice, potholes, outage, cloud_drift, weather_blend,
             weather_cycle, metar_rx, metar_once, metar_next, sky, scenery, tomorrow,
         } = session;
         Parts {
@@ -185,7 +188,7 @@ impl App {
             menus: MenusPart { menus, shell },
             clock: ClockPart { clock, paused, world_day, clock_jump, pending_time, autosave_t, fixed_tick },
             weather: WeatherPart {
-                rain, cabin_air, spray, lamps_on, envir, weather, wetness, flood, cloud_drift,
+                rain, cabin_air, spray, lamps_on, envir, weather, wetness, flood, ice, potholes, outage, cloud_drift,
                 weather_blend, weather_cycle, metar_rx, metar_once, metar_next, sky, tomorrow,
             },
             world: WorldPart { world, scenery },
