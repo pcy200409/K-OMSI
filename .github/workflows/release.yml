@@ -185,32 +185,6 @@ jobs:
             Copy-Item (Join-Path $dir $dll) dist/windows/
           }
           Get-ChildItem dist/windows
-      # K-OMSI: openMapper (openOMSI-org/openMapper, AGPL-3.0, the map editor) beside the
-      # game in an `openMapper` folder. Its source of the release tag (the commit is pinned
-      # here) with K-OMSI's patches (komsi/openmapper/*.patch: Korean texts, the objects'
-      # drawing, lines on the map, the line map export, no update from the official
-      # releases) built with openMapper's own packaging script.
-      - name: openMapper
-        shell: pwsh
-        env:
-          OPENMAPPER_TAG: v0.1.17
-          OPENMAPPER_COMMIT: 272b87f68bfc985e24d7e3bc6945042344e21cd1
-        run: |
-          $src = Join-Path $env:RUNNER_TEMP "openmapper-src"
-          git clone --quiet -c core.autocrlf=false --depth 1 --branch $env:OPENMAPPER_TAG https://github.com/openOMSI-org/openMapper.git $src
-          $have = (git -C $src rev-parse HEAD).Trim()
-          if ($have -ne $env:OPENMAPPER_COMMIT) { throw "openMapper $env:OPENMAPPER_TAG is commit $have, expected $env:OPENMAPPER_COMMIT" }
-          foreach ($p in Get-ChildItem komsi/openmapper/*.patch | Sort-Object Name) {
-            git -C $src apply --whitespace=nowarn $p.FullName
-            if ($LASTEXITCODE -ne 0) { throw "openMapper: $($p.Name) does not apply" }
-          }
-          pwsh -File "$src/tools/package-windows.ps1" -Target $env:TARGET
-          if ($LASTEXITCODE -ne 0) { throw "openMapper: packaging failed" }
-          $zip = Get-ChildItem "$src/target/package/*.zip" | Select-Object -First 1
-          Expand-Archive $zip.FullName -DestinationPath openmapper/x
-          $dir = Get-ChildItem openmapper/x -Directory | Select-Object -First 1
-          Copy-Item -Recurse $dir.FullName dist/windows/openMapper
-          Get-ChildItem dist/windows/openMapper
       - name: Package
         shell: pwsh
         run: |
