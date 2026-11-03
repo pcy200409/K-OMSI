@@ -1,6 +1,6 @@
 <p align="center"><img src="https://raw.githubusercontent.com/pcy200409/K-OMSI/branding/komsi/logo.png" alt="K-OMSI" width="470"></p>
 
-**K-OMSI 0.4** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.47(main `b5d29ecd`)을 바탕으로 K-OMSI 수정을 얹은 빌드입니다. 이번부터 K-OMSI 버전은 0.4.x로 따로 매깁니다. 맵 편집기 [openMapper](https://github.com/openOMSI-org/openMapper)는 이번 판부터 함께 넣지 않습니다.
+**K-OMSI 0.4** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.47(main `b5d29ecd`)을 바탕으로 K-OMSI 수정을 얹은 빌드입니다. 이번부터 K-OMSI 버전은 0.4.x로 따로 매깁니다.
 
 > **비공식 포크입니다.** K-OMSI는 공식 openOMSI(openOMSI.org)와 관계없는 독립 프로젝트이며, openOMSI의 이름·로고는 원작자의 것입니다([TRADEMARKS.md](https://github.com/pcy200409/K-OMSI/blob/release/TRADEMARKS.md)). 문제는 공식 저장소가 아니라 [K-OMSI 이슈](https://github.com/pcy200409/K-OMSI/issues)로 알려 주세요.
 >
@@ -9,6 +9,8 @@
 > **초기 단계 프로젝트입니다. 버그가 있을 수 있습니다.** OMSI 2 정품이 설치되어 있어야 실행됩니다. 이 프로그램에는 게임 콘텐츠가 들어 있지 않습니다.
 
 ## K-OMSI에서 더한 것
+
+맵 편집기 openMapper는 더 이상 함께 넣지 않습니다. K-OMSI 수정판은 https://github.com/pcy200409/K-openMapper 에서 따로 받으세요.
 
 - **표시 이름**: 게임 창 제목이 K-OMSI로 표시되고 로딩 화면에 K-OMSI 로고가 나옵니다. 자동 업데이트는 공식 openOMSI가 아니라 이 저장소의 릴리스를 확인합니다.
 - **텔레메트리 페달·주행거리**: 텔레메트리의 플레이어 항목에 가속·브레이크·클러치 페달 값(0~1, 운전석과 같이 컨트롤러 입력이 키보드보다 우선)과 버스 총 주행거리(`odometer_km`)를 더했습니다. 외부 채점 도구(DTG / light-taco 등)용입니다.
