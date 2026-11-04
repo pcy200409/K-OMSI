@@ -65,6 +65,10 @@ fn gpu_texture_compression_and_the_launchers_defaults() {
     assert!(!Settings::from_text("gpu_texture_compression=disabled\n").gpu_texture_compression);
     assert!(Settings::from_text("gpu_texture_compression=auto\n").gpu_texture_compression);
     assert!(!off.render_options().gpu_texture_compression);
+    // (the safer graphics after a lost device take them compressed again)
+    let mut safe = off.clone();
+    safe.apply_safe_gpu(1);
+    assert!(safe.render_options().gpu_texture_compression);
     let launcher = omsi_launcher_lib::settings_from_text(None);
     let game = Settings::from_text(&omsi_launcher_lib::settings_to_text(&launcher, None));
     let d = Settings::default();
