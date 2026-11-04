@@ -33,7 +33,7 @@ pub fn describe_join(text: &str) -> Result<String, String> {
     if looks_like_code(t) {
         let c = SessionCode::decode(t)?;
         if c.protocol as u32 != PROTOCOL {
-            return Err(format!("this code was made by a game with LAN protocol {}, this one speaks {PROTOCOL} - both players need the same version", c.protocol));
+            return Err(crate::version_mismatch_text(c.protocol as u32, PROTOCOL, None));
         }
         let at: Vec<String> = c
             .ips
