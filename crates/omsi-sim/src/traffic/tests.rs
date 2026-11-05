@@ -1314,3 +1314,29 @@ fn a_door_program_without_green_holds_its_stop_in_state_four() {
     gdr.advance(3.0);
     assert!(!gdr.held, "green with yellow (state 8) is a go phase: the changeover to it is not held");
 }
+
+/// (K-OMSI) A lane driven backwards (`[rule] reverse`) joins the lane into a bay at a cusp,
+/// and the forward lane after it at another; a plain lane turning back is not joined.
+#[test]
+fn a_reversing_lane_joins_at_a_cusp() {
+    let p = |y: f64| DVec3::new(0.0, y, 0.0);
+    let bay = LaneBuilder::polyline(vec![p(0.0), p(20.0)], LaneKind::Street, 3.0);
+    let mut back = LaneBuilder::polyline(vec![p(20.0), p(5.0)], LaneKind::Street, 3.0);
+    back.reverse_drive = true;
+    let on = LaneBuilder::polyline(vec![p(5.0), p(40.0)], LaneKind::Street, 3.0);
+    let plain = LaneBuilder::polyline(vec![p(20.0), p(0.0)], LaneKind::Street, 3.0);
+    let mut net = Network { lanes: vec![bay, back, on, plain], ..Default::default() };
+    net.link(1.5);
+    assert_eq!(net.lanes[0].next, vec![1]);
+    assert_eq!(net.lanes[1].next, vec![2]);
+    // across the cusps the bumper that leads changes
+    let mut car = AiState::new(0, 19.0, 7);
+    car.front = 3.0;
+    car.rear = 9.0;
+    car.lane = 1;
+    car.sync_reversing(&net);
+    assert!(car.reversing && car.front == 9.0 && car.rear == 3.0);
+    car.lane = 2;
+    car.sync_reversing(&net);
+    assert!(!car.reversing && car.front == 3.0 && car.rear == 9.0);
+}
