@@ -660,7 +660,7 @@ impl AiBody {
         self.a_lat = 0.0;
         self.steer = 0.0;
         self.steer_cmd = 0.0;
-        self.moved = -speed;
+        self.moved = speed;
         self.started = true;
     }
 
