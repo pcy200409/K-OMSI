@@ -293,6 +293,10 @@ const BRAKE_LIGHT_MIN: f32 = 0.6;
 /// How hard a driver slows for a bend ahead (m/s²): early and gently. At 2 m/s² the car ran
 /// up to the bend's speed profile and then braked at once, a jolt before every turn.
 const BEND_DECEL: f32 = 1.2;
+/// (K-OMSI) How a vehicle comes to a cusp (`AiState::cusp_ahead`): braking at this much
+/// (m/s²) down to a crawl (m/s) that takes it the last centimetres.
+const CUSP_DECEL: f32 = 1.0;
+const CUSP_CRAWL: f32 = 0.6;
 /// Braking gentler than this (m/s²) is put on at `BRAKE_JERK`, not in one step.
 const GENTLE_BRAKE: f32 = 2.5;
 const BRAKE_JERK: f32 = 5.0;
@@ -755,13 +759,47 @@ impl AiState {
     /// own curvature or the turn of the way over 6 m, whichever is sharper: lanes are linked
     /// with up to 40° between them, and such a kink is a bend too.
     pub fn curve_speed(&self, net: &Network) -> f32 {
-        let mut best = self.curve_speed_on(net, &self.seq(), self.s);
+        // (K-OMSI) a cusp ahead - into or out of a lane driven backwards - is no bend: the
+        // vehicle stops there and changes gear. The bends are looked for up to it only, and the
+        // speed comes down to a crawl at it (taken as a 180-degree bend, the allowed speed
+        // fell towards nothing and the vehicle crept to the cusp for ever).
+        let cusp = self.cusp_ahead(net);
+        let mut best = self.curve_speed_on(net, &self.seq(), self.s, cusp.map(|c| c - 6.0));
         if let Some(c) = self.change {
             if c.to < net.lanes.len() {
-                best = best.min(self.curve_speed_on(net, &self.change_seq(c.to), c.s_to));
+                best = best.min(self.curve_speed_on(net, &self.change_seq(c.to), c.s_to, None));
             }
         }
+        if let Some(c) = cusp {
+            best = best.min((CUSP_CRAWL * CUSP_CRAWL + 2.0 * CUSP_DECEL * c.max(0.0)).sqrt());
+        }
         best
+    }
+
+    /// (K-OMSI) How far ahead the way turns back on itself (the end of the lane before which a
+    /// lane driven backwards begins or ends), within `bend_reach`.
+    pub fn cusp_ahead(&self, net: &Network) -> Option<f32> {
+        let here = net.lanes.get(self.lane)?;
+        let mut back = here.reverse_drive;
+        let mut d = here.length() - self.s;
+        let reach = self.bend_reach();
+        let on: Vec<usize> = if self.route.is_empty() {
+            self.planned_next.into_iter().chain(self.ahead.iter().copied()).collect()
+        } else {
+            self.route.iter().skip(self.route_index + 1).copied().collect()
+        };
+        for l in on {
+            let lane = net.lanes.get(l)?;
+            if lane.reverse_drive != back {
+                return Some(d);
+            }
+            back = lane.reverse_drive;
+            d += lane.length();
+            if d > reach {
+                break;
+            }
+        }
+        None
     }
 
     fn bend_reach(&self) -> f32 {
@@ -820,8 +858,8 @@ impl AiState {
         best
     }
 
-    fn curve_speed_on(&self, net: &Network, q: &LaneSeq, s: f32) -> f32 {
-        let reach = self.bend_reach();
+    fn curve_speed_on(&self, net: &Network, q: &LaneSeq, s: f32, upto: Option<f32>) -> f32 {
+        let reach = upto.map_or(self.bend_reach(), |u| u.min(self.bend_reach()));
         let lat = self.bend_lat();
         let mut best = f32::MAX;
         // The samples lie at fixed places of the road (every 2.5 m of the odometer), not at
