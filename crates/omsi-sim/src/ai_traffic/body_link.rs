@@ -52,7 +52,11 @@ pub fn project(state: &AiState, net: &Network, body: &AiBody, half_lane: f32) ->
     // behind the planner's place, and it is turned half round from the way
     let (rot, flip) = if state.reversing { (-body.rotation_long(), 180.0) } else { (body.rotation_long(), 0.0) };
     let at = body.rotation_at();
-    let point = |d: f32| state.way_point(net, rot + d);
+    // (K-OMSI: the way mirrored through a cusp as the body stands on it, `AiState::cusp_way` -
+    // past a cusp the plain way runs back over itself and the body was found there)
+    let plain = |d: f32| state.way_point(net, d);
+    let way = state.cusp_way(net, &plain);
+    let point = |d: f32| way(rot + d);
     // the nearest sample, then the nearest point of the pieces on either side of it
     let n = ((WINDOW_BACK + WINDOW_AHEAD) / SAMPLE).round() as usize;
     let mut best = (f64::MAX, 0usize);
