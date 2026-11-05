@@ -1340,3 +1340,23 @@ fn a_reversing_lane_joins_at_a_cusp() {
     car.sync_reversing(&net);
     assert!(!car.reversing && car.front == 3.0 && car.rear == 9.0);
 }
+
+/// (K-OMSI) Towards a cusp the bend speed comes down to a crawl, not to nothing: the vehicle
+/// gets to the end of the lane and changes gear there.
+#[test]
+fn a_cusp_ahead_slows_to_a_crawl_not_to_a_stand() {
+    let p = |y: f64| DVec3::new(0.0, y, 0.0);
+    let mut back = LaneBuilder::polyline(vec![p(30.0), p(10.0)], LaneKind::Street, 3.0);
+    back.reverse_drive = true;
+    let lanes = vec![LaneBuilder::polyline(vec![p(0.0), p(30.0)], LaneKind::Street, 3.0), back];
+    let mut net = Network { lanes, ..Default::default() };
+    net.link(1.5);
+    let mut car = AiState::new(0, 29.9, 7);
+    car.route = vec![0, 1];
+    car.planned_next = Some(1);
+    assert!((car.cusp_ahead(&net).unwrap() - 0.1).abs() < 1e-3);
+    let v = car.curve_speed(&net);
+    assert!(v >= 0.6 && v < 1.0, "{v}");
+    car.s = 10.0;
+    assert!(car.curve_speed(&net) > 5.0);
+}
