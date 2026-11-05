@@ -48,7 +48,9 @@ pub struct Projection {
 /// Where `body` stands on the way `state` lays out over `net` (None: nowhere within the
 /// window). `half_lane` is half the width of the car's lane.
 pub fn project(state: &AiState, net: &Network, body: &AiBody, half_lane: f32) -> Option<Projection> {
-    let rot = body.rotation_long();
+    // (K-OMSI) a body backing stands back to front on its way: its rotation point lies
+    // behind the planner's place, and it is turned half round from the way
+    let (rot, flip) = if state.reversing { (-body.rotation_long(), 180.0) } else { (body.rotation_long(), 0.0) };
     let at = body.rotation_at();
     let point = |d: f32| state.way_point(net, rot + d);
     // the nearest sample, then the nearest point of the pieces on either side of it
@@ -84,7 +86,7 @@ pub fn project(state: &AiState, net: &Network, body: &AiBody, half_lane: f32) ->
     let right = DVec2::new(dir.y, -dir.x);
     let side = (at - q.truncate()).dot(right) as f32;
     let way_heading = dir.x.atan2(dir.y).to_degrees();
-    let turn = ((body.heading - way_heading + 540.0).rem_euclid(360.0) - 180.0).abs();
+    let turn = ((body.heading + flip - way_heading + 540.0).rem_euclid(360.0) - 180.0).abs();
     // (the way's height at the rotation point against the body's origin, both on the road)
     let rise = body.position.z - q.z;
     let on_way = side.abs() <= half_lane + BEYOND_EDGE && turn <= MAX_TURN && rise.abs() <= MAX_RISE;
@@ -155,6 +157,21 @@ mod tests {
         far.s = 60.0;
         body.place(&|d| far.way_point(&net, d), None, None, 0.0);
         assert!(project(&st, &net, &body, 1.5).is_none());
+    }
+
+    /// (K-OMSI) A body backing along its way (back to front on it, `AiBody::reverse`) is found
+    /// where its planner is, on its way, not two rotation-point distances behind and turned.
+    #[test]
+    fn a_body_backing_is_found_on_its_way() {
+        let net = road();
+        let mut st = AiState::new(0, 100.0, 1);
+        st.plan_next(&net);
+        st.reversing = true;
+        let mut body = AiBody::new(&golf(), MotionKind::Road);
+        body.reverse = true;
+        body.place(&|d| st.way_point(&net, d), None, None, 0.0);
+        let p = project(&st, &net, &body, 1.5).unwrap();
+        assert!(p.on_way && p.along.abs() < 0.05 && p.turn < 1.0, "{p:?}");
     }
 
     /// A planner whose body is held back two metres behind it waits for it: it takes the
