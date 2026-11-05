@@ -175,6 +175,9 @@ pub struct AiBody {
     /// How fast the body's rotation point went along its heading in the last step (m/s):
     /// the planner's speed, less what held the body back, plus its catching up.
     pub moved: f32,
+    /// (K-OMSI) Backing along its way (`AiState::reversing`): the body stands back to front on
+    /// it (`ride_back`), the tail leading.
+    pub reverse: bool,
     /// How far ahead the driver looks along the way to steer, as a share of the usual
     /// (`drive`): 1, or what a corner caught on something is worked free with
     /// (`ai_traffic::scenery`).
@@ -306,6 +309,7 @@ impl AiBody {
             steer_cmd: 0.0,
             last_speed: 0.0,
             moved: 0.0,
+            reverse: false,
             look_scale: 1.0,
             a_long: 0.0,
             a_lat: 0.0,
@@ -362,8 +366,14 @@ impl AiBody {
         self.last_speed = speed;
         match self.kind {
             MotionKind::Road => {
-                self.drive(dt, speed, way);
-                self.settle(dt, way, ground, contact);
+                if self.reverse {
+                    self.ride_back(dt, speed, way);
+                    // (the way's height at each axle: the body's +long lies back along the way)
+                    self.settle(dt, &|d| way(-d), ground, contact);
+                } else {
+                    self.drive(dt, speed, way);
+                    self.settle(dt, way, ground, contact);
+                }
             }
             MotionKind::Rail => self.ride(way),
             MotionKind::Air => self.fly(dt, speed, way),
@@ -627,6 +637,33 @@ impl AiBody {
         }
     }
 
+    /// (K-OMSI) A road vehicle backing along its way: its axles stand on the way back to front
+    /// - the rear axle `-rear_long` metres ahead (the tail leads), the front one `front_long`
+    /// behind - and the body is the line between them, its nose pointing back along the way.
+    /// At walking pace on a short reversing lane the rear wheels follow the lane closely
+    /// enough; the cusp before it (`AiState::cusp_way`) keeps the body where it stood.
+    fn ride_back(&mut self, dt: f32, speed: f32, way: &dyn Fn(f32) -> DVec3) {
+        let f = way(-self.front_long);
+        let r = way(-self.rear_long);
+        let d = f - r;
+        let run = d.truncate().length();
+        let h0 = self.heading;
+        if run > 1e-3 {
+            self.heading = d.x.atan2(d.y).to_degrees().rem_euclid(360.0);
+        }
+        let span = (self.front_long - self.rear_long).max(0.1);
+        let o = r + d * ((0.0 - self.rear_long) / span) as f64;
+        self.position.x = o.x;
+        self.position.y = o.y;
+        self.rear = o.truncate() + dir(self.heading) * self.rot_long as f64;
+        self.yaw_rate = if dt > 0.0 { (wrap(self.heading - h0).to_radians() / dt as f64) as f32 } else { 0.0 };
+        self.a_lat = 0.0;
+        self.steer = 0.0;
+        self.steer_cmd = 0.0;
+        self.moved = -speed;
+        self.started = true;
+    }
+
     /// A rail vehicle: its outermost axles stand on the track, the body is the line
     /// between them.
     fn ride(&mut self, way: &dyn Fn(f32) -> DVec3) {
@@ -841,6 +878,41 @@ mod tests {
             body.step(dt, speed, &|d| DVec3::new(0.0, s + d as f64, 10.0), Some(&bumpy), None);
             assert!(body.position.is_finite() && body.vz.is_finite() && body.vpitch.is_finite(), "step {i}: {:?} vz {} vpitch {}", body.position, body.vz, body.vpitch);
         }
+    }
+
+    /// (K-OMSI) A bus that drove north into a bay and backs out south again stands where it
+    /// stood at the cusp, nose north, and moves back along the way with its nose still north.
+    #[test]
+    fn backs_out_of_a_bay_nose_first_stays_put_at_the_cusp() {
+        let mut def = Vehicle { mass: 11.0, moment_of_inertia: [300.0, 300.0, 80.0], cog_height: 1.3, rot_pnt_long: -2.5, inv_min_turn_radius: 0.1, ..Default::default() };
+        def.axles = [3.4, -2.5].iter().map(|&long| Axle { long, max_width: 2.1, spring: 240.0, damper: 20.0, wheel_diameter: 1.0, ..Default::default() }).collect();
+        let mut body = AiBody::new(&def, MotionKind::Road);
+        let flat = |_x: f64, _y: f64| Some(10.0);
+        // forwards up to the end of the bay lane (origin at y = 20)
+        body.place(&|d| DVec3::new(0.0, d as f64, 10.0), Some(&flat), None, 0.0);
+        let dt = 0.05;
+        let mut y = 0.0f64;
+        while y < 20.0 {
+            y = (y + 0.1).min(20.0);
+            let at = y;
+            body.step(dt, 2.0, &|d| DVec3::new(0.0, at + d as f64, 10.0), Some(&flat), None);
+        }
+        let (p0, h0) = (body.position, body.heading);
+        // backing: the reversing lane runs south from the cusp, `s` along it
+        body.reverse = true;
+        body.step(dt, 0.0, &|d| DVec3::new(0.0, 20.0 - d as f64, 10.0), Some(&flat), None);
+        assert!((body.position - p0).truncate().length() < 0.3, "moved {:?} -> {:?}", p0, body.position);
+        assert!(wrap(body.heading - h0).abs() < 3.0 && wrap(body.heading).abs() < 3.0, "heading {h0} -> {}", body.heading);
+        for k in 1..=50 {
+            let s = k as f64 * 0.1;
+            body.step(dt, 2.0, &|d| DVec3::new(0.0, 20.0 - s - d as f64, 10.0), Some(&flat), None);
+        }
+        assert!((body.position.y - (p0.y - 5.0)).abs() < 0.3 && wrap(body.heading).abs() < 1.0, "{:?} heading {}", body.position, body.heading);
+        // and forwards again (nose north) on the lane after: no jump
+        let p1 = body.position;
+        body.reverse = false;
+        body.step(dt, 0.0, &|d| DVec3::new(0.0, 15.0 + d as f64, 10.0), Some(&flat), None);
+        assert!((body.position - p1).truncate().length() < 0.3 && wrap(body.heading).abs() < 3.0, "{:?} -> {:?}", p1, body.position);
     }
 
     fn golf() -> Vehicle {
