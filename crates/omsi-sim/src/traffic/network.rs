@@ -509,7 +509,10 @@ impl Network {
                             }
                             let d = (l.start() - e).truncate().length();
                             let dh = wrap_deg(l.start_heading() - eh).abs();
-                            if d <= tol && dh < 40.0 && (l.start().z - e.z).abs() < 3.0 {
+                            // (K-OMSI) into or out of a lane driven backwards the way turns back
+                            // on itself at a cusp: the vehicle stops and changes gear there
+                            let cusp = l.reverse_drive != self.lanes[i].reverse_drive && dh > 140.0;
+                            if d <= tol && (dh < 40.0 || cusp) && (l.start().z - e.z).abs() < 3.0 {
                                 found.push(j);
                             }
                         }
