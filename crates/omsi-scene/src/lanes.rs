@@ -95,6 +95,10 @@ pub(super) fn spline_lanes(
         let no_cars = s.rules.iter().any(|r| {
             r.path_index == pi as i32 && r.kind.eq_ignore_ascii_case("no_cars") && !r.kill
         });
+        // (K-OMSI) `[rule] reverse`: driven backwards, see `Lane::reverse_drive`
+        let reverse_drive = s.rules.iter().any(|r| {
+            r.path_index == pi as i32 && r.kind.eq_ignore_ascii_case("reverse") && !r.kill
+        });
         // (`bus` and `trucks` are switches that open the path to those AI vehicles, see
         // `Lane::allows`; `bus` does not close it to cars)
         let rule_bus = rule_of("bus").is_some();
@@ -118,6 +122,7 @@ pub(super) fn spline_lanes(
             l.density = density;
             l.group_density = group_density.clone();
             l.no_cars = no_cars;
+            l.reverse_drive = reverse_drive;
             l.rule_bus = rule_bus;
             l.rule_trucks = rule_trucks;
             l.no_overtaking = no_overtaking;
@@ -247,6 +252,7 @@ pub(super) fn object_lanes(
         let no_cars = rules.iter().any(|r| {
             r.path_index == pi as i32 && r.kind.eq_ignore_ascii_case("no_cars") && !r.kill
         });
+        let reverse_drive = rule_of("reverse").is_some();
         let rule_bus = rule_of("bus").is_some();
         let rule_trucks = rule_of("trucks").is_some();
         let no_overtaking = rule_of("overtaking_prohib").is_some();
@@ -273,6 +279,7 @@ pub(super) fn object_lanes(
             l.density = density;
             l.group_density = group_density.clone();
             l.no_cars = no_cars;
+            l.reverse_drive = reverse_drive;
             l.rule_bus = rule_bus;
             l.rule_trucks = rule_trucks;
             l.no_overtaking = no_overtaking;
