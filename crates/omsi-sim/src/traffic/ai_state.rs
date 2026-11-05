@@ -708,9 +708,10 @@ impl AiState {
         let lane = net.lanes.get(self.lane);
         let len = lane.map(|l| l.length()).unwrap_or(0.0);
         let rev = lane.is_some_and(|l| l.reverse_drive);
-        // a cusp at the end of this lane, and one at its start (behind, when backing)
+        // a cusp at the end of this lane, and one at its start (behind: into the backed lane,
+        // and out of it - there the tail of the vehicle stands past the cusp)
         let ahead = self.planned_next.and_then(|n| net.lanes.get(n)).is_some_and(|n| n.reverse_drive != rev);
-        let behind = rev && self.prev_lane.and_then(|p| net.lanes.get(p)).is_some_and(|p| !p.reverse_drive);
+        let behind = self.prev_lane.and_then(|p| net.lanes.get(p)).is_some_and(|p| p.reverse_drive != rev);
         let end = lane.map(|l| l.end()).unwrap_or(DVec3::ZERO);
         let start = lane.map(|l| l.start()).unwrap_or(DVec3::ZERO);
         let s = self.s;
