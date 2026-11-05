@@ -87,8 +87,13 @@ pub struct AiState {
     /// Additional personality setting: how long they wait to honk a horn (relative factor).
     pub honk_factor: f32,
     /// From the vehicle's origin (the lane position `s`) to its front and rear bumper (m).
+    /// Measured along the way it drives: while it backs (`reversing`) the two are swapped,
+    /// so that the gap to the car ahead is taken from the bumper that leads, its rear one.
     pub front: f32,
     pub rear: f32,
+    /// (K-OMSI) On a lane driven backwards (`Lane::reverse_drive`): `front`/`rear` are
+    /// swapped and the body stands back to front on the way (`AiBody::reverse`).
+    pub reversing: bool,
     /// Standing still and held there (by a car ahead, a light, a stop): moving off again
     /// starts after `reaction`; `start_timer` counts it down.
     pub held: bool,
@@ -439,6 +444,8 @@ impl AiState {
             speed_cap: None,
             rail_power: None,
             bend: BendCache::default(),
+            amber_factor: 0.03,
+            reversing: false,
         }
     }
 
@@ -833,6 +840,47 @@ impl AiState {
             q.n += 1;
         }
         q
+    }
+
+    /// (K-OMSI) Backing or not as the lane it is on says: across a cusp the bumper that leads
+    /// changes, so `front` and `rear` change places.
+    pub fn sync_reversing(&mut self, net: &Network) {
+        let back = net.lanes.get(self.lane).is_some_and(|l| l.reverse_drive);
+        if back != self.reversing {
+            std::mem::swap(&mut self.front, &mut self.rear);
+            self.reversing = back;
+        }
+    }
+
+    /// (K-OMSI) The way as the body sees it at a cusp: past the point where the way turns back
+    /// on itself (the end of the lane before a lane driven backwards, or of that lane before
+    /// the forward one after it, and the start of the backed lane behind the vehicle) the
+    /// way runs on straight along the lane instead - mirrored through the cusp - as the
+    /// vehicle's nose (or tail) does over the bay. Without it the body's far axle, and the
+    /// point the steering aims at, lay back along the other lane.
+    pub fn cusp_way(&self, net: &Network, way: &dyn Fn(f32) -> DVec3) -> impl Fn(f32) -> DVec3 + '_ {
+        let lane = net.lanes.get(self.lane);
+        let len = lane.map(|l| l.length()).unwrap_or(0.0);
+        let rev = lane.is_some_and(|l| l.reverse_drive);
+        // a cusp at the end of this lane, and one at its start (behind, when backing)
+        let ahead = self.planned_next.and_then(|n| net.lanes.get(n)).is_some_and(|n| n.reverse_drive != rev);
+        let behind = rev && self.prev_lane.and_then(|p| net.lanes.get(p)).is_some_and(|p| !p.reverse_drive);
+        let end = lane.map(|l| l.end()).unwrap_or(DVec3::ZERO);
+        let start = lane.map(|l| l.start()).unwrap_or(DVec3::ZERO);
+        let s = self.s;
+        let pts: Vec<(f32, DVec3)> = (-40..=40).map(|k| (k as f32, way(k as f32))).collect();
+        move |d: f32| {
+            let p = sample(&pts, d);
+            if ahead && s + d > len {
+                let m = sample(&pts, len - s - (s + d - len));
+                DVec3::new(2.0 * end.x - m.x, 2.0 * end.y - m.y, p.z)
+            } else if behind && s + d < 0.0 {
+                let m = sample(&pts, -s + (-(s + d)));
+                DVec3::new(2.0 * start.x - m.x, 2.0 * start.y - m.y, p.z)
+            } else {
+                p
+            }
+        }
     }
 
     /// The point of the car's way `d` metres ahead of it (behind for negative `d`): along
@@ -1415,6 +1463,7 @@ impl AiState {
             self.s -= l.length();
             self.prev_lane = Some(self.lane);
             self.lane = next;
+            self.sync_reversing(net);
             if self.route.is_empty() {
                 self.planned_next = if self.ahead.is_empty() {
                     None
@@ -1479,4 +1528,12 @@ mod power_tests {
         assert_eq!(power_limited(1.0, Some(12.0), 0.2), 1.0);
         assert_eq!(power_limited(1.0, Some(12.0), 500.0), 0.08);
     }
+}
+
+/// (K-OMSI) A way given at whole metres (`AiState::cusp_way`), between them linearly.
+fn sample(pts: &[(f32, DVec3)], d: f32) -> DVec3 {
+    let d = d.clamp(pts[0].0, pts[pts.len() - 1].0);
+    let k = ((d - pts[0].0).floor() as usize).min(pts.len() - 2);
+    let (a, b) = (pts[k], pts[k + 1]);
+    a.1.lerp(b.1, ((d - a.0) as f64).clamp(0.0, 1.0))
 }
