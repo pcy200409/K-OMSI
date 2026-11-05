@@ -12,9 +12,11 @@ impl Network {
             return false;
         }
         let (e, s) = (a.end(), b.start());
-        (s - e).truncate().length() <= tol
-            && wrap_deg(b.start_heading() - a.end_heading()).abs() < 40.0
-            && (s.z - e.z).abs() < 3.0
+        let dh = wrap_deg(b.start_heading() - a.end_heading()).abs();
+        // (K-OMSI) into or out of a lane driven backwards the way turns back on itself at a
+        // cusp: the vehicle stops and changes gear there
+        let cusp = a.reverse_drive != b.reverse_drive && dh > 140.0;
+        (s - e).truncate().length() <= tol && (dh < 40.0 || cusp) && (s.z - e.z).abs() < 3.0
     }
 
     /// Keep a direct link only when it does not skip a signalized lane that joins both ends.
