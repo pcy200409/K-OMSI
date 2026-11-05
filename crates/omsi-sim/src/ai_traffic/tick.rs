@@ -76,6 +76,13 @@ fn step_body(net: &Network, dt: f32, scripts: bool, profile: bool, w: &mut BodyW
         // time, as this is where they animate (`update_trailers` leaves a train's cars
         // standing on their track alone, and the scripts' frame skips them)
         vehicle.retrail(dt, &|d| Some(behind(d)));
+    } else if !vehicle.trailers.is_empty() && state.reversing {
+        // (K-OMSI) backing: the rear section is pushed ahead of the front one and laid on the
+        // way the tail takes, as a driver keeps it there - towed instead, a trailer pushed
+        // backwards folds up. Behind the body is ahead along its way.
+        let plain = |d: f32| state.way_point(net, d);
+        let way = state.cusp_way(net, &plain);
+        vehicle.retrail(dt, &|d| Some(way(d as f32)));
     } else if !vehicle.trailers.is_empty() {
         // (a road trailer, an articulated bus's rear section: with its front in every step)
         vehicle.step_ai_trailers(dt);
