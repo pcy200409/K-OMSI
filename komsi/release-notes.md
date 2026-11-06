@@ -1,6 +1,6 @@
 <p align="center"><img src="https://raw.githubusercontent.com/pcy200409/K-OMSI/branding/komsi/logo.png" alt="K-OMSI" width="470"></p>
 
-**K-OMSI 0.4** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.49 이후 main(`3cfb0ce7`)을 바탕으로 K-OMSI 수정을 얹은 빌드입니다. 이번부터 K-OMSI 버전은 0.4.x로 따로 매깁니다.
+**K-OMSI 0.4** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.50 이후 main(`a19eac80`)을 바탕으로 K-OMSI 수정을 얹은 빌드입니다. 이번부터 K-OMSI 버전은 0.4.x로 따로 매깁니다.
 
 > **비공식 포크입니다.** K-OMSI는 공식 openOMSI(openOMSI.org)와 관계없는 독립 프로젝트이며, openOMSI의 이름·로고는 원작자의 것입니다([TRADEMARKS.md](https://github.com/pcy200409/K-OMSI/blob/release/TRADEMARKS.md)). 문제는 공식 저장소가 아니라 [K-OMSI 이슈](https://github.com/pcy200409/K-OMSI/issues)로 알려 주세요.
 >
@@ -12,13 +12,14 @@
 
 맵 편집기 openMapper는 더 이상 함께 넣지 않습니다. K-OMSI 수정판은 https://github.com/pcy200409/K-openMapper 에서 따로 받으세요.
 
+K-OMSI가 따로 넣었던 NVIDIA DLSS(PR #942 이식)는 뺐습니다. openOMSI 0.3.50부터 공식으로 DLSS·FSR 3가 들어왔으니 아래 공식 변경사항을 보세요.
+
 - **표시 이름**: 게임 창 제목이 K-OMSI로 표시되고 로딩 화면에 K-OMSI 로고가 나옵니다. 자동 업데이트는 공식 openOMSI가 아니라 이 저장소의 릴리스를 확인합니다.
 - **텔레메트리 페달·주행거리**: 텔레메트리의 플레이어 항목에 가속·브레이크·클러치 페달 값(0~1, 운전석과 같이 컨트롤러 입력이 키보드보다 우선)과 버스 총 주행거리(`odometer_km`)를 더했습니다. 외부 채점 도구(DTG / light-taco 등)용입니다.
 - **승객 좌석 선택**: 승객이 빈자리를 무작위로 잡지 않고 고릅니다. 짧게 타는 승객은 하차문 근처에 서고, 멀리 가는 승객은 안쪽에 앉으며, 남은 몇 자리는 멀리 가는 승객 몫입니다. 노인(65세 이상)은 빈 좌석이 있으면 앉고 탄 문 가까이 앉습니다. 빈 2인석·창가·사람과 떨어진 입석 자리를 먼저 고릅니다. openOMSI의 '짧게 타는 승객은 문 옆에 서기'(`pax_short_rides_stand`)를 켜면 짧게 타는 승객에게는 그 규칙이 먼저 적용됩니다.
 - **LAN 차량번호·번호판**: 멀티플레이에서 다른 플레이어의 버스가 그 플레이어 화면과 같은 차량번호와 번호판으로 보입니다.
 - **AI 차량 차선 변경 신호**: AI 차량이 다른 차선으로 옮기기 2초 전에 방향지시등을 켭니다(기존 1.2초). 서 있는 차를 비켜 갈 때는 openOMSI대로 1.2초입니다.
 - **ReShade 호환**: 게임이 ReShade를 넣으면 창이 뜨기 전에 꺼지던 문제를 고쳤습니다(wgpu의 `IDXGIFactoryMedia` 생성 제거, Criisko/openOMSI 방식). ReShade는 `openomsi.exe`에 DirectX 10/11/12로 설치하세요.
-- **NVIDIA DLSS / DLAA (시험 기능)**: 설정 → 그래픽 → 안티에일리어싱 아래 **DLSS** 칸(끔·DLAA·품질·균형·성능·울트라 성능). 기본은 꺼짐입니다. Windows + DirectX 12(켜면 자동 선택) + GeForce RTX가 필요하고, NVIDIA Streamline의 `sl.interposer.dll`, `sl.common.dll`, `sl.dlss.dll`, `nvngx_dlss.dll`을 [Streamline SDK](https://github.com/NVIDIA-RTX/Streamline) `bin/x64`에서 받아 `openomsi.exe` 옆에 넣어야 합니다(NVIDIA 파일은 포함하지 않음). 없으면 이유를 로그에 남기고 평소대로 그립니다. openOMSI PR #942(Nussaccino)를 옮겨 온 것입니다. DLSS를 켜면 openOMSI 0.3.41의 FSR 1 대신 DLSS가 화면을 키웁니다.
 - **HTML 페이지 한글 글꼴 지정**: `openomsi.exe` 옆 `fonts/html_fallback.ttf`(굵은 글씨는 `html_fallback_bold.ttf`)가 있으면 HTML 페이지(정류장 안내기, 단말기 화면 등)의 한글을 그 글꼴로 그립니다(없으면 기존대로 맑은 고딕). 업데이트해도 이 파일은 지워지지 않습니다.
 - **하이거 Auto 화면 (시험 기능)**: 하이거 1611P 문 CCTV 화면을 눌러 여는 안드로이드 오토 풍 차량 화면입니다. 게임 도로 지도·노선·차량 위치, 다음 정류장 3곳과 운행표 시각, 정류장 접근·문 열림 표시, YouTube 링크 재생을 보여 줍니다. 설치된 Edge 또는 Chrome이 필요하고, 차량 옆에 `HigerHypers1611P.android-auto.cfg`(예시: `docs/examples/android-auto`)를 두어야 켜집니다. 자세한 내용과 한계: [docs/android-auto.md](https://github.com/pcy200409/K-OMSI/blob/release/docs/android-auto.md)
 - **맵 규칙 존중**: AI 차량의 희망 속도가 맵의 `[rule] speedlimit`을 넘지 않고(최대 제한속도의 100%), 보행자가 맵에서 `trafficdensity 0`으로 둔 보도는 갈 곳이 따로 없을 때가 아니면 걷지 않습니다.
@@ -42,6 +43,19 @@
 - **내비 첫 정류장 합류 (새)**: 운행의 첫 정류장(차고지)을 지나 이미 경로 위를 달리는 버스는 경로에 합류한 것으로 보고, 첫 정류장으로 되돌아가는 우회 안내를 하지 않습니다.
 - **서버 맵 목록 누락 수정 (새)**: 전용 서버의 맵 목록(`run-server`, `--list-maps`)에서 한 번 플레이한 맵이 빠지고 "설치되지 않음"으로 나오던 문제를 고쳤습니다. 게임이 콘텐츠 폴더에 `global.cfg` 없이 `laststn.osn`만 든 맵 폴더를 만들면 그 폴더가 같은 이름의 진짜 맵을 가렸습니다.
 
+## openOMSI 0.3.50 및 이후 main 공식 변경사항 (`3cfb0ce7` 이후 main `a19eac80`까지, 요약)
+
+공식 CHANGELOG에는 이번 변경이 아직 올라오지 않아 커밋 기준으로 정리했습니다. 이 사이에 v0.3.50 태그가 나왔고, 트롤리 집전 머리 회전은 0.3.50 이후 main에 들어온 것입니다.
+
+### 새 기능
+- **NVIDIA DLSS · AMD FSR 3 업스케일링** (#3681): DirectX 12와 Vulkan 모두에서 됩니다. DLSS(원래 해상도로 그리는 DLAA 포함)는 GeForce RTX에서만, FSR 3는 어떤 그래픽카드에서나 씁니다. AMD FidelityFX DLL은 Windows x64 빌드에 들어 있고, NVIDIA DLSS 파일은 들어 있지 않아 런처의 선택 설치기로 따로 받습니다(NVIDIA 라이선스 별도, 승인한 경우에만 설치, Windows·RTX·게임 재시작 필요). 업스케일러가 켜져 있으면 안티에일리어싱·렌더 배율 칸은 숨겨지고, 스크린숏은 키운 화면 그대로 찍히며, DLL이 없으면 '표준'으로 표시됩니다.
+- **Lua 플러그인 `omsi.cable`**: 플러그인이 3D 세계에 케이블을 그릴 수 있습니다(플러그인별 점 개수 한도 있음).
+- **트롤리 집전봉 손 조작**: 집전봉을 줄로 손수 올리고 내릴 수 있고(Ctrl+R), 차량 스크립트가 움직이는 승강 장치를 쓸 수 있습니다. 0.3.50 이후 main에서는 집전봉 머리가 가선을 따라 돌아 모델의 집전 슈에 쓸 수 있습니다(`Trolley_Pole<k>_Shoe_Yaw` / `_Shoe_Pitch`).
+
+### 수정·성능
+- **그래픽 API 자동 선택**: AMD Radeon에서는 Vulkan을 먼저 열고, Vulkan에서 장치를 한 번 잃으면 DirectX 12를 유지합니다. DirectX 12로 그릴 수 없으면 다른 Vulkan 어댑터를 시도합니다. Vulkan에서 반사광 계산 위치를 바꿔 AMD에서 향상 그래픽 셰이더 성능을 지킵니다.
+- **비디오 메모리**: 승객 안내 화면의 지난 프레임을 메모리가 바닥나기 전에 놓아 주고, GPU 대체 모드로 넘어가기 전에 플레이어 버스의 디테일을 지키며, AI 텍스처 상향이 복구 예산 안에서만 이뤄집니다. 번갈아 바뀌는 큰 표시 그림은 캐시에 남습니다.
+- **기타**: 모델 순서로 그리는 버스의 깊이 채우기가 유리창 앞에 유지되고, `max_angle`이 `rest_angle`보다 작을 때 트롤리 줄이 집전봉 범위를 지킵니다.
 
 ## openOMSI 0.3.49 및 이후 main 공식 변경사항 (`9826da3f` 이후 main `3cfb0ce7`까지, 요약)
 
