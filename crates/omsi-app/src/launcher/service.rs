@@ -358,6 +358,9 @@ impl Showroom {
 /// The preview's renderer: no window, the launcher window's own options.
 fn open_renderer(options: omsi_render::RenderOptions) -> anyhow::Result<Renderer> {
     let instance = crate::graphics_instance();
+    // (its pipelines in a file of their own: one shared with the game was overwritten at each
+    // launcher start, and the game compiled its pipelines again every time)
+    omsi_render::pipeline_cache::set_role("launcher");
     let r = pollster::block_on(Renderer::new_with(&instance, None, Some(wgpu::TextureFormat::Rgba8UnormSrgb), options))?;
     log::info!("launcher service: renderer on {}", r.adapter_name);
     Ok(r)
