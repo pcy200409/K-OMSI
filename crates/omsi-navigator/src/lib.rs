@@ -165,6 +165,8 @@ pub struct NavStop {
     /// Closed today (a diversion, roadworks: `duty.set_closed_stops`), with the way round it
     /// ("" when not said): struck through, and the bus does not call there.
     pub closed: Option<String>,
+    /// The trip's first stop (where it starts: the depot, the terminus).
+    pub start: bool,
 }
 
 /// Another player of the session as the maps show them (the session's, see `lan`).
@@ -476,9 +478,10 @@ pub fn duty_parts(duty: Option<&omsi_sim::timetable_run::PlayerDuty>) -> (Option
     let stops = trip
         .stops
         .iter()
+        .enumerate()
         .skip(d.next_stop)
-        .filter(|s| s.stops)
-        .map(|s| NavStop { object_id: s.object_id, position: s.position.unwrap_or(DVec3::ZERO), name: s.name.clone(), arrival: s.arr, closed: s.closed.clone() })
+        .filter(|(_, s)| s.stops)
+        .map(|(i, s)| NavStop { object_id: s.object_id, position: s.position.unwrap_or(DVec3::ZERO), name: s.name.clone(), arrival: s.arr, closed: s.closed.clone(), start: i == 0 })
         .collect();
     (Some(line.to_string()), Some(trip.terminus.clone()), stops, Some((format!("{}/{}", d.trip_index, trip.name), trip.name.clone())))
 }
@@ -861,9 +864,13 @@ impl Navigator {
         let stop_at = f.stops.first().and_then(|st| stop_on_route(net, &r.lanes[..r.lanes.len().min(r.progress + 1500)], r.progress, st.position, |_, _| true)).map(|(k, _)| k);
         // the nearest route lane near the bus that runs its way, a little back to a lot ahead
         // (before the bus first reached the route: only the stretch up to the next stop)
+        // (the trip's first stop left early or without calling there - out of the depot
+        // before the departure: the bus already on the route beyond it has joined it, and is
+        // not sent round the block back to it; Dasan's 83 out of Yonggok garage)
+        let past = if f.stops.first().is_some_and(|s| s.start) { 60 } else { 2 };
         let (from, to) = match (r.joined, stop_at) {
-            (false, Some(k)) if r.approach => (r.progress.saturating_sub(3), (k + 2).min(r.lanes.len())),
-            (false, Some(k)) => (k.saturating_sub(40).max(r.progress), (k + 2).min(r.lanes.len())),
+            (false, Some(k)) if r.approach => (r.progress.saturating_sub(3), (k + past).min(r.lanes.len())),
+            (false, Some(k)) => (k.saturating_sub(40).max(r.progress), (k + past).min(r.lanes.len())),
             (true, Some(k)) => (r.progress.saturating_sub(3), (r.progress + 60).min(k.max(r.progress) + 2).min(r.lanes.len())),
             _ => (r.progress.saturating_sub(3), (r.progress + 60).min(r.lanes.len())),
         };
