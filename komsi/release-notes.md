@@ -1,6 +1,6 @@
 <p align="center"><img src="https://raw.githubusercontent.com/pcy200409/K-OMSI/branding/komsi/logo.png" alt="K-OMSI" width="470"></p>
 
-**K-OMSI 0.4** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.50 이후 main(`a19eac80`)을 바탕으로 K-OMSI 수정을 얹은 빌드입니다. 이번부터 K-OMSI 버전은 0.4.x로 따로 매깁니다.
+**K-OMSI 0.4** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.51(`f35ecba2`)을 바탕으로 K-OMSI 수정을 얹은 빌드입니다. 이번부터 K-OMSI 버전은 0.4.x로 따로 매깁니다.
 
 > **비공식 포크입니다.** K-OMSI는 공식 openOMSI(openOMSI.org)와 관계없는 독립 프로젝트이며, openOMSI의 이름·로고는 원작자의 것입니다([TRADEMARKS.md](https://github.com/pcy200409/K-OMSI/blob/release/TRADEMARKS.md)). 문제는 공식 저장소가 아니라 [K-OMSI 이슈](https://github.com/pcy200409/K-OMSI/issues)로 알려 주세요.
 >
@@ -43,6 +43,14 @@ K-OMSI가 따로 넣었던 NVIDIA DLSS(PR #942 이식)는 뺐습니다. openOMSI
 - **내비 첫 정류장 합류 (새)**: 운행의 첫 정류장(차고지)을 지나 이미 경로 위를 달리는 버스는 경로에 합류한 것으로 보고, 첫 정류장으로 되돌아가는 우회 안내를 하지 않습니다.
 - **서버 맵 목록 누락 수정 (새)**: 전용 서버의 맵 목록(`run-server`, `--list-maps`)에서 한 번 플레이한 맵이 빠지고 "설치되지 않음"으로 나오던 문제를 고쳤습니다. 게임이 콘텐츠 폴더에 `global.cfg` 없이 `laststn.osn`만 든 맵 폴더를 만들면 그 폴더가 같은 이름의 진짜 맵을 가렸습니다.
 - **AI 후진 차선 (새, 시험 기능)**: 맵에서 `[rule] reverse`로 표시한 차선(터미널의 사선 주차칸 등)을 AI 차량이 후진으로 달립니다. 앞뒤 차선과 만나는 꺾임점에서는 기어를 바꾸듯 천천히(0.6 m/s) 다가가 멈췄다가 방향을 바꾸고, 굴절버스는 후진하는 동안 뒤 차체가 접히지 않고 지나갈 길 위에 놓입니다.
+
+## openOMSI 0.3.51 공식 변경사항 (`a19eac80` 이후 `f35ecba2`까지, 요약)
+
+공식 CHANGELOG에는 이번 변경이 올라오지 않아 커밋 기준으로 정리했습니다. 새 기능은 없고 수정만 들어왔습니다.
+
+### 수정
+- **멀티플레이 호스팅**: 포트 확인의 응답이 늦게 오거나 연결이 늦게 닫히는 PC에서 세션 호스팅이 실패하던 문제를 고쳤습니다.
+- **도시 지도 비디오 메모리**: 도시 지도를 닫으면 지도가 쓰던 비디오 메모리를 풍경 텍스처에 돌려줍니다.
 
 ## openOMSI 0.3.50 및 이후 main 공식 변경사항 (`3cfb0ce7` 이후 main `a19eac80`까지, 요약)
 
