@@ -411,12 +411,18 @@ fn remote_needs_long_passwords(mut cfg: ServerCfg) -> ServerCfg {
 /// (one check for `server.cfg` and the admins: `omsi_admin::passenger_density`)
 pub use omsi_admin::{passenger_density, PASSENGER_DENSITY_MAX};
 
-/// The installed maps as server.cfg names them (`maps/<folder>/global.cfg`), sorted.
+/// The installed maps as server.cfg names them (`maps/<folder>/global.cfg`), sorted. A map
+/// folder of a higher content root without a global.cfg (only the game's `laststn.osn` in
+/// the content folder) does not hide the map below it.
 pub fn installed_maps() -> Vec<String> {
-    let mut maps: Vec<String> = omsi_cfg::read_dir_merged("maps")
+    let mut seen = std::collections::HashSet::new();
+    let mut maps: Vec<String> = omsi_cfg::content_dirs("maps")
         .into_iter()
+        .flat_map(|d| omsi_cfg::vfs::list_dir(&d).unwrap_or_default().into_iter().map(move |(n, _)| d.join(n)))
         .filter(|d| omsi_cfg::vfs::exists(&d.join("global.cfg")))
-        .filter_map(|d| d.file_name().map(|n| format!("maps/{}/global.cfg", n.to_string_lossy())))
+        .filter_map(|d| d.file_name().map(|n| n.to_string_lossy().into_owned()))
+        .filter(|n| seen.insert(omsi_cfg::name_key(n)))
+        .map(|n| format!("maps/{n}/global.cfg"))
         .collect();
     maps.sort_by_key(|m| m.to_lowercase());
     maps
