@@ -105,6 +105,7 @@ impl Traffic {
             held: false,
             geo_block: None,
             lead_info: None,
+            behind_player: None,
             junction_why: String::new(),
             wait_at: None,
             seed: 0,
