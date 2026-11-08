@@ -589,9 +589,13 @@ impl TrafficSim {
                 if v < limit * 0.7
                     && v < st.speed + 1.0
                     && d > 8.0
-                    // K-OMSI: not round a car standing in a queue before a light or a
-                    // junction (room to get back in beyond it, on open road)
-                    && (v >= 0.5 || self.open_road_ahead(st, d + 30.0) >= d + 30.0)
+                    // K-OMSI: not round something standing (a queue before a light, a
+                    // junction or a bus at its stop): the move, begun 45 m off, was not over
+                    // when the car had to stop behind it, and a move goes on only as the car
+                    // drives - it stood there with the move begun, for good. Going round what
+                    // stands is `plan_bypass`'s (from where it waits, short, once it is known
+                    // to stand)
+                    && v >= 0.5
                     && self.lane_clear(i, side, s_side, 20.0, 50.0, by_lane)
                     && self.open_run(st, side, s_side, room) >= room
                 {

@@ -655,6 +655,34 @@ fn a_car_goes_round_the_players_bus_standing_well_before_a_red_light() {
     assert!(went_round, "it does not go round the bus standing 60 m before the light");
 }
 
+#[test]
+fn the_cars_behind_a_queue_at_the_standing_player_bus_go_round_it() {
+    // two lanes north; the player's bus stands on the right lane (at its stop) and a car
+    // has stopped close behind it, too close to steer out round it (a timetable bus
+    // waiting for its own stop does not either). A car coming up behind that one passes
+    // the two of them in the lane beside: with the player's bus at the head of the queue
+    // nothing counted as standing for long, and the street behind the player's bus waited
+    // for as long as the player stood
+    let f = Fixture::new();
+    let lanes = vec![street(-3.5, 0.0, 0.0, 800.0), street(0.0, 0.0, 0.0, 800.0)];
+    let mut t = traffic(&f, net_of(lanes, &[(0, 1)]));
+    let bus: PlayerBox = (DVec3::new(0.0, 200.0, 0.0), 0.0, 6.0, 1.25, 0.0);
+    let close = add_car(&mut t, &f, 1, 190.5, 0x919, Some(0.0));
+    let me = add_car(&mut t, &f, 1, 20.0, 0xa1a, Some(8.0));
+    let mut past = false;
+    for _ in 0..(90.0 / DT) as usize {
+        t.tick(DT, Some(bus));
+        let c = car(&t, me).expect("on the road");
+        past |= c.vehicle.position.y > 215.0;
+        assert_eq!(any_overlap(&t, 0.1), None, "bodies overlap at t={:.2}", t.time);
+        if past {
+            break;
+        }
+    }
+    assert!(car(&t, close).is_some());
+    assert!(past, "it waited behind the queue at the player's bus");
+}
+
 /// #2048: over a solid centre line (`[rule] overtaking_prohib`) a car does not go round a
 /// vehicle that stands in its lane and will move on; it still goes round a parked car.
 #[test]
