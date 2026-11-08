@@ -25,3 +25,5 @@ patch/nav-first-stop
 patch/obis-route-fallback
 patch/map-list-dup
 patch/ai-reverse
+patch/pipeline-cache-split
+patch/vehicle-load-parallel
