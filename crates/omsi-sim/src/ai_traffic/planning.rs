@@ -480,6 +480,16 @@ impl TrafficSim {
                 break;
             }
             let Some((id, gap)) = self.cars[k].lead_info else {
+                // K-OMSI: the queue is headed by the player's bus standing (at its stop, not
+                // at a light): it will not move for a while. The timetable bus behind it
+                // waits for its own stop, and the cars behind that bus waited with it,
+                // the lane beside them free, for as long as the player stood.
+                if let Some((gap, stood, length)) = self.cars[k].behind_player {
+                    if gap <= 8.0 && stood > 10.0 {
+                        len += gap.max(0.0) + length;
+                        long = true;
+                    }
+                }
                 break;
             };
             let Some(&n) = self.index_of.get(&id) else {
@@ -522,6 +532,14 @@ impl TrafficSim {
         }
         let Some(d) = gap else { return };
         if d > 25.0 {
+            return;
+        }
+        // K-OMSI: not from right behind a vehicle (under half the room its steering needs - a
+        // car that had queued up nose to tail before the one ahead counted as standing): the
+        // move took its corner straight into the obstacle's (the way over is checked
+        // against all but what it goes round), and it stood there with the move begun, for
+        // good, holding the lane beside it as well
+        if lead.is_some_and(|l| l.1.is_some()) && d < self.cars[i].pass_room * 0.5 {
             return;
         }
         let lane = &self.net.lanes[st.lane];

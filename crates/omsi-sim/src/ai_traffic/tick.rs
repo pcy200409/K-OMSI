@@ -749,6 +749,12 @@ impl TrafficSim {
             who.filter(|&j| j < self.cars.len())
                 .map(|j| (self.cars[j].id, l.gap))
         });
+        // (K-OMSI: and whether that is the player's bus, standing how long)
+        let at_light = self.cars[i].since_player_at_light;
+        self.cars[i].behind_player = match (lead, player) {
+            (Some((l, Some(usize::MAX))), Some(p)) if p.4.abs() < 0.3 => Some((l.gap, player_standing.min(at_light), p.2 * 2.0)),
+            _ => None,
+        };
         // Something that may stand for a while (a bus at its stop, the player's bus that
         // has stopped) is waited behind with room to pull out round it later: a car that
         // had stopped a metre behind the player's bus scraped its corner when it went
