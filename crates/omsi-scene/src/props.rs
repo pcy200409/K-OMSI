@@ -306,6 +306,7 @@ impl World {
             let g = Arc::make_mut(&mut d.ground);
             g.terrains.remove(&key);
             g.surfaces.remove(&key);
+            g.waters.remove(&key);
         });
         freed > 0
     }
