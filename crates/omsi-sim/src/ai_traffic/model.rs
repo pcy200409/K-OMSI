@@ -119,6 +119,11 @@ pub struct AiCar {
     pub geo_block: Option<u64>,
     /// What it keeps behind (by id) and the gap to it, as of its last step.
     pub lead_info: Option<(u64, f32)>,
+    /// K-OMSI: it keeps behind the player's (or a LAN player's) bus, as of its last step:
+    /// (the gap to it, how long that bus has stood - not counting a wait at a light -, its
+    /// length). A queue headed by a bus that stands is passed as a whole
+    /// (`TrafficSim::standing_queue`).
+    pub behind_player: Option<(f32, f32, f32)>,
     /// What it waited for at its last junction (`OMSI_DEBUG_STUCK` only).
     pub junction_why: String,
     /// Giving way: where it waits (distance from its origin to the line).
@@ -748,6 +753,7 @@ impl TrafficSim {
             held: false,
             geo_block: None,
             lead_info: None,
+            behind_player: None,
             junction_why: String::new(),
             wait_at: None,
             squeeze: None,
