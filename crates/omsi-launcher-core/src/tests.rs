@@ -460,6 +460,10 @@ fn settings_defaults_and_automatic_values() {
     // a number from a script instead of the select's string
     let text = settings_to_text(&json!({ "view_distance": 900, "video_memory": 1500.0 }), None);
     assert!(text.contains("\nview_distance=900\n") && text.contains("\nvideo_memory=1500\n"), "{text}");
+    // K-OMSI: the whole map kept loaded goes through the page and back
+    let v = settings_from_text(Some("view_distance=map\n"));
+    assert_eq!(v["view_distance"], "map");
+    assert!(settings_to_text(&v, None).lines().any(|l| l == "view_distance=map"));
 }
 
 /// Dates fitted to a map's year span: moved to the nearest allowed year keeping the day,
