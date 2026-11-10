@@ -217,6 +217,13 @@ pub(crate) fn prepare(args: &mut Args, path: &Path) -> Result<ServerCfg> {
     args.lan_name = cfg.name.clone();
     args.bus = None;
     args.radius = Some(if cfg.radius <= 0 { 99 } else { cfg.radius });
+    // K-OMSI: streamed round the players instead (`stream_distance`): only the start area at
+    // first, the rest as they come (see `offscreen::step::server_streaming_step`)
+    if cfg.stream_distance > 0.0 {
+        args.radius = Some(1);
+        let _ = SERVER_STREAM.set(cfg.stream_distance);
+        log::info!("server: the tiles within {:.0} m of a player are loaded as they drive (stream_distance), not the whole map", cfg.stream_distance);
+    }
     args.size = "64x36".into();
     if args.offscreen.is_none() {
         args.offscreen = Some(std::env::temp_dir().join("omsi-server-unused.png"));
@@ -226,6 +233,10 @@ pub(crate) fn prepare(args: &mut Args, path: &Path) -> Result<ServerCfg> {
     log::info!("server '{}': map {}, {} at {}, traffic {}, timetable {}, passengers {} (density {density}), UDP {} / web {}, at most {} players", cfg.name, cfg.map, cfg.date.as_deref().unwrap_or("today"), cfg.time, cfg.traffic, cfg.timetable, cfg.passengers, cfg.port, cfg.web_port, cfg.max_players);
     Ok(cfg)
 }
+
+/// K-OMSI: a dedicated server's `stream_distance` (m) when it streams the tiles round its
+/// players.
+pub(crate) static SERVER_STREAM: std::sync::OnceLock<f64> = std::sync::OnceLock::new();
 
 /// A dedicated server's people: whether it has any (`passengers`) and its
 /// `passenger_density` (None: the machine's own passengers setting).

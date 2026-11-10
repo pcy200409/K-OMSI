@@ -37,6 +37,10 @@ pub struct ServerCfg {
     /// `off`: none told.
     pub public_address: String,
     pub radius: i32,
+    /// K-OMSI: metres round each connected player whose tiles the server keeps loaded,
+    /// streamed as they drive (0: off - `radius` tiles round the first entry point, the whole
+    /// map with 0, loaded once at the start). The whole of a big map held 6 GB (Namcheon).
+    pub stream_distance: f64,
     pub icon: Vec<u8>,
     /// Players who say `/admin <password>` in the chat administer the server (empty: nobody).
     pub admin_password: String,
@@ -172,6 +176,9 @@ public_address =
 
 # how many tiles round the map's first entry point are kept loaded (0: all of them)
 radius = 0
+# K-OMSI: load only the tiles within this many metres of a connected player, as they drive
+# (0: off - radius above; 1500 holds a fraction of a big map's memory)
+stream_distance = 1500
 
 # players who say \"/admin <password>\" in the chat get the Administration menu (Esc):
 # send players away, bring them, the clock, its speed, the weather, the traffic and the
@@ -344,6 +351,7 @@ impl ServerCfg {
                 }
             }).unwrap_or_default(),
             radius: num("radius", 0) as i32,
+            stream_distance: kv.get("stream_distance").and_then(|v| v.trim().parse::<f64>().ok()).filter(|d| d.is_finite() && *d > 0.0).map(|d| d.max(omsi_map::tile_size())).unwrap_or(0.0),
             icon,
             admin_password: admin_password(kv.get("admin_password").cloned().unwrap_or_default()),
             moderator_password: checked_password(kv.get("moderator_password").cloned().unwrap_or_default(), "moderator_password"),
@@ -829,5 +837,33 @@ mod rp_speed_limit_tests {
             assert_eq!(parse_speed_limit(Some(bad)), 0, "{bad}");
         }
         assert_eq!(parse_speed_limit(None), 0);
+    }
+}
+
+/// K-OMSI: `stream_distance` - metres round the players, off when absent or 0, never less
+/// than a tile.
+#[cfg(test)]
+mod stream_distance_tests {
+    use super::ServerCfg;
+
+    fn load(text: &str) -> ServerCfg {
+        static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!("omsi-stream-cfg-{}-{n}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("server.cfg");
+        std::fs::write(&path, text).unwrap();
+        let cfg = ServerCfg::load(&path, 120).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        cfg
+    }
+
+    #[test]
+    fn stream_distance_is_off_unless_set() {
+        assert_eq!(load("map = maps/x/global.cfg\n").stream_distance, 0.0);
+        assert_eq!(load("map = maps/x/global.cfg\nstream_distance = 0\n").stream_distance, 0.0);
+        assert_eq!(load("map = maps/x/global.cfg\nstream_distance = 1500\n").stream_distance, 1500.0);
+        assert_eq!(load("map = maps/x/global.cfg\nstream_distance = 10\n").stream_distance, omsi_map::tile_size());
+        assert_eq!(load("map = maps/x/global.cfg\nstream_distance = far\n").stream_distance, 0.0);
     }
 }
