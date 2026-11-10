@@ -91,6 +91,7 @@ pub fn game_setting_options(key: &str) -> Vec<(&'static str, &'static str)> {
             ("1500", "1500 m"),
             ("2000", "2000 m"),
             ("2500", "2500 m"),
+            ("map", "Whole map (heavy)"),
         ],
         "max_obj_dist" => vec![
             ("auto", "Automatic"),
