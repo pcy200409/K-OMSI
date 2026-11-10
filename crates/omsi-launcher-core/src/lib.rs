@@ -2563,9 +2563,11 @@ pub fn settings_from_text_on(text: Option<&str>, phone: bool) -> Value {
             "graphics" | "renderer" => graphics = Some(graphics_mode(val)),
             // whole metres, as the page's select has them ("1500"); anything else (auto) is
             // the game's default
+            // (K-OMSI: or "map", the whole map kept loaded)
             "view_distance" => {
                 v[&k] = match val.parse::<f64>() {
                     Ok(m) if m > 0.0 => json!((m.round() as i64).to_string()),
+                    _ if val.trim().eq_ignore_ascii_case("map") || val.trim().eq_ignore_ascii_case("all") => json!("map"),
                     _ => json!("auto"),
                 }
             }
@@ -2720,6 +2722,8 @@ pub fn settings_to_text(v: &Value, old: Option<&str>) -> String {
         // metres, or "auto" (the game's 1200 m)
         match v.get("view_distance") {
             Some(Value::String(s)) if s.trim().parse::<f64>().map(|m| m > 0.0).unwrap_or(false) => s.trim().to_string(),
+            // (K-OMSI: the whole map)
+            Some(Value::String(s)) if s.trim().eq_ignore_ascii_case("map") => "map".to_string(),
             Some(Value::Number(x)) if x.as_f64().map(|m| m > 0.0).unwrap_or(false) => x.to_string(),
             _ => "auto".to_string(),
         },
