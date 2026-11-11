@@ -103,11 +103,14 @@ local function map_folder_of(path)
   return path:match("([^/]+)/[^/]+$")
 end
 
+local picked_rev = nil   -- 이름표를 만든 때의 omsi.obis.routes_rev (노선을 다 읽거나 다시 읽으면 OBIS 이름으로 다시)
+
 local function pick_map()
   local info = omsi.info and omsi.info() or nil
   local f = info and map_folder_of(info.map_path) or nil
-  if f == obis_picked or not map_tabs then return end
-  obis_picked = f
+  local rev = omsi.obis and omsi.obis.routes_rev and omsi.obis.routes_rev() or nil
+  if (f == obis_picked and rev == picked_rev) or not map_tabs then return end
+  obis_picked, picked_rev = f, rev
   local e = f and map_tabs[f] or nil
   my_map = e and e.obis or nil
   -- 보내기 노선도 이 맵 것만: mapId / false = 이 PC 표에 있는 OBIS 미등록 맵(노선 안 붙임) / nil = 모르는 맵(원래 규칙)
