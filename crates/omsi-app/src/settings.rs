@@ -1165,7 +1165,8 @@ impl Settings {
         if self.max_obj_dist >= 0.0 {
             self.max_obj_dist
         } else {
-            view_distance().map(|v| v as f32).unwrap_or(900.0)
+            // (K-OMSI: with the whole map loaded, not as far as the map reaches)
+            view_distance().map(|v| if v >= WHOLE_MAP_DISTANCE { WHOLE_MAP_OBJECT_DISTANCE } else { v as f32 }).unwrap_or(900.0)
         }
     }
 
@@ -1315,9 +1316,30 @@ pub fn rain_quality(v: &str) -> &'static str {
 
 /// `view_distance=<metres>` of the settings file: how far around the camera the map's tiles
 /// are kept loaded (OMSI's "visible distance"). None when the file does not say.
+/// K-OMSI: `view_distance=map` keeps every tile of the map loaded, as OMSI's "load the
+/// whole map": the timetable buses are put out on loaded ground only, so with the tiles
+/// round the player alone the buses of the rest of the map were not there
+/// (`WHOLE_MAP_DISTANCE`).
 pub fn view_distance() -> Option<f64> {
     let text = std::fs::read_to_string(Settings::path()?).ok()?;
-    text.lines().filter_map(|l| l.trim().split_once('=')).find(|(k, _)| k.trim().eq_ignore_ascii_case("view_distance")).and_then(|(_, v)| v.trim().parse::<f64>().ok()).filter(|v| *v > 0.0)
+    let v = text.lines().filter_map(|l| l.trim().split_once('=')).find(|(k, _)| k.trim().eq_ignore_ascii_case("view_distance"))?.1.trim().to_string();
+    parse_view_distance(&v)
+}
+
+/// K-OMSI: the distance `view_distance=map` stands for (m): further than any map reaches
+/// (the streamer then takes every tile; `tile_candidates` falls back to all of them).
+pub const WHOLE_MAP_DISTANCE: f64 = 1.0e7;
+
+/// The objects' drawing distance that `max_obj_dist=auto` takes with the whole map loaded
+/// (m): the farthest of the menu's visible distances, not the whole map.
+pub const WHOLE_MAP_OBJECT_DISTANCE: f32 = 2500.0;
+
+/// A `view_distance` value: metres, or `map` (`all`) for the whole map.
+pub fn parse_view_distance(v: &str) -> Option<f64> {
+    if v.eq_ignore_ascii_case("map") || v.eq_ignore_ascii_case("all") {
+        return Some(WHOLE_MAP_DISTANCE);
+    }
+    v.parse::<f64>().ok().filter(|v| *v > 0.0)
 }
 
 #[cfg(test)]
