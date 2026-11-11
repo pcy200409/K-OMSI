@@ -242,6 +242,7 @@ impl<'a> Offscreen<'a> {
         let cabin_air = crate::condensation::CabinAir::new();
         let real_time = RealTime::default();
         let recorder = record::Recorder::new(out, player.as_mut(), &args.root, settings.doppler);
+        let world = std::sync::Arc::new(world);
         Ok(Offscreen {
             args,
             out,
@@ -251,6 +252,9 @@ impl<'a> Offscreen<'a> {
             settings,
             renderer,
             scene,
+            // (no first area: the start area is loaded already, and a first area that never came
+            // in held off the unloading for good)
+            streamer: crate::server::SERVER_STREAM.get().filter(|_| server).map(|&d| tiles::Streamer::new(world.clone(), &[], d, 0.0, crate::release_free_memory)),
             world,
             camera,
             traffic,
