@@ -179,6 +179,7 @@ impl TrafficSim {
         }
         self.pull_out_step(i, ts);
         self.guard_pass(i, &ts.by_lane);
+        self.guard_pass_player(i, ts);
         self.finish_pass(i);
         let car = &self.cars[i];
         let mut why = if car.state.change.is_some() {
