@@ -2525,7 +2525,7 @@
       "name": "obis.map_names",
       "group": "network",
       "since": "0.2.22",
-      "doc": "A map's stop names as OBIS has them: the map's name of a stop -> the Korean one (its `maps\\<map>\\map.json` of OBIS's pack, else of the OBIS client). `map` is a route's `map` of `obis.routes`. `nil` without the OBIS client or the map.",
+      "doc": "A map's stop names as OBIS shows them: the map's name of a stop -> the Korean one (the names its routes carry, `nameDisplay`; else an older OBIS client's `maps\\<map>\\map.json`). `map` is a route's `map` of `obis.routes`. `nil` without the OBIS client or the map; up to date with `obis.routes_rev`.",
       "params": [
         {
           "name": "map",
@@ -2567,9 +2567,19 @@
       "name": "obis.routes",
       "group": "network",
       "since": "0.2.22",
-      "doc": "The OBIS client's routes, to match the player's trip to one: `{default_map, routes = {[key] = {file, line, map, stops}}, trips = {[trip file] = {keys}}}` (`stops` the stop object ids in order; a trip file lower case, without `.ttp`). Read on a worker the first time - OBIS's route pack first (fetched then with the OBIS client's token, only when OBIS has a newer one; kept in `~/.openomsi/obis_pack`), then the client's `data\\routes`: `nil` until then, and without the OBIS client.",
+      "doc": "The OBIS client's routes, to match the player's trip to one: `{default_map, routes = {[key] = {file, line, map, stops}}, trips = {[trip file] = {keys}}}` (`stops` the stop object ids in order; a trip file lower case, without `.ttp`). Read on a worker the first time - OBIS's route pack first (fetched then with the OBIS client's token, only when OBIS has a newer one; kept in `~/.openomsi/obis_pack`), then the client's `data\\routes`: `nil` until then, and without the OBIS client. Read again when `obis.fetch_routes` added routes (`obis.routes_rev` goes up).",
       "params": [],
       "returns": "table or nil",
+      "multi": false,
+      "permission": "network_remote"
+    },
+    {
+      "name": "obis.routes_rev",
+      "group": "network",
+      "since": "0.2.22",
+      "doc": "Which reading of `obis.routes` is there: 0 none yet, one more each time the routes were read again (routes fetched). Cheap: ask it often and `obis.routes`/`obis.map_names` again when it changed.",
+      "params": [],
+      "returns": "number",
       "multi": false,
       "permission": "network_remote"
     },
