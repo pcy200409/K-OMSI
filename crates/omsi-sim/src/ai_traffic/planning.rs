@@ -658,6 +658,13 @@ impl TrafficSim {
                 log::info!("t={t_dbg:.1}: car {id_dbg} does not pass: {why}");
             }
         };
+        // K-OMSI: nor round the player's bus indicating out: it is pulling away
+        if let Some(id) = self.round_player_of(who, player, ts) {
+            if self.player_signals_out(id) {
+                skip("the player's bus indicates out".into());
+                return;
+            }
+        }
         // a timetable bus does not pass what stands at its own next stop: it queues for it
         if let Some((ri, ss)) = car.next_stop() {
             if ri >= st.route_index
@@ -815,6 +822,7 @@ impl TrafficSim {
             aborted: false,
             hold: 0.0,
             creep: !rolling,
+            round_player: None,
         };
         let clear_d = probe.clear_at(car.half_width);
         // Time out there: until the car is back far enough to be out of the oncoming
@@ -863,6 +871,7 @@ impl TrafficSim {
         let id = car.id;
         let odo = st.odometer;
         let out = self.net.oncoming_sign();
+        let round_player = self.round_player_of(who, player, ts);
         let car = &mut self.cars[i];
         car.passing = Some(Passing {
             lane: opp,
@@ -873,6 +882,7 @@ impl TrafficSim {
             aborted: false,
             hold: 0.0,
             creep: !rolling,
+            round_player,
         });
         car.state.lateral_target = side * out;
         // pull out over what room there is (from a standstill a car turns out steeply)
@@ -1194,6 +1204,99 @@ impl TrafficSim {
         car.state.lateral_ramp = (lat, 0.0, odo, (p.block - odo - 0.5).clamp(2.0, 8.0));
         if debug {
             log::info!("t={:.1}: car {id} gives up passing: car {who} comes in {t:.1} s, it needed {t_me:.1} s more ({r:.1} m); stops within {stop_d:.1} m", self.time);
+        }
+    }
+
+    /// K-OMSI: which player's vehicle the player box `player` in car's way is (`who` the
+    /// lead's owner, `usize::MAX` for a player): `u32::MAX` for the own, else the LAN id.
+    fn round_player_of(&self, who: Option<usize>, player: Option<PlayerBox>, ts: &TickScene) -> Option<u32> {
+        if who != Some(usize::MAX) {
+            return None;
+        }
+        let p = player?;
+        if ts.player.is_some_and(|o| o.0 == p.0) {
+            return Some(u32::MAX);
+        }
+        ts.others.iter().find(|o| o.1 .0 == p.0).map(|o| o.0).or(Some(u32::MAX))
+    }
+
+    /// K-OMSI: is that player's vehicle indicating out into the traffic (pulling away)?
+    fn player_signals_out(&self, id: u32) -> bool {
+        if id == u32::MAX {
+            return self.player_signal_age < 1.0;
+        }
+        let out_side = if self.net.left_hand { 2 } else { 1 };
+        self.other_blinkers.get(&id).copied() == Some(out_side)
+    }
+
+    /// K-OMSI: a car out round the player's bus (or a LAN player's) that pulls away
+    /// meanwhile. The pass was planned for where the bus stood, and the car moved back in at
+    /// that spot - into the bus that had moved on (#AI-overtake: the cars behind a bus at its
+    /// stop on a two-lane road ran into its back as it left). While the car's front is still
+    /// well behind the bus it gives the pass up and falls in behind it; beside it, it does not
+    /// move back in before its rear is past the bus's front.
+    pub fn guard_pass_player(&mut self, i: usize, ts: &TickScene) {
+        let car = &self.cars[i];
+        let Some(mut p) = car.passing else { return };
+        let Some(id) = p.round_player else { return };
+        let bus = if id == u32::MAX {
+            ts.player
+        } else {
+            ts.others.iter().find(|o| o.0 == id).map(|o| o.1)
+        };
+        let Some((centre, _, half_len, _, bus_speed)) = bus else { return };
+        let st = &car.state;
+        let h = car.vehicle.heading.to_radians();
+        let fwd = DVec2::new(h.sin(), h.cos());
+        // (along the car's heading, from its origin)
+        let rel = (centre.truncate() - car.vehicle.position.truncate()).dot(fwd) as f32;
+        let rear_gap = rel - half_len - st.front; // its front to the bus's back
+        let bus_front = rel + half_len;
+        let (odo, lat, v) = (st.odometer, st.lateral, st.speed);
+        let out = self.net.oncoming_sign();
+        let debug = omsi_cfg::flags::OMSI_DEBUG_TRAFFIC.is_set();
+        let car_id = car.id;
+        let moving = bus_speed.abs() > 0.5;
+        if p.aborted {
+            // given up behind the bus that went on: back in its lane, an ordinary car again
+            if moving && lat.abs() < 0.05 && rear_gap > -0.5 {
+                self.cars[i].passing = None;
+            }
+            return;
+        }
+        // still well behind it as it pulls away: give up and follow it
+        let closing = (v - bus_speed.max(0.0)).max(0.0);
+        if moving && rear_gap > closing * closing / (2.0 * 3.5) + 1.5 {
+            p.aborted = true;
+            p.until = odo;
+            // (no stop of its own: it follows the bus)
+            p.hold = odo + 1.0e4;
+            let car = &mut self.cars[i];
+            car.passing = Some(p);
+            car.state.lateral_target = 0.0;
+            car.state.lateral_ramp = (lat, 0.0, odo, (rear_gap - 0.5).clamp(3.0, 10.0));
+            if debug {
+                log::info!("t={:.1}: car {car_id} gives up passing the player's bus pulling away ({rear_gap:.1} m behind it)", self.time);
+            }
+            return;
+        }
+        // beside or past it: back in only once its rear is past the bus's front
+        if bus_front + st.rear + 2.0 > 0.0 {
+            let past = odo + bus_front + st.rear + 2.0;
+            if past > p.until + 0.05 {
+                let was_back = odo >= p.until;
+                p.until = past;
+                let car = &mut self.cars[i];
+                car.passing = Some(p);
+                if was_back {
+                    // it had begun to move back in: out again beside the bus
+                    car.state.lateral_target = p.side * out;
+                    car.state.lateral_ramp = (lat, p.side * out, odo, 3.0);
+                }
+                if debug && was_back {
+                    log::info!("t={:.1}: car {car_id} stays out beside the player's bus that moved on ({bus_front:.1} m to its front)", self.time);
+                }
+            }
         }
     }
 
