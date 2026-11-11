@@ -144,6 +144,65 @@ impl PreparedPlayer {
     }
 }
 
+/// The player's bus of a session given on the command line, read on a worker while the map
+/// opens and its first tiles load (`read_player_early`), its meshes and textures made on the
+/// GPU as soon as the world is there (`prefetch_player_early`). Read only once the map stood,
+/// a bus of thousands of meshes (a Serise LFNSAC with its displays and ticket machines) added
+/// 15-20 s to every start.
+struct EarlyRead {
+    bus: String,
+    paint: Option<String>,
+    handle: std::thread::JoinHandle<Result<PreparedPlayer>>,
+}
+
+static EARLY: std::sync::Mutex<Option<EarlyRead>> = std::sync::Mutex::new(None);
+
+/// Start reading `--bus` on a worker (see [`EarlyRead`]).
+pub(crate) fn read_player_early(args: &Args) {
+    let Some(bus) = args.bus.clone() else { return };
+    let worker_args = args.clone();
+    let spawned = std::thread::Builder::new().name("player bus".into()).spawn(move || {
+        let start = std::time::Instant::now();
+        let r = PreparedPlayer::load(&worker_args);
+        log::info!("player bus: read on a worker in {:.2} s", start.elapsed().as_secs_f64());
+        r
+    });
+    if let Ok(handle) = spawned {
+        *EARLY.lock().unwrap_or_else(|e| e.into_inner()) = Some(EarlyRead { bus, paint: args.paint.clone(), handle });
+    }
+}
+
+/// With the world there: the early read goes on to make the bus's meshes and textures on
+/// the GPU (as a placement from the menu does), while the first tiles load.
+pub(crate) fn prefetch_player_early(world: &World, renderer: &Renderer) {
+    let mut early = EARLY.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(read) = early.take() else { return };
+    let prefetch = world.placement_prefetch(renderer);
+    let paint = read.paint.clone();
+    let reading = read.handle;
+    let spawned = std::thread::Builder::new().name("player bus".into()).spawn(move || {
+        let mut prepared = reading.join().map_err(|_| anyhow::anyhow!("the player bus worker stopped"))??;
+        let start = std::time::Instant::now();
+        prepared.prefetch(prefetch, paint.as_deref());
+        log::info!("player bus: meshes and textures made on a worker in {:.2} s", start.elapsed().as_secs_f64());
+        Ok(prepared)
+    });
+    match spawned {
+        Ok(handle) => *early = Some(EarlyRead { handle, ..read }),
+        Err(e) => log::warn!("player bus: no worker for the GPU part ({e})"),
+    }
+}
+
+/// The early read of this `args`' bus, waited for; None when there is none or it was for
+/// another bus or paint (it is dropped then).
+fn take_early(args: &Args) -> Option<Result<PreparedPlayer>> {
+    let read = EARLY.lock().unwrap_or_else(|e| e.into_inner()).take()?;
+    if args.bus.as_deref() != Some(read.bus.as_str()) || args.paint != read.paint {
+        return None;
+    }
+    Some(read.handle.join().unwrap_or_else(|_| Err(anyhow::anyhow!("the player bus worker stopped"))))
+}
+
 /// A vehicle chosen in the game menu being read on a worker thread (one at a time): the
 /// game goes on meanwhile, and the bus driven stays until its replacement is ready.
 pub(crate) struct PendingPlacement {
@@ -229,7 +288,15 @@ pub(crate) fn spawn_player(
     if args.bus.is_none() {
         return Ok(None);
     }
-    spawn_player_prepared(args, world, renderer, scene, PreparedPlayer::load(args)?)
+    let prepared = match take_early(args) {
+        Some(Ok(p)) => p,
+        Some(Err(e)) => {
+            log::warn!("player bus: the early read failed ({e:#}); reading it again");
+            PreparedPlayer::load(args)?
+        }
+        None => PreparedPlayer::load(args)?,
+    };
+    spawn_player_prepared(args, world, renderer, scene, prepared)
 }
 
 /// `spawn_player` with the vehicle read already (`PreparedPlayer`).
