@@ -197,8 +197,9 @@ fn map_dirs(client: &std::path::Path, pack: Option<&std::path::Path>) -> Vec<Pat
 }
 
 /// The index of the client's routes: `{default_map, routes = {key = {file, line, map, stops}},
-/// trips = {trip file = {keys}}}` (what the plugin needs to match a trip to a route).
-fn build_route_index(dir: &std::path::Path, pack: Option<&std::path::Path>) -> Value {
+/// trips = {trip file = {keys}}}` (what the plugin needs to match a trip to a route); and the
+/// stop names the routes carry, by map: `{map = {map's name of a stop = the one OBIS shows}}`.
+fn build_route_index(dir: &std::path::Path, pack: Option<&std::path::Path>) -> (Value, Vec<(String, Vec<(String, Value)>)>) {
     let mut maps: Vec<String> = map_dirs(dir, pack).iter().flat_map(|m| std::fs::read_dir(m).map(|rd| rd.flatten().filter(|d| d.path().is_dir()).map(|d| d.file_name().to_string_lossy().into_owned()).collect::<Vec<_>>()).unwrap_or_default()).collect();
     maps.sort();
     maps.dedup();
@@ -214,6 +215,7 @@ fn build_route_index(dir: &std::path::Path, pack: Option<&std::path::Path>) -> V
     }
     let mut routes: Vec<(String, Value)> = Vec::new();
     let mut trips: Vec<(String, Value)> = Vec::new();
+    let mut names_by_map: Vec<(String, Vec<(String, Value)>)> = Vec::new();
     for (folder, f) in files {
         let Ok(text) = std::fs::read_to_string(folder.join(&f)) else { continue };
         let Ok(Value::Map(r)) = crate::api::json::decode(&text, false) else { continue };
@@ -238,6 +240,29 @@ fn build_route_index(dir: &std::path::Path, pack: Option<&std::path::Path>) -> V
             }).collect(),
             _ => Vec::new(),
         };
+        // the name OBIS shows (OBIS client 1.2.3: `nameDisplay`, before it `name_ko`), when it is not the map's own
+        if let Some(Value::List(l)) = field(&r, "stations") {
+            let map = s("mapId");
+            let i = match names_by_map.iter().position(|(m, _)| *m == map) {
+                Some(i) => i,
+                None => {
+                    names_by_map.push((map, Vec::new()));
+                    names_by_map.len() - 1
+                }
+            };
+            for st in l {
+                let Value::Map(m) = st else { continue };
+                let text = |k: &str| match field(m, k) {
+                    Some(Value::Str(t)) if !t.trim().is_empty() => Some(t.trim().to_string()),
+                    _ => None,
+                };
+                let (Some(name), Some(shown)) = (text("name"), text("nameDisplay").or_else(|| text("name_ko"))) else { continue };
+                let names = &mut names_by_map[i].1;
+                if shown != name && !names.iter().any(|(n, _)| *n == name) {
+                    names.push((name, Value::Str(shown)));
+                }
+            }
+        }
         let trip = norm_trip(&s("fileName"));
         if !trip.is_empty() {
             match trips.iter_mut().find(|(t, _)| *t == trip) {
@@ -253,18 +278,24 @@ fn build_route_index(dir: &std::path::Path, pack: Option<&std::path::Path>) -> V
         ])));
     }
     log::info!("plugin obis: {} routes read (OBIS's pack, the OBIS client's {}, those fetched from OBIS)", routes.len(), dir.display());
-    Value::Map(vec![
-        ("default_map".into(), maps.first().map(|m| Value::Str(m.clone())).unwrap_or(Value::Nil)),
+    // (OBIS client 1.2.3 dropped `maps/`: the first map with routes stands for it)
+    let default_map = maps.first().cloned().or_else(|| names_by_map.iter().map(|(m, _)| m.clone()).filter(|m| !m.is_empty()).min());
+    let index = Value::Map(vec![
+        ("default_map".into(), default_map.map(Value::Str).unwrap_or(Value::Nil)),
         ("routes".into(), Value::Map(routes)),
         ("trips".into(), Value::Map(trips)),
-    ])
+    ]);
+    (index, names_by_map)
 }
 
-/// A map's stop names as the OBIS client has them (`maps/<map>/map.json`, its `stations`:
-/// the map's name of a stop -> the Korean one): the folder named so, or the one whose
-/// `mapId` it is.
+/// A map's stop names as OBIS shows them (the map's name of a stop -> the Korean one): those
+/// its routes carry, else an older client's `maps/<map>/map.json` (`stations`; the folder
+/// named so, or the one whose `mapId` it is).
 fn map_names(map: &str) -> Value {
     let Some(dir) = obis_client_dir() else { return Value::Nil };
+    if let Some((_, names)) = NAMES.lock().unwrap_or_else(|e| e.into_inner()).iter().find(|(m, n)| m == map && !n.is_empty()) {
+        return Value::Map(names.clone());
+    }
     let read = |p: &std::path::Path| -> Option<Vec<(String, Value)>> {
         match crate::api::json::decode(&std::fs::read_to_string(p).ok()?, false).ok()? {
             Value::Map(m) => Some(m),
@@ -293,8 +324,21 @@ fn map_names(map: &str) -> Value {
 
 /// The index: not read yet (`None`), being read (`Some(None)`), read.
 static INDEX: Mutex<Option<Option<Value>>> = Mutex::new(None);
+/// The stop names the routes of the index carry, by map.
+static NAMES: Mutex<Vec<(String, Vec<(String, Value)>)>> = Mutex::new(Vec::new());
+/// Which index is there: 0 none yet, one more each time it is read again (routes fetched).
+static REV: AtomicU64 = AtomicU64::new(0);
 
-/// The index, read on a worker the first time it is asked for (`nil` until it is there).
+/// Reads the index (and its names) again; the one before stays until this one is there.
+fn rebuild_index(dir: &std::path::Path) {
+    let (v, names) = build_route_index(dir, pack_dir().as_deref());
+    *NAMES.lock().unwrap_or_else(|e| e.into_inner()) = names;
+    *INDEX.lock().unwrap_or_else(|e| e.into_inner()) = Some(Some(v));
+    REV.fetch_add(1, Ordering::Relaxed);
+}
+
+/// The index, read on a worker the first time it is asked for (`nil` until it is there), after
+/// OBIS was asked once for a newer pack (routes it added, stop names it changed).
 fn route_index() -> Value {
     let mut g = INDEX.lock().unwrap_or_else(|e| e.into_inner());
     match &*g {
@@ -307,8 +351,7 @@ fn route_index() -> Value {
     drop(g);
     let _ = std::thread::Builder::new().name("plugin obis routes".into()).spawn(move || {
         sync_pack();
-        let v = build_route_index(&dir, pack_dir().as_deref());
-        *INDEX.lock().unwrap_or_else(|e| e.into_inner()) = Some(Some(v));
+        rebuild_index(&dir);
     });
     Value::Nil
 }
@@ -436,8 +479,9 @@ fn sync_pack_from(base: &str, token: &str, dir: &std::path::Path) -> Result<bool
     Ok(true)
 }
 
-/// Fetches OBIS's pack once a session (on the index's worker), so the routes are OBIS's latest
+/// Fetches OBIS's pack once a game (on the index's worker), so the routes are OBIS's latest
 /// without the OBIS client being run; on any failure the pack kept and the client's routes stay.
+/// Only the OBIS client's token is used: no device is ever registered here.
 fn sync_pack() {
     static DONE: AtomicBool = AtomicBool::new(false);
     if DONE.swap(true, Ordering::Relaxed) {
@@ -597,8 +641,10 @@ fn fetch_routes(line: &str) -> Value {
         };
         log::info!("plugin obis: line {line}: {n} routes fetched from OBIS");
         if n > 0 {
-            // read again, with them
-            *INDEX.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            // read again, with them (the index's worker keeps going)
+            if let Some(dir) = obis_client_dir() {
+                rebuild_index(&dir);
+            }
         }
         let mut g = FETCHES.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(e) = g.iter_mut().find(|(l, _)| *l == line) {
@@ -989,8 +1035,11 @@ pub static FNS: &[ApiFn] = &[
     def!("obis.stop", "network", [], "nil", "Stops sending (OBIS shows the bus as gone after a while).", NEW, NetworkRemote, false, |c, a| {
         c.state().obis.stop();
     }),
-    def!("obis.routes", "network", [], "table or nil", "The OBIS client's routes, to match the player's trip to one: `{default_map, routes = {[key] = {file, line, map, stops}}, trips = {[trip file] = {keys}}}` (`stops` the stop object ids in order; a trip file lower case, without `.ttp`). Read on a worker the first time - OBIS's route pack first (fetched then with the OBIS client's token, only when OBIS has a newer one; kept in `~/.openomsi/obis_pack`), then the client's `data\\routes`: `nil` until then, and without the OBIS client.", NEW, NetworkRemote, false, |c, a| {
+    def!("obis.routes", "network", [], "table or nil", "The OBIS client's routes, to match the player's trip to one: `{default_map, routes = {[key] = {file, line, map, stops}}, trips = {[trip file] = {keys}}}` (`stops` the stop object ids in order; a trip file lower case, without `.ttp`). Read on a worker the first time - OBIS's route pack first (fetched then with the OBIS client's token, only when OBIS has a newer one; kept in `~/.openomsi/obis_pack`), then the client's `data\\routes`: `nil` until then, and without the OBIS client. Read again when `obis.fetch_routes` added routes (`obis.routes_rev` goes up).", NEW, NetworkRemote, false, |c, a| {
         if has_original("obis") { route_index() } else { Value::Nil }
+    }),
+    def!("obis.routes_rev", "network", [], "number", "Which reading of `obis.routes` is there: 0 none yet, one more each time the routes were read again (routes fetched). Cheap: ask it often and `obis.routes`/`obis.map_names` again when it changed.", NEW, NetworkRemote, false, |c, a| {
+        Value::Int(REV.load(Ordering::Relaxed) as i64)
     }),
     def!("obis.fetch_routes", "network", [p("line", "string")], "number or nil", "Fetches from OBIS (`https://obis.kr/api/routes`) the routes of a line number the OBIS client's `data\\routes` lacks (an old or empty one), in the background, keeps them in `~/.openomsi/obis_routes` (fetched again after a week) and has `obis.routes` read again with them. `nil` while fetching, then how many routes were added (0: none to add, or OBIS did not answer). Once a session per line number; a request at most every 0.6 s.", NEW, NetworkRemote, false, |c, a| {
         let line = a.str(0)?;
@@ -1001,7 +1050,7 @@ pub static FNS: &[ApiFn] = &[
         let text = has_original("obis").then(|| route_file(&name)).flatten().and_then(|p| std::fs::read_to_string(p).ok());
         Ok::<_, ApiError>(text.map(Value::Str).unwrap_or(Value::Nil))
     }),
-    def!("obis.map_names", "network", [p("map", "string")], "table or nil", "A map's stop names as OBIS has them: the map's name of a stop -> the Korean one (its `maps\\<map>\\map.json` of OBIS's pack, else of the OBIS client). `map` is a route's `map` of `obis.routes`. `nil` without the OBIS client or the map.", NEW, NetworkRemote, false, |c, a| {
+    def!("obis.map_names", "network", [p("map", "string")], "table or nil", "A map's stop names as OBIS shows them: the map's name of a stop -> the Korean one (the names its routes carry, `nameDisplay`; else an older OBIS client's `maps\\<map>\\map.json`). `map` is a route's `map` of `obis.routes`. `nil` without the OBIS client or the map; up to date with `obis.routes_rev`.", NEW, NetworkRemote, false, |c, a| {
         let map = a.str(0)?;
         Ok::<_, ApiError>(if has_original("obis") { map_names(&map) } else { Value::Nil })
     }),
@@ -1018,7 +1067,7 @@ pub static FNS: &[ApiFn] = &[
 mod tests {
     use super::check_url;
 
-    /// The real OBIS (three requests): `OMSI_OBIS_CLIENT_DIR` an empty folder, `OMSI_OBIS_FETCHED_DIR`
+    /// The real OBIS (three requests): `OMSI_OBIS_CLIENT_DIR` and `OMSI_OBIS_PACK_DIR` empty folders, `OMSI_OBIS_FETCHED_DIR`
     /// where they go; `cargo test -p omsi-plugin --lib fetches_a_line_from_obis -- --ignored`.
     #[test]
     #[ignore]
@@ -1115,9 +1164,31 @@ mod tests {
         std::fs::create_dir_all(client.join("maps/C")).unwrap();
         std::fs::write(client.join("data/routes/A_1_a.json"), one[0].1).unwrap();
         std::fs::write(client.join("data/routes/C_2_a.json"), r#"{"routeKey":"C_2_a","mapId":"C","fileName":"2 A.ttp","lineNumber":"2","stations":[]}"#).unwrap();
-        let idx = crate::api::json::encode(&super::build_route_index(&client, Some(&pack)));
+        let (idx, names) = super::build_route_index(&client, Some(&pack));
+        let idx = crate::api::json::encode(&idx);
+        assert!(names.iter().any(|(m, _)| m == "A"), "{names:?}");
         assert!(idx.contains(r#""A_1_a":{"file":"A_1_a.json","line":"1","map":"A","stops":[7]}"#), "{idx}");
         assert!(idx.contains("C_2_a") && idx.contains(r#""default_map":"B""#), "{idx}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_routes_carry_the_names_obis_shows() {
+        let root = temp("names");
+        std::fs::create_dir_all(root.join("data/routes")).unwrap();
+        std::fs::write(root.join("data/routes/B_1_a.json"), r#"{"routeKey":"B_1_a","mapId":"B","fileName":"1 A.ttp","lineNumber":"1","stations":[
+            {"id":1,"name":"Munsan Station G1","name_ko":"문산역","nameDisplay":"문산역"},
+            {"id":2,"name":"Harbor A","nameDisplay":"Harbor A"},
+            {"id":3,"name":"Old Name","name_ko":"옛 이름"}]}"#).unwrap();
+        std::fs::write(root.join("data/routes/B_1_b.json"), r#"{"routeKey":"B_1_b","mapId":"B","fileName":"1 B.ttp","lineNumber":"1","stations":[
+            {"id":1,"name":"Munsan Station G1","nameDisplay":"다른 이름"}]}"#).unwrap();
+        let (idx, names) = super::build_route_index(&root, None);
+        assert_eq!(crate::api::json::encode(&idx).contains(r#""default_map":"B""#), true, "no maps/: a map with routes");
+        let b = &names.iter().find(|(m, _)| m == "B").unwrap().1;
+        let get = |n: &str| b.iter().find(|(k, _)| k == n).map(|(_, v)| crate::api::json::encode(v));
+        assert_eq!(get("Munsan Station G1").as_deref(), Some("\"문산역\""), "the first route's");
+        assert_eq!(get("Old Name").as_deref(), Some("\"옛 이름\""), "name_ko without nameDisplay");
+        assert_eq!(get("Harbor A"), None, "not shown otherwise: the plugin's own table may name it");
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -1130,7 +1201,9 @@ mod tests {
         let dir = temp("real").join("obis_pack");
         assert!(super::sync_pack_from(super::PACK_URL, &token, &dir).unwrap(), "fetched the first time");
         assert!(std::fs::read_dir(dir.join("routes")).unwrap().count() > 100);
-        assert!(dir.join("maps/NCC/map.json").is_file());
+        // (OBIS client 1.2.3: no `maps/` any more, the routes carry the names)
+        let ncc = std::fs::read_dir(dir.join("routes")).unwrap().flatten().find(|e| e.file_name().to_string_lossy().starts_with("NCC_")).unwrap();
+        assert!(std::fs::read_to_string(ncc.path()).unwrap().contains("nameDisplay"));
         assert!(!super::sync_pack_from(super::PACK_URL, &token, &dir).unwrap(), "the same pack is not fetched again");
         assert!(super::sync_pack_from(super::PACK_URL, "not-a-token", &temp("bad").join("p")).unwrap_err().contains("token"));
     }

@@ -45,11 +45,19 @@ end
 local EMPTY = { routes = {}, trips = {} }
 local local_copy = nil         -- 플러그인 폴더의 obis_routes (있을 때만)
 
+local idx_rev = nil            -- 그 노선 목록의 omsi.obis.routes_rev
+
 local function load_index()
+  -- K-OMSI 가 노선을 다시 읽었으면(받아 온 노선 등) 새 목록으로: 다 읽기 전엔 옛 목록 그대로
+  local rev = omsi.obis and omsi.obis.routes_rev and omsi.obis.routes_rev()
+  if idx and local_copy == false and rev and rev ~= idx_rev then
+    local v = omsi.obis.routes()
+    if type(v) == "table" then idx, idx_rev, route_cache = v, rev, {} end
+  end
   if idx then return idx end
   -- OBIS Client 의 노선 (처음 한 번 K-OMSI 가 따로 읽음: 다 읽기 전엔 nil → 다음에 다시)
   local v = omsi.obis and omsi.obis.routes and omsi.obis.routes()
-  if type(v) == "table" then idx = v; local_copy = false; return idx end
+  if type(v) == "table" then idx = v; idx_rev = rev; local_copy = false; return idx end
   if local_copy == nil then
     local text = omsi.plugin.read("obis_routes/index.json")
     local_copy = text ~= nil
