@@ -589,6 +589,13 @@ impl TrafficSim {
                 if v < limit * 0.7
                     && v < st.speed + 1.0
                     && d > 8.0
+                    // K-OMSI: not round something standing (a queue before a light, a
+                    // junction or a bus at its stop): the move, begun 45 m off, was not over
+                    // when the car had to stop behind it, and a move goes on only as the car
+                    // drives - it stood there with the move begun, for good. Going round what
+                    // stands is `plan_bypass`'s (from where it waits, short, once it is known
+                    // to stand)
+                    && v >= 0.5
                     && self.lane_clear(i, side, s_side, 20.0, 50.0, by_lane)
                     && self.open_run(st, side, s_side, room) >= room
                 {
@@ -614,8 +621,14 @@ impl TrafficSim {
         if !self.net.crossings[st.lane].is_empty() {
             return 0.0;
         }
+        // K-OMSI: a traffic light ends the open road too (its stop line is the start of the
+        // lane it holds). The paths of a signalled junction need not cross on the map (the
+        // Korean crossing sets), so an overtake was begun 45 m before a red light round the
+        // queue standing there; the car stopped for the light with its move three quarters
+        // done (a move goes on only as the car drives) and stood across both lanes, in front
+        // of the car it had meant to pass, which then waited for it through green after green.
         for l in st.upcoming() {
-            if d >= limit || !self.net.crossings[l].is_empty() {
+            if d >= limit || !self.net.crossings[l].is_empty() || self.net.lanes[l].traffic_light.is_some() {
                 break;
             }
             d += self.net.lanes[l].length();
