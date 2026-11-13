@@ -348,6 +348,9 @@ pub(crate) struct Seen {
     other: Vec<u64>,
     budget: Option<u64>,
     measured: bool,
+    /// K-OMSI: the room wgpu's allocator holds free in its blocks as of the last look
+    /// (bytes; 0 where it does not tell), see [`Renderer::gpu_holes`].
+    holes: u64,
 }
 
 impl Seen {
@@ -404,8 +407,18 @@ impl Renderer {
             seen.budget = info.and_then(|m| m.budget_bytes).filter(|b| *b > 0);
             let used = info.and_then(|m| m.usage_bytes).filter(|u| *u > 0);
             seen.take(used, textures + meshes, || self.target_bytes());
+            // (K-OMSI: and how much of that is free room in the allocator's blocks)
+            seen.holes = self.device.generate_allocator_report().map_or(0, |r| r.total_reserved_bytes.saturating_sub(r.total_allocated_bytes));
         }
         seen.memory(textures, meshes)
+    }
+
+    /// K-OMSI: the room wgpu's allocator holds free in its blocks (bytes, as of the last
+    /// [`Renderer::gpu_memory`] look; 0 where the backend does not tell). The driver counts
+    /// it as the game's, but making textures smaller does not make it less - a texture made
+    /// smaller only leaves another hole - while a texture made whole again may fill one.
+    pub fn gpu_holes(&self) -> u64 {
+        self.gpu_memory_seen.borrow().holes
     }
 
     /// The render targets' and the shadow maps' bytes, from their sizes.
