@@ -847,6 +847,10 @@ impl PluginIo for Io<'_> {
         let app = self.app_mut().ok_or("no game")?;
         pbus::set_ticket(app, id, change, by)
     }
+    fn people_order(&mut self, id: u32, order: &op::PaxCommand) -> Result<(), String> {
+        let app = self.app_mut().ok_or("no game")?;
+        pbus::people_order(app, id, order)
+    }
 
     // --- duty, timetable, map ---
     fn duty(&self) -> Option<op::Duty> {

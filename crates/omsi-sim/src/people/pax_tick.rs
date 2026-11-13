@@ -208,7 +208,22 @@ impl PeopleSim {
             }
         }
         self.runner_step(i, dt, world, buses, bus_ix);
-        self.pax_move(i, dt, dt_ms, world, buses, bus_ix);
+        // (K-OMSI: a plugin holds them - they stand where they are, the ones behind wait)
+        if self.held(i) {
+            let p = self.pax_mut(i).unwrap();
+            p.speed = 0.0;
+            p.moved = 0.0;
+            if p.pax_state == 1.0 {
+                p.pax_state = 0.0;
+            }
+        } else {
+            if self.pax(i).is_some_and(|p| p.pax_state == 0.0 && (p.st == 1 || p.st == 5) && p.held_until.is_some()) {
+                self.pax_mut(i).unwrap().pax_state = 1.0;
+            }
+            self.pax_mut(i).unwrap().held_until = None;
+            self.pax_move(i, dt, dt_ms, world, buses, bus_ix);
+        }
+        self.apply_order(i, buses, bus_ix, world);
         self.pax_task(i, dt, world, buses, bus_ix, at_stops, player_bus, taken_ticket, remove);
         // (got off: a pedestrian now)
         let Some(p) = self.pax(i).cloned() else { return };

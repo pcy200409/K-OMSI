@@ -338,6 +338,21 @@ pub(crate) fn set_ticket(app: &mut App, id: u32, c: &op::TicketChange, by: &str)
     h.set_ticket(id, &change, by).map_err(str::to_string)
 }
 
+/// `people.hold`, `people.stay`, `people.leave`, `people.move` (K-OMSI).
+pub(crate) fn people_order(app: &mut App, id: u32, o: &op::PaxCommand) -> Result<(), String> {
+    let h = app.session.humans.as_mut().ok_or("no passengers")?;
+    match o {
+        op::PaxCommand::Hold(s) => h.pax_hold(id, *s),
+        op::PaxCommand::Stay(on) => h.pax_stay(id, *on),
+        op::PaxCommand::Leave { anywhere } => h.pax_leave(id, *anywhere),
+        op::PaxCommand::Move(to) => match omsi_sim::people::PaxOrder::parse(to) {
+            Some(to) => h.pax_move_to(id, to),
+            None => Err("no such place"),
+        },
+    }
+    .map_err(str::to_string)
+}
+
 /// The passengers of the people's `ticket_asks`, for the plugins.
 pub(crate) fn ticket_ask(a: omsi_sim::people::TicketAsk) -> op::TicketAsk {
     let kind = match a.kind {
