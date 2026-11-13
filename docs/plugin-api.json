@@ -2897,6 +2897,48 @@
       "permission": null
     },
     {
+      "name": "people.hold",
+      "group": "people",
+      "since": "0.2.22",
+      "doc": "K-OMSI: a passenger of the player's bus stops where they are - in the doorway, at the validator or the cash desk, in the aisle, in the doorway getting off - for `seconds` (120 at most; 0 lets them go on). The people behind them wait.",
+      "params": [
+        {
+          "name": "id",
+          "type": "integer",
+          "optional": false
+        },
+        {
+          "name": "seconds",
+          "type": "number",
+          "optional": false
+        }
+      ],
+      "returns": "true, or false and the reason",
+      "multi": true,
+      "permission": "traffic_write"
+    },
+    {
+      "name": "people.leave",
+      "group": "people",
+      "since": "0.2.22",
+      "doc": "K-OMSI: a rider of the player's bus gets up, asks to stop and walks to the nearest exit: off at the next stop, or - `anywhere` - as soon as the driver opens that door, stop or no stop.",
+      "params": [
+        {
+          "name": "id",
+          "type": "integer",
+          "optional": false
+        },
+        {
+          "name": "anywhere",
+          "type": "bool",
+          "optional": true
+        }
+      ],
+      "returns": "true, or false and the reason",
+      "multi": true,
+      "permission": "traffic_write"
+    },
+    {
       "name": "people.list",
       "group": "people",
       "since": "0.2.22",
@@ -2911,6 +2953,27 @@
       "returns": "list of tables",
       "multi": false,
       "permission": null
+    },
+    {
+      "name": "people.move",
+      "group": "people",
+      "since": "0.2.22",
+      "doc": "K-OMSI: a rider of the player's bus, at their place, walks to another free place while the bus runs: `\"seat\"`, `\"stand\"` (a standing place) or `\"door\"` (the standing place nearest an exit, without asking to stop). False and the reason when there is no free place of that kind.",
+      "params": [
+        {
+          "name": "id",
+          "type": "integer",
+          "optional": false
+        },
+        {
+          "name": "to",
+          "type": "string",
+          "optional": false
+        }
+      ],
+      "returns": "true, or false and the reason",
+      "multi": true,
+      "permission": "traffic_write"
     },
     {
       "name": "people.set_density",
@@ -2943,6 +3006,27 @@
           "name": "ticket",
           "type": "table",
           "optional": false
+        }
+      ],
+      "returns": "true, or false and the reason",
+      "multi": true,
+      "permission": "traffic_write"
+    },
+    {
+      "name": "people.stay",
+      "group": "people",
+      "since": "0.2.22",
+      "doc": "K-OMSI: a rider of the player's bus stays in - not off at their stop, not at the terminus - until `people.stay(id, false)` or `people.leave`.",
+      "params": [
+        {
+          "name": "id",
+          "type": "integer",
+          "optional": false
+        },
+        {
+          "name": "stay",
+          "type": "bool",
+          "optional": true
         }
       ],
       "returns": "true, or false and the reason",

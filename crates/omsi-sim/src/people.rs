@@ -76,6 +76,7 @@ pub mod pax_task;
 pub mod pax_driver;
 pub mod runners;
 pub mod ticket_hook;
+pub mod pax_orders;
 // What the renderer has to follow, the money on the desk and what the people need of the map.
 pub mod bodies;
 pub mod pose_facts;
@@ -112,6 +113,7 @@ pub use money::Money;
 pub use pose_facts::PoseFacts;
 pub use pax::DutyTrip;
 pub use ticket_hook::{TicketAsk, TicketChange};
+pub use pax_orders::PaxOrder;
 pub use world::World;
 
 /// The map's traffic keeps left (its stops are on the left): see the doors of `Cabin`.

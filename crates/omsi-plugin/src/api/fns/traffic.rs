@@ -2,7 +2,7 @@
 
 use super::{def, multi, o, p, rec};
 use crate::api::{ApiError, ApiFn, Ctx, Value};
-use crate::io::{AiCar, Person, TicketAsk, TicketChange, TicketKind};
+use crate::io::{AiCar, PaxCommand, Person, TicketAsk, TicketChange, TicketKind};
 
 const NEW: &str = crate::api::VERSION;
 /// The passengers' tickets (`people.get`, `people.set_ticket`, the `passenger_ticket` event).
@@ -110,6 +110,10 @@ pub(crate) fn ticket_ask(a: TicketAsk) -> Value {
             a.destination_index.map(|k| k + 1).into(),
         ),
     ])
+}
+
+fn person_id(id: i64, f: &str) -> Result<u32, ApiError> {
+    u32::try_from(id).map_err(|_| ApiError(format!("omsi.people.{f}: no such person")))
 }
 
 /// `people.set_ticket`'s table.
@@ -429,6 +433,29 @@ pub static FNS: &[ApiFn] = &[
             ))
         }
     ),
+    def!("people.hold", "people", [p("id", "integer"), p("seconds", "number")], "true, or false and the reason", "K-OMSI: a passenger of the player's bus stops where they are - in the doorway, at the validator or the cash desk, in the aisle, in the doorway getting off - for `seconds` (120 at most; 0 lets them go on). The people behind them wait.", NEW, TrafficWrite, true, |c, a| {
+        let id = person_id(a.int(0)?, "hold")?;
+        let s = a.num(1)?;
+        Ok::<_, ApiError>(super::core::ok_or_reason(c.io().people_order(id, &PaxCommand::Hold(s))))
+    }),
+    def!("people.stay", "people", [p("id", "integer"), o("stay", "bool")], "true, or false and the reason", "K-OMSI: a rider of the player's bus stays in - not off at their stop, not at the terminus - until `people.stay(id, false)` or `people.leave`.", NEW, TrafficWrite, true, |c, a| {
+        let id = person_id(a.int(0)?, "stay")?;
+        let stay = a.flag(1, true);
+        Ok::<_, ApiError>(super::core::ok_or_reason(c.io().people_order(id, &PaxCommand::Stay(stay))))
+    }),
+    def!("people.leave", "people", [p("id", "integer"), o("anywhere", "bool")], "true, or false and the reason", "K-OMSI: a rider of the player's bus gets up, asks to stop and walks to the nearest exit: off at the next stop, or - `anywhere` - as soon as the driver opens that door, stop or no stop.", NEW, TrafficWrite, true, |c, a| {
+        let id = person_id(a.int(0)?, "leave")?;
+        let anywhere = a.flag(1, false);
+        Ok::<_, ApiError>(super::core::ok_or_reason(c.io().people_order(id, &PaxCommand::Leave { anywhere })))
+    }),
+    def!("people.move", "people", [p("id", "integer"), p("to", "string")], "true, or false and the reason", "K-OMSI: a rider of the player's bus, at their place, walks to another free place while the bus runs: `\"seat\"`, `\"stand\"` (a standing place) or `\"door\"` (the standing place nearest an exit, without asking to stop). False and the reason when there is no free place of that kind.", NEW, TrafficWrite, true, |c, a| {
+        let id = person_id(a.int(0)?, "move")?;
+        let to = a.str(1)?;
+        if !matches!(to.as_str(), "seat" | "stand" | "door") {
+            return Err(ApiError(format!("omsi.people.move: `to` must be \"seat\", \"stand\" or \"door\", not {to:?}")));
+        }
+        Ok::<_, ApiError>(super::core::ok_or_reason(c.io().people_order(id, &PaxCommand::Move(to))))
+    }),
     def!(
         "people.stops",
         "people",
