@@ -47,6 +47,8 @@ pub struct CabinView {
     /// Its rear sections (`part_frames`) and the places switched off (`places_off`).
     pub trailers: Vec<PartFrame>,
     pub places_off: Vec<bool>,
+    /// K-OMSI: the card readers shown, bus frame (`tag_points::shown_readers`).
+    pub readers: Vec<Vec3>,
 }
 
 impl PeopleSim {
@@ -60,6 +62,7 @@ impl PeopleSim {
                 exit_open,
                 trailers: part_frames(v, cabin),
                 places_off: places_off(v, cabin),
+                readers: tag_points::shown_readers(v, &self.player_reader_meshes),
             }
         });
         // the destination shown: the row the display's scripts chose (target_index_int, as
