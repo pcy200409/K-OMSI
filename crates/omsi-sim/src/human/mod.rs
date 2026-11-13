@@ -147,6 +147,9 @@ pub struct PoseInput<'a> {
     pub look: Option<Vec3>,
     /// Where the right hand reaches (the cash desk).
     pub reach: Option<Vec3>,
+    /// K-OMSI: the reach is a card tagged on a reader - with the arm, the body upright (no
+    /// bow from the hips as over a cash desk).
+    pub reach_upright: bool,
     /// Where both hands hold on (left, right): the driver's hands on the steering wheel.
     /// Followed as given every frame, no easing (the caller moves them).
     pub grips: Option<[Vec3; 2]>,
@@ -177,6 +180,7 @@ impl Default for PoseInput<'_> {
             seat_pelvis: None,
             look: None,
             reach: None,
+            reach_upright: false,
             grips: None,
             grip_frames: None,
             grip_lean: 0.0,
@@ -274,6 +278,7 @@ pub struct Pose {
     seat_pelvis: Option<Vec3>,
     reach: f32,
     reach_at: Vec3,
+    reach_upright: bool,
     /// Both hands on a steering wheel: how far (0 … 1) and where.
     grip: f32,
     grip_at: [Vec3; 2],

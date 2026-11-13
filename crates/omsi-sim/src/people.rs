@@ -79,6 +79,7 @@ pub mod ticket_hook;
 // What the renderer has to follow, the money on the desk and what the people need of the map.
 pub mod bodies;
 pub mod pose_facts;
+pub mod tag_points;
 pub mod money;
 pub mod world;
 #[cfg(test)]

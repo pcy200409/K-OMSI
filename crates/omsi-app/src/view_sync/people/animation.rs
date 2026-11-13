@@ -35,7 +35,7 @@ pub(super) fn bones(p: &PersonFrame, ty: &omsi_sim::human::HumanType, st: &mut P
             (at.as_dvec3(), p.lheading, frame)
         }
     };
-    let PoseFacts { activity, seat, reach, floor_lift, hold, seated_level } = p.facts;
+    let PoseFacts { activity, seat, reach, floor_lift, hold, seated_level, reach_upright } = p.facts;
     let bus = match p.place {
         Place::Bus(id, _) => buses.get(&id).copied(),
         Place::Ground => None,
@@ -105,6 +105,7 @@ pub(super) fn bones(p: &PersonFrame, ty: &omsi_sim::human::HumanType, st: &mut P
         seat,
         seat_pelvis,
         reach,
+        reach_upright,
         hold,
         floor: Some(&sample),
         ..PoseInput::default()

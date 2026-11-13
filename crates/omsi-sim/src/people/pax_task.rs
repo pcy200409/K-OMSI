@@ -128,10 +128,25 @@ impl PeopleSim {
                     p.ticket = TICKET_NONE;
                 }
                 let ticket = p.ticket;
+                // K-OMSI: on the player's bus, the card reader at the door (see `tag_points`)
+                let reader = if ticket == TICKET_STAMP && bn.id == BusId::Player {
+                    tag_points::pick_reader(&self.player_readers, local).and_then(|r| tag_points::path_point_for(&bn.cabin, r, local).map(|k| (r, k)))
+                } else {
+                    None
+                };
+                let p = self.pax_mut(i).unwrap();
+                p.tag_at = None;
+                p.tag_pt = None;
+                p.tag_walk = 0.0;
                 match ticket {
                     TICKET_STAMP => {
                         p.stamper = bn.cabin.nearest_stamper(local);
                         p.pt_target = p.stamper.and_then(|k| bn.cabin.stampers[k].0);
+                        if let Some((r, k)) = reader {
+                            p.tag_at = Some(r);
+                            p.tag_pt = Some(k);
+                            p.pt_target = Some(k);
+                        }
                     }
                     TICKET_BUY => p.pt_target = bn.cabin.in_group(vec![bn.cabin.sale.and_then(|s| s.0)], bn.cabin.group_at(p.pt))[0],
                     _ => self.route_to_place(i, bn),
@@ -574,11 +589,14 @@ impl PeopleSim {
                 pp.st = 9;
                 pp.smooth = true;
                 if pp.ticket == TICKET_STAMP {
-                    if let Some(&(_, dev)) = pp.stamper.and_then(|k| bn.cabin.stampers.get(k)) {
+                    let dev = pp.tag_at.or_else(|| pp.stamper.and_then(|k| bn.cabin.stampers.get(k)).map(|s| s.1));
+                    if let Some(dev) = dev {
                         pp.target = dev.as_dvec3();
                         pp.target_bus = true;
                         pp.reach_at = dev;
                     }
+                    // (a step up to the reader first: `pax_move`)
+                    pp.tag_walk = if pp.tag_at.is_some() { tag_points::TAG_WALK } else { 0.0 };
                     pp.timer = 1.0;
                     pp.reach = true;
                     pp.sub = 1;
@@ -603,7 +621,10 @@ impl PeopleSim {
             } else if p.sub == 2 && p.timer <= 0.0 {
                 self.route_to_place(i, bn);
                 let pp = self.pax_mut(i).unwrap();
-                pp.pt = pp.stamper.and_then(|k| bn.cabin.stampers.get(k)).and_then(|s| s.0);
+                pp.pt = pp.tag_pt.or_else(|| pp.stamper.and_then(|k| bn.cabin.stampers.get(k)).and_then(|s| s.0));
+                pp.tag_at = None;
+                pp.tag_pt = None;
+                pp.tag_walk = 0.0;
                 pp.ticket = TICKET_NONE;
                 pp.sub = 0;
             }
