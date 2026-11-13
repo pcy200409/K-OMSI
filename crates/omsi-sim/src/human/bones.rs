@@ -54,8 +54,11 @@ impl Pose {
             let excess = (v.length() - 0.75 * (rig.upper_arm + rig.forearm)).max(0.0);
             let r = smoothstep(0.0, 1.0, self.reach);
             let yaw = v.x.atan2(v.y.max(0.05)).to_degrees();
+            // (a card to a reader: upright - a little bow only for one out of the arm's reach)
+            let excess = if self.reach_upright { (excess - 0.2 * (rig.upper_arm + rig.forearm)).max(0.0) } else { excess };
+            let most = if self.reach_upright { 8.0 } else { 32.0 };
             (
-                d(32.0) * (excess / 0.35).min(1.0) * r * if v.y > 0.0 { 1.0 } else { 0.3 },
+                d(most) * (excess / 0.35).min(1.0) * r * if v.y > 0.0 { 1.0 } else { 0.3 },
                 d((-yaw * 0.5).clamp(-30.0, 12.0)) * r,
             )
         } else {

@@ -53,6 +53,7 @@ fn setup(tag: &str) -> (PeopleSim, PlayerBusView) {
             exit_open: vec![true; bus.cabin.exits.len()],
             trailers: Vec::new(),
             places_off: Vec::new(),
+            readers: Vec::new(),
         }),
     };
     (people, view)
