@@ -2861,6 +2861,22 @@
       "permission": null
     },
     {
+      "name": "people.cancel",
+      "group": "people",
+      "since": "0.2.22",
+      "doc": "K-OMSI: somebody on their way into the player's bus (`passenger_ticket` names them; in the doorway, say, having asked where it goes) does not get on after all: back to the stop, and they do not board that bus again while it stands there.",
+      "params": [
+        {
+          "name": "id",
+          "type": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "true, or false and the reason",
+      "multi": true,
+      "permission": "traffic_write"
+    },
+    {
       "name": "people.counts",
       "group": "people",
       "since": "0.2.22",
