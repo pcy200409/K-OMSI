@@ -86,6 +86,8 @@ impl PeopleSim {
             wall_key: (0, 0, 0, 0.0),
             cabins: HashMap::new(),
             player_cabin: None,
+            player_reader_meshes: Vec::new(),
+            player_readers: Vec::new(),
             player_next_stop: None,
             seats: HashMap::new(),
             stops: HashMap::new(),
@@ -414,6 +416,10 @@ impl PeopleSim {
                 self.exit_req = vec![false; c.exits.len().max(1)];
                 self.entry_busy = vec![false; c.entries.len()];
                 self.exit_busy = vec![false; c.exits.len()];
+                self.player_reader_meshes = tag_points::reader_meshes(&vehicle.ty);
+                if !self.player_reader_meshes.is_empty() {
+                    log::info!("passenger cabin: {} card reader meshes (the passengers tag on there)", self.player_reader_meshes.len());
+                }
                 self.player_cabin = Some(c);
             }
             None => log::info!("{}: no passenger cabin", vehicle.ty.def.path.display()),
