@@ -6229,6 +6229,11 @@ _version: 2
   tl: "Default (1200 m)"
   sr: "Podrazumevano (1200 m)"
   ka: "ნაგულისხმევი (1200 m)"
+"Whole map (heavy)":
+  ko: "맵 전체 (무거움)"
+  de: "Ganze Karte (schwer)"
+  ja: "マップ全体(重い)"
+  zh: "整个地图(较重)"
 "600 m - fastest":
   ca: "600 m - màxima rapidesa"
   ru: "600 м - быстрее всего"
