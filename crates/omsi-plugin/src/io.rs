@@ -839,6 +839,8 @@ pub enum PaxCommand {
     Leave { anywhere: bool },
     /// To another place of the bus: `"seat"`, `"stand"` or `"door"`.
     Move(String),
+    /// Not get on after all: back to the stop.
+    Cancel,
 }
 
 /// A plugin's change of a passenger's ticket: `None` leaves that part as it is.

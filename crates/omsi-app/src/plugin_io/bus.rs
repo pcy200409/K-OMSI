@@ -345,6 +345,7 @@ pub(crate) fn people_order(app: &mut App, id: u32, o: &op::PaxCommand) -> Result
         op::PaxCommand::Hold(s) => h.pax_hold(id, *s),
         op::PaxCommand::Stay(on) => h.pax_stay(id, *on),
         op::PaxCommand::Leave { anywhere } => h.pax_leave(id, *anywhere),
+        op::PaxCommand::Cancel => h.pax_cancel(id),
         op::PaxCommand::Move(to) => match omsi_sim::people::PaxOrder::parse(to) {
             Some(to) => h.pax_move_to(id, to),
             None => Err("no such place"),

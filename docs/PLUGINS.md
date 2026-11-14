@@ -828,6 +828,7 @@ On macOS, helpers extracted from ZIP files may need their executable bit restore
 
 | Function | Returns | What it does | Since |
 | --- | --- | --- | --- |
+| `omsi.people.cancel(id)` | true, or false and the reason | K-OMSI: somebody on their way into the player's bus (`passenger_ticket` names them; in the doorway, say, having asked where it goes) does not get on after all: back to the stop, and they do not board that bus again while it stands there. *Permission: `traffic_write`.* | 0.2.22 |
 | `omsi.people.counts()` | walking, waiting, riding | The people of the map near the camera: walking, waiting at stops, riding a bus. | 0.2.22 |
 | `omsi.people.density()` | number or nil | The people setting: 0 to 3, 1 the map's own amount. | 0.2.22 |
 | `omsi.people.get(id)` | table or nil | One person by id, as `people.list` gives them, and more: `stop_name` (the timetable's name of the stop they wait or waited at), `ticket` (the name of the ticket they ask for), `ticket_kind` (`"none"`, `"stamp"`, `"buy"`), `ticket_index` (the ticket pack's, from 1; 0 none), `ticket_price`, `ticket_voice`, `ticket_by` (the plugin that changed it), `ticket_asked` (asked for at the cash desk already), `tag` (`people.set_ticket`'s), `age`, `model` (the `.hum` file), `voice` (its voice folder). `people.list` gives the same fields. | 0.3 |

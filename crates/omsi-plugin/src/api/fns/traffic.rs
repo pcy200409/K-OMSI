@@ -190,6 +190,10 @@ pub static FNS: &[ApiFn] = &[
         let anywhere = a.flag(1, false);
         Ok::<_, ApiError>(super::core::ok_or_reason(c.io().people_order(id, &PaxCommand::Leave { anywhere })))
     }),
+    def!("people.cancel", "people", [p("id", "integer")], "true, or false and the reason", "K-OMSI: somebody on their way into the player's bus (`passenger_ticket` names them; in the doorway, say, having asked where it goes) does not get on after all: back to the stop, and they do not board that bus again while it stands there.", NEW, TrafficWrite, true, |c, a| {
+        let id = person_id(a.int(0)?, "cancel")?;
+        Ok::<_, ApiError>(super::core::ok_or_reason(c.io().people_order(id, &PaxCommand::Cancel)))
+    }),
     def!("people.move", "people", [p("id", "integer"), p("to", "string")], "true, or false and the reason", "K-OMSI: a rider of the player's bus, at their place, walks to another free place while the bus runs: `\"seat\"`, `\"stand\"` (a standing place) or `\"door\"` (the standing place nearest an exit, without asking to stop). False and the reason when there is no free place of that kind.", NEW, TrafficWrite, true, |c, a| {
         let id = person_id(a.int(0)?, "move")?;
         let to = a.str(1)?;
