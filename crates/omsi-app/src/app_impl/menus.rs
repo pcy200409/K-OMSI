@@ -311,6 +311,10 @@ impl App {
                 self.close_game_menu();
                 self.copy_server_code();
             }
+            "plugins_on" => {
+                self.close_game_menu();
+                self.integrations.plugins_turn_on = true;
+            }
             "admin" => self.open_list(crate::game_lists::ListKind::Admin),
             "players" if self.net.lan.is_some() => {
                 self.close_list();
@@ -587,6 +591,11 @@ impl crate::App {
         let lines = self.plugin_menu_lines();
         let before = v.iter().position(|x| matches!(x.0, "save" | "admin" | "quit")).unwrap_or(v.len()).max(at);
         v.splice(before..before, lines.into_iter().map(|m| ("plugin", Cow::Owned(m.label.clone()), Some(m))));
+        // plugins switched off this session (too slow, too many errors): a line to turn them on
+        if self.integrations.plugins.as_ref().is_some_and(|p| !p.switched_off().is_empty()) {
+            let before = v.iter().position(|x| matches!(x.0, "save" | "admin" | "quit")).unwrap_or(v.len()).max(at);
+            v.insert(before, ("plugins_on", "Turn switched-off plugins on again".into(), None));
+        }
         v
     }
 
