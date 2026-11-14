@@ -276,7 +276,11 @@ impl PeopleSim {
                 self.set_roll((id, bus), Roll::Done);
                 let why = if roll.why.is_empty() { "it was never 150 m off" } else { roll.why };
                 trace!("t={:.1} nobody was put out for {bus:?} at stop {id}: {why}", self.time);
-                self.spawn_runner(world, net, id, bus, None, false, buses, bus_ix);
+                let called = bus == BusId::Player && self.runner_called == Some(id);
+                self.spawn_runner(world, net, id, bus, None, called, buses, bus_ix);
+                if called {
+                    self.runner_called = None;
+                }
             }
         }
     }
@@ -495,7 +499,7 @@ impl PeopleSim {
             .map(Source::Stroller);
         // (not for the player's bus: whoever runs for it was there to be seen before)
         let from = near
-            .or_else(|| (bus != BusId::Player).then(|| self.start_behind(world, net, lane, s0, lane_len, stop_pos, fwd, jitter).map(Source::Spawn)).flatten());
+            .or_else(|| (bus != BusId::Player || self.runner_called == Some(id)).then(|| self.start_behind(world, net, lane, s0, lane_len, stop_pos, fwd, jitter).map(Source::Spawn)).flatten());
         let Some(from) = from else {
             trace!(
                 "t={:.1} nobody late for {bus:?} at stop {id}: nobody walking near, and every place behind is in sight, across the street or not loaded",

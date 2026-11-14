@@ -332,6 +332,11 @@ pub trait PluginIo {
     fn people_set_ticket(&mut self, _id: u32, _change: &TicketChange, _by: &str) -> Result<(), String> {
         Err("the game has no passengers".into())
     }
+    /// A plugin's order to a passenger of the player's bus (`people.hold`, `people.stay`,
+    /// `people.leave`, `people.move`); the reason when it was not taken.
+    fn people_order(&mut self, _id: u32, _order: &PaxCommand) -> Result<(), String> {
+        Err("the game has no passengers".into())
+    }
 
     // --- duty and timetable -------------------------------------------------------------
     fn duty(&self) -> Option<Duty> {
@@ -753,6 +758,8 @@ pub struct Person {
     pub pax_ticket: Option<PaxTicket>,
     /// A plugin's own text kept with the person (`people.set_ticket`'s `tag`).
     pub tag: Option<String>,
+    /// Late for a bus and hurrying for it (K-OMSI, `people.runner`).
+    pub late: bool,
 }
 
 /// What a passenger does about a ticket.
@@ -825,6 +832,23 @@ pub struct TicketAsk {
     /// Where the two are in the duty's trip (from 0), where it has them.
     pub stop_index: Option<usize>,
     pub destination_index: Option<usize>,
+}
+
+/// A plugin's order to a passenger of the player's bus (`people.hold`, ...).
+#[derive(Debug, Clone, PartialEq)]
+pub enum PaxCommand {
+    /// Stand where they are for so many seconds (0: go on).
+    Hold(f64),
+    /// Stay in the bus past their stop and the terminus (`false`: as usual again).
+    Stay(bool),
+    /// Get off at the next stop - or, `anywhere`, wherever the doors open.
+    Leave { anywhere: bool },
+    /// To another place of the bus: `"seat"`, `"stand"` or `"door"`.
+    Move(String),
+    /// Not get on after all: back to the stop.
+    Cancel,
+    /// Somebody late runs for the player's bus standing at a stop (the id: nobody).
+    Runner,
 }
 
 /// A plugin's change of a passenger's ticket: `None` leaves that part as it is.

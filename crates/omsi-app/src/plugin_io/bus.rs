@@ -296,6 +296,7 @@ pub(crate) fn people(app: &App) -> Vec<op::Person> {
                 stop_name: pax.and_then(|x| x.stop).and_then(|s| h.stop_name(s)),
                 pax_ticket: ticket,
                 tag: pax.and_then(|x| x.plugin().tag.clone()),
+                late: pax.is_some_and(|x| x.late.is_some()),
             }
         })
         .collect()
@@ -336,6 +337,23 @@ pub(crate) fn set_ticket(app: &mut App, id: u32, c: &op::TicketChange, by: &str)
     });
     let change = omsi_sim::people::TicketChange { kind, ticket: c.ticket, name: c.name.clone(), price: c.price, voice: c.voice.clone(), tag: c.tag.clone(), payment: c.payment };
     h.set_ticket(id, &change, by).map_err(str::to_string)
+}
+
+/// `people.hold`, `people.stay`, `people.leave`, `people.move` (K-OMSI).
+pub(crate) fn people_order(app: &mut App, id: u32, o: &op::PaxCommand) -> Result<(), String> {
+    let h = app.session.humans.as_mut().ok_or("no passengers")?;
+    match o {
+        op::PaxCommand::Hold(s) => h.pax_hold(id, *s),
+        op::PaxCommand::Stay(on) => h.pax_stay(id, *on),
+        op::PaxCommand::Leave { anywhere } => h.pax_leave(id, *anywhere),
+        op::PaxCommand::Cancel => h.pax_cancel(id),
+        op::PaxCommand::Runner => h.call_runner(),
+        op::PaxCommand::Move(to) => match omsi_sim::people::PaxOrder::parse(to) {
+            Some(to) => h.pax_move_to(id, to),
+            None => Err("no such place"),
+        },
+    }
+    .map_err(str::to_string)
 }
 
 /// The passengers of the people's `ticket_asks`, for the plugins.
