@@ -209,6 +209,8 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_OBIS_CLIENT_DIR` | text | - | use | plugin | K-OMSI: the OBIS client's folder (the one with OBIS-client.exe), instead of looking for it under the OMSI folders. |
 | `OMSI_OBIS_FETCHED_DIR` | text | - | use | plugin | K-OMSI: where the routes fetched from OBIS for a line the OBIS client lacks are kept, instead of ~/.openomsi/obis_routes (tests). |
 | `OMSI_OBIS_INGEST_URL` | text | - | use | plugin | K-OMSI: another address the player's bus is sent to instead of OBIS (tests, a local stand-in). |
+| `OMSI_OBIS_PACK_DIR` | text | - | use | plugin | K-OMSI: where OBIS's route pack is kept, instead of ~/.openomsi/obis_pack (tests). |
+| `OMSI_OBIS_PACK_URL` | text | - | use | plugin | K-OMSI: another address of OBIS's route pack (https://obis.kr/api/client/routes) (tests, a local stand-in). |
 | `OMSI_OBIS_PREFS_URL` | text | - | use | plugin | K-OMSI: another address of the OBIS vehicle settings (tests, a local stand-in). |
 | `OMSI_OBIS_ROUTES_URL` | text | - | use | plugin | K-OMSI: another address of the OBIS routes (https://obis.kr/api/routes) a missing line is fetched from (tests, a local stand-in). |
 | `OMSI_OBIS_TOKEN` | text | - | use | plugin | K-OMSI: the device token sent to OBIS instead of the OBIS client's own (tests). |
