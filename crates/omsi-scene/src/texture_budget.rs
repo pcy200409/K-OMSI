@@ -45,6 +45,26 @@ pub(super) fn card_hard_over(card: omsi_render::GpuMemory, video_limit: u64, car
     }
 }
 
+/// K-OMSI: the card as the budget pass weighs it - the free room in the allocator's blocks
+/// (`holes`) out of the rest. Counted in, it held the textures over the card's bound however
+/// small they were made (each texture made smaller left one more hole and nothing less in
+/// use), and never let them come back: on 8 GB cards the scenery went blurry about an hour
+/// in and stayed so until a restart (openOMSI #3888, #3819).
+pub(super) fn firm_card(card: omsi_render::GpuMemory, holes: u64) -> omsi_render::GpuMemory {
+    // (`KOMSI_COUNT_HOLES=1`: counted in as before, to compare)
+    if std::env::var_os("KOMSI_COUNT_HOLES").is_some() {
+        return card;
+    }
+    omsi_render::GpuMemory { other: card.other.saturating_sub(holes), ..card }
+}
+
+/// K-OMSI: past the driver's budget with the holes counted in, the card is paging to the
+/// system's memory: no texture is made bigger then (holes did grow to half of a 12 GB card
+/// once, #2295), though none is made smaller for the holes either.
+pub(super) fn card_paging(card: omsi_render::GpuMemory) -> bool {
+    card.budget.is_some_and(|b| card.total() > b)
+}
+
 pub(super) fn texture_room(limit: u64, usage: u64) -> u64 {
     if limit == 0 {
         u64::MAX
