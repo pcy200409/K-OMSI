@@ -122,3 +122,19 @@ fn somebody_boarding_turns_back_and_does_not_board_that_bus_again() {
     let (mut h, _bus, _ix) = riding("po-cancel2");
     assert_eq!(h.pax_cancel(1), Err("already in the bus"));
 }
+
+#[test]
+fn a_runner_is_called_only_for_the_player_s_bus_at_a_stop() {
+    use crate::people::runners::Roll;
+    let (mut h, _bus, _ix) = riding("po-runner");
+    assert_eq!(h.call_runner(), Err("the bus stands at no stop"));
+    h.stops.get_mut(&42).unwrap().buses = vec![(BusId::Player, true)];
+    assert_eq!(h.call_runner(), Err("the stop has no pavement"));
+    h.stops.get_mut(&42).unwrap().lane = Some((0, 0.0));
+    h.runner_rolls.insert((42, BusId::Player), crate::people::runners::RollEntry { roll: Roll::Done, kept: 0.0, why: "" });
+    h.call_runner().unwrap();
+    assert_eq!(h.runner_rolls[&(42, BusId::Player)].roll, Roll::Due, "a done roll is due again");
+    assert_eq!(h.runner_called, Some(42));
+    h.runner_rolls.get_mut(&(42, BusId::Player)).unwrap().roll = Roll::Running(5);
+    assert_eq!(h.call_runner(), Err("somebody runs for it already"));
+}

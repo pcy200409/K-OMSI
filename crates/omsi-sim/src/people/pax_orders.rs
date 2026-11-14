@@ -114,6 +114,35 @@ impl PeopleSim {
         Ok(())
     }
 
+    /// `people.runner`: somebody late for the player's bus at the stop it stands at (in the
+    /// stop's box): its roll there made due again, and `runners_tick` sends somebody out in
+    /// the next step (behind the bus out of sight, or a pedestrian near), as it does for a
+    /// bus nobody was put out for.
+    pub fn call_runner(&mut self) -> Result<(), &'static str> {
+        let mut at: Vec<i64> = self
+            .stops
+            .iter()
+            .filter(|(_, s)| s.buses.iter().any(|(b, in_box)| *b == BusId::Player && *in_box))
+            .map(|(k, _)| *k)
+            .collect();
+        at.sort_unstable();
+        let Some(&stop) = at.first() else { return Err("the bus stands at no stop") };
+        if self.stops[&stop].lane.is_none() {
+            return Err("the stop has no pavement");
+        }
+        if let Some(e) = self.runner_rolls.get(&(stop, BusId::Player)) {
+            if let super::runners::Roll::Placed(_) | super::runners::Roll::Running(_) = e.roll {
+                return Err("somebody runs for it already");
+            }
+        }
+        self.runner_called = Some(stop);
+        self.runner_rolls.insert(
+            (stop, BusId::Player),
+            super::runners::RollEntry { roll: super::runners::Roll::Due, kept: self.time, why: "a plugin" },
+        );
+        Ok(())
+    }
+
     /// `people.move`: to another place of the bus, walking there while it runs.
     pub fn pax_move_to(&mut self, person: u32, to: PaxOrder) -> Result<(), &'static str> {
         let i = self.player_pax(person)?;
