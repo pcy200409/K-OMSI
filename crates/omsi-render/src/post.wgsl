@@ -94,7 +94,9 @@ fn src_unmasked(uv: vec2<f32>, texel: vec2<f32>, x: f32, y: f32) -> vec4<f32> {
     let m = textureSampleLevel(t_base, s_lin, at, 0.0);
     let c = clean(textureSampleLevel(t_src, s_lin, at, 0.0).rgb);
     let screen = select(0.0, 1.0, is_screen_mask(m));
-    let led = step(0.5, m.g);
+    // (an LED panel's code, g / r = 1: a pane over it - a windscreen, a side window - scales
+    // both channels together, and the dots seen through it lost their glow altogether)
+    let led = step(0.5, m.g / max(m.r, 1e-3));
     let picture = c * (1.0 - screen);
     let over = min(max(picture - vec3<f32>(GLARE_WHITE), vec3<f32>(0.0)), vec3<f32>(64.0)) + c * (led * p.c.w) * screen;
     return vec4<f32>(over, luma(picture + c * (led * p.c.w) * screen));
