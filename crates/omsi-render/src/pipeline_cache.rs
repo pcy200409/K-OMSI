@@ -41,15 +41,28 @@ pub(crate) fn wanted(adapter: &wgpu::Adapter) -> wgpu::Features {
     adapter.features() & wgpu::Features::PIPELINE_CACHE
 }
 
+/// Which program's cache this process keeps (`set_role`): "" for the game.
+static ROLE: Mutex<&'static str> = Mutex::new("");
+
+/// Keep this process's pipelines in a file of their own, `pipelines-…-<role>.bin`. The
+/// launcher's preview builds other pipelines than the game (another target format, its own
+/// options) on the same GPU; with one file per GPU each start of the launcher wrote its
+/// smaller cache over the game's, and the game compiled for some twenty seconds at every start.
+pub fn set_role(role: &'static str) {
+    *ROLE.lock().unwrap_or_else(|e| e.into_inner()) = role;
+}
+
 fn path(info: &wgpu::AdapterInfo) -> Option<PathBuf> {
     let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))?;
     let home = PathBuf::from(home);
-    home.is_absolute().then(|| home.join(".openomsi/cache").join(file_name(info.backend, info.vendor, info.device)))
+    let role = *ROLE.lock().unwrap_or_else(|e| e.into_inner());
+    home.is_absolute().then(|| home.join(".openomsi/cache").join(file_name(info.backend, info.vendor, info.device, role)))
 }
 
-// (one file per GPU: a laptop's two GPUs would throw each other's data away)
-fn file_name(backend: wgpu::Backend, vendor: u32, device: u32) -> String {
-    format!("pipelines-{}-{vendor:04x}-{device:04x}.bin", format!("{backend:?}").to_lowercase())
+// (one file per GPU: a laptop's two GPUs would throw each other's data away; and per role)
+fn file_name(backend: wgpu::Backend, vendor: u32, device: u32, role: &str) -> String {
+    let role = if role.is_empty() { String::new() } else { format!("-{role}") };
+    format!("pipelines-{}-{vendor:04x}-{device:04x}{role}.bin", format!("{backend:?}").to_lowercase())
 }
 
 /// Open the cache of a device made with [`wanted`]'s feature, from last run's file.
@@ -293,7 +306,9 @@ mod tests {
 
     #[test]
     fn file_names_backend_and_gpu() {
-        assert_eq!(super::file_name(wgpu::Backend::Gl, 0x5143, 0x43050a01), "pipelines-gl-5143-43050a01.bin");
-        assert_eq!(super::file_name(wgpu::Backend::Vulkan, 0x10de, 0x2684), "pipelines-vulkan-10de-2684.bin");
+        assert_eq!(super::file_name(wgpu::Backend::Gl, 0x5143, 0x43050a01, ""), "pipelines-gl-5143-43050a01.bin");
+        assert_eq!(super::file_name(wgpu::Backend::Vulkan, 0x10de, 0x2684, ""), "pipelines-vulkan-10de-2684.bin");
+        // the launcher's preview keeps its own file beside the game's
+        assert_eq!(super::file_name(wgpu::Backend::Vulkan, 0x10de, 0x2684, "launcher"), "pipelines-vulkan-10de-2684-launcher.bin");
     }
 }
