@@ -29,7 +29,9 @@ struct Offscreen<'a> {
     settings: settings::Settings,
     renderer: Renderer,
     scene: Scene,
-    world: World,
+    world: std::sync::Arc<World>,
+    /// K-OMSI: a dedicated server's tiles streamed round its players (`stream_distance`)
+    streamer: Option<tiles::Streamer>,
     /// the scenery objects' scripts (see `World::scenery_sync`)
     scenery: omsi_sim::scenery::SceneryState,
     camera: Camera,

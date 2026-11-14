@@ -12,6 +12,33 @@ impl Offscreen<'_> {
         Ok(crate::frame_stages::run(&mut step, stages::OFFSCREEN_STEP)? == crate::frame_stages::Flow::Go)
     }
 
+    /// K-OMSI: a dedicated server's tiles round its players (`stream_distance`): the
+    /// window's streaming with the players for the camera. Nobody there: the tiles stay as
+    /// they are. New ground brings its lanes to the traffic.
+    pub(super) fn server_streaming_step(&mut self) {
+        let Some(streamer) = self.streamer.as_mut() else { return };
+        let centers: Vec<DVec3> = self.remotes_off.remotes.values().map(|r| r.vehicle().position).collect();
+        if centers.is_empty() {
+            return;
+        }
+        let changed = streamer.update(&self.renderer, &mut self.scene, &centers, std::time::Duration::from_millis(6), self.lan_audio.as_ref());
+        if !changed {
+            return;
+        }
+        if let Some(t) = self.traffic.as_mut() {
+            t.add_tiles(&self.world.traffic_inbox);
+        }
+        // (now and then in the log: how much of the map the server holds)
+        {
+            static LAST: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+            let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+            if last.is_none_or(|t| t.elapsed().as_secs() >= 60) {
+                *last = Some(std::time::Instant::now());
+                log::info!("server: {} tiles loaded round {} players ({} loaded and {} unloaded since the start)", self.world.loaded_tiles().len(), centers.len(), streamer.loaded_total, streamer.unloaded_total);
+            }
+        }
+    }
+
     /// The ground under the vehicles (`OMSI_GROUND_GAP`).
     pub(super) fn ground_gap_step(&mut self, t_s: f32) {
         if let Some(g) = self.ground_gap.as_mut() {
