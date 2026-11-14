@@ -495,3 +495,28 @@ fn a_squeezed_restore_cut_short_by_a_fuller_budget_stays_squeezed() {
     assert_eq!(scene.texture_size_of(id), Some((512, 512)));
     assert!(world.gpu.lock().textures[&path].squeezed);
 }
+
+/// K-OMSI: the free room in the allocator's blocks does not hold the textures over the
+/// card's bound (making them smaller cannot lessen it), and past the driver's budget with
+/// it counted in nothing grows (openOMSI #3888).
+#[test]
+fn k_omsi_the_allocators_holes_do_not_hold_the_textures_down() {
+    const MIB: u64 = 1 << 20;
+    // an 8 GB card: budget 7131 MB, the bound nine tenths of it (6417 MB)
+    let card = omsi_render::GpuMemory { textures: 3000 * MIB, meshes: 440 * MIB, other: 3300 * MIB, budget: Some(7131 * MIB), measured: true };
+    let holes = 1200 * MIB;
+    let cap = card.cap(0);
+    // counted in, the holes put the card over its bound: the textures were cut for good
+    assert!(card.total() > cap);
+    let firm = firm_card(card, holes);
+    assert_eq!(firm.total(), card.total() - holes);
+    // left out, it is under, and the textures may come back into what is left
+    assert!(firm.total() < cap);
+    assert!(card_near_room(0, firm) > 0);
+    assert!(!card_paging(card));
+    // past the driver's budget itself (holes and all): paging, nothing comes back
+    let full = omsi_render::GpuMemory { other: 3800 * MIB, ..card };
+    assert!(card_paging(full));
+    // (no more holes than the rest: never below nothing)
+    assert_eq!(firm_card(card, u64::MAX).other, 0);
+}
