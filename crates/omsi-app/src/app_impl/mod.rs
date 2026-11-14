@@ -9,6 +9,7 @@ mod coupling;
 mod depot;
 mod editor_ops;
 mod hover;
+mod ime;
 pub(crate) use clock::{real_time_locked, restart_timetable, shift_clock, time_speed, timetable_after_clock_jump, JumpCx, ShiftClockCx};
 pub(crate) use hover::{hud_cursor, hud_size, sight_extent, triple_rig};
 pub(crate) use vehicles::{placement, placement_args, PlacementCx};
