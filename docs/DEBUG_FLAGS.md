@@ -391,6 +391,7 @@ effect. On Android, `openOMSI/env.txt` holds `NAME=value` lines that are set bef
 | `OMSI_GRAPHICS` | text | settings | use | app | vanilla, vanilla_plus or enhanced: another renderer for one run. |
 | `OMSI_IBIS_BUDGET` | num | 10 | use | sim | Seconds the IBIS typist may take per entry. |
 | `OMSI_LAN_JOIN_TIMEOUT` | num | default | use | net | LAN: seconds to wait when joining a game. |
+| `OMSI_LED_SIGN_DAY` | num | default | use | render | How bright a page's LED destination sign burns by day (the screen's white = 1; default 4). |
 | `OMSI_MAX_FPS` | num | settings | use | app | Frame rate limit for this run. |
 | `OMSI_METER` | text | - | use | render | gain,target,dark,bright,bias,night: the exposure metering. |
 | `OMSI_MIRROR_HUD` | num | settings | use | app | Mirror HUD mode (number). |
