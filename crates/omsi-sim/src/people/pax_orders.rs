@@ -98,6 +98,22 @@ impl PeopleSim {
         Ok(())
     }
 
+    /// `people.cancel`: somebody on their way into the player's bus (in the doorway, say,
+    /// having asked where it goes) does not get on after all: back to the stop, and that bus
+    /// is not boarded again while it stands there.
+    pub fn pax_cancel(&mut self, person: u32) -> Result<(), &'static str> {
+        let i = self.player_pax(person)?;
+        let p = self.pax(i).unwrap();
+        if p.inside.is_some() {
+            return Err("already in the bus");
+        }
+        if !matches!(p.task, Task::ToBus | Task::WalkingToBus) {
+            return Err("not boarding");
+        }
+        self.pax_mut(i).unwrap().cancel = true;
+        Ok(())
+    }
+
     /// `people.move`: to another place of the bus, walking there while it runs.
     pub fn pax_move_to(&mut self, person: u32, to: PaxOrder) -> Result<(), &'static str> {
         let i = self.player_pax(person)?;
@@ -130,6 +146,24 @@ impl PeopleSim {
     /// to leave - the stop asked for, the walk to the exit - or to another place.
     pub(crate) fn apply_order(&mut self, i: usize, buses: &[BusNow], bus_ix: &HashMap<BusId, usize>, world: &dyn super::World) {
         let Some(p) = self.pax(i) else { return };
+        if p.cancel {
+            let bus = p.bus;
+            let seat = p.seat;
+            {
+                let pp = self.pax_mut(i).unwrap();
+                pp.cancel = false;
+                pp.held_until = None;
+                pp.seat = None;
+                pp.refused = bus;
+            }
+            if let (Some(b), Some(k)) = (bus, seat) {
+                self.free_seat(b, k);
+            }
+            if matches!(self.pax(i).unwrap().task, Task::ToBus | Task::WalkingToBus) && self.pax(i).unwrap().inside.is_none() {
+                self.set_task(i, Task::WalkingToBusstop, buses, bus_ix, world);
+            }
+            return;
+        }
         if p.task != Task::SittingInBus {
             if p.task != Task::InBusToPlace {
                 let pp = self.pax_mut(i).unwrap();
