@@ -1303,6 +1303,17 @@ impl Plugins {
         }
     }
 
+    /// The Lua plugins switched off this session (too slow, too many errors), by name.
+    pub fn switched_off(&self) -> Vec<String> {
+        self.lua.iter().filter(|p| p.disabled).map(|p| p.name.clone()).collect()
+    }
+
+    /// Turn a switched-off Lua plugin on again (loaded again from its files); false when
+    /// there is none of that name off.
+    pub fn turn_on(&mut self, io: &mut dyn PluginIo, name: &str) -> bool {
+        self.lua.iter_mut().find(|p| p.disabled && p.name == name).is_some_and(|p| p.turn_on(io))
+    }
+
     /// Send an event to every Lua plugin now, outside its frame (the game pausing: `pause`,
     /// `menu_open`, which the plugins hear although they stand still).
     pub fn emit(&mut self, io: &mut dyn PluginIo, event: &'static str, args: Vec<api::Value>) {

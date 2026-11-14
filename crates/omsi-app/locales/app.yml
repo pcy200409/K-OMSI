@@ -12964,6 +12964,10 @@ _version: 2
   sv: "Reparera"
   sr: "Popravka"
   ka: "შეკეთება"
+"Turn switched-off plugins on again":
+  ko: "꺼진 플러그인 다시 켜기"
+"No plugin is switched off":
+  ko: "꺼진 플러그인이 없습니다"
 "Copy server code":
   ca: "Copia el codi del servidor"
   de: "Servercode kopieren"
