@@ -57,6 +57,7 @@ fn person(p: Person) -> Value {
         ("model", p.model.into()),
         ("voice", p.voice.into()),
         ("complaint", Value::Int(p.complaint as i64)),
+        ("late", p.late.into()),
     ])
 }
 
@@ -193,6 +194,9 @@ pub static FNS: &[ApiFn] = &[
     def!("people.cancel", "people", [p("id", "integer")], "true, or false and the reason", "K-OMSI: somebody on their way into the player's bus (`passenger_ticket` names them; in the doorway, say, having asked where it goes) does not get on after all: back to the stop, and they do not board that bus again while it stands there.", NEW, TrafficWrite, true, |c, a| {
         let id = person_id(a.int(0)?, "cancel")?;
         Ok::<_, ApiError>(super::core::ok_or_reason(c.io().people_order(id, &PaxCommand::Cancel)))
+    }),
+    def!("people.runner", "people", [], "true, or false and the reason", "K-OMSI: somebody late runs for the player's bus standing at a stop - out of sight behind it, or a pedestrian walking near - and boards if the doors open for them; left behind, they stand a moment and walk back. `people.list` marks them `late`. False and the reason when the bus stands at no stop.", NEW, TrafficWrite, true, |c, a| {
+        Ok::<_, ApiError>(super::core::ok_or_reason(c.io().people_order(0, &PaxCommand::Runner)))
     }),
     def!("people.move", "people", [p("id", "integer"), p("to", "string")], "true, or false and the reason", "K-OMSI: a rider of the player's bus, at their place, walks to another free place while the bus runs: `\"seat\"`, `\"stand\"` (a standing place) or `\"door\"` (the standing place nearest an exit, without asking to stop). False and the reason when there is no free place of that kind.", NEW, TrafficWrite, true, |c, a| {
         let id = person_id(a.int(0)?, "move")?;

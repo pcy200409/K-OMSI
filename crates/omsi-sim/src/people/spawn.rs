@@ -103,6 +103,7 @@ impl PeopleSim {
             ai_visits: HashMap::new(),
             last_door_open: HashMap::new(),
             runner_rolls: HashMap::new(),
+            runner_called: None,
             holds: Vec::new(),
             ai_requests: Vec::new(),
             tickets: None,

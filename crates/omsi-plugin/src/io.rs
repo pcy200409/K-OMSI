@@ -754,6 +754,8 @@ pub struct Person {
     pub pax_ticket: Option<PaxTicket>,
     /// A plugin's own text kept with the person (`people.set_ticket`'s `tag`).
     pub tag: Option<String>,
+    /// Late for a bus and hurrying for it (K-OMSI, `people.runner`).
+    pub late: bool,
 }
 
 /// What a passenger does about a ticket.
@@ -841,6 +843,8 @@ pub enum PaxCommand {
     Move(String),
     /// Not get on after all: back to the stop.
     Cancel,
+    /// Somebody late runs for the player's bus standing at a stop (the id: nobody).
+    Runner,
 }
 
 /// A plugin's change of a passenger's ticket: `None` leaves that part as it is.
