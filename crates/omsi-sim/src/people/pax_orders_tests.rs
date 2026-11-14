@@ -100,3 +100,25 @@ fn orders_are_only_for_the_player_s_bus() {
     assert!(h.pax_leave(1, false).is_err());
     assert_eq!(h.pax_hold(99, 1.0), Err("no such person"));
 }
+
+#[test]
+fn somebody_boarding_turns_back_and_does_not_board_that_bus_again() {
+    let (mut h, bus, ix) = riding("po-cancel");
+    {
+        let p = h.pax_mut(0).unwrap();
+        p.inside = None;
+        p.task = Task::WalkingToBus;
+        p.stop = Some(42);
+        p.pos = glam::DVec3::new(-3.0, 4.0, 0.0);
+    }
+    h.pax_cancel(1).unwrap();
+    run(&mut h, &bus, &ix, 1);
+    let p = h.pax(0).unwrap();
+    assert_eq!(p.task, Task::WalkingToBusstop);
+    assert_eq!(p.refused, Some(BusId::Player));
+    assert_eq!(p.seat, None);
+    assert_eq!(h.seats[&BusId::Player], vec![false, false], "the place is given back");
+    // in the bus already: too late
+    let (mut h, _bus, _ix) = riding("po-cancel2");
+    assert_eq!(h.pax_cancel(1), Err("already in the bus"));
+}

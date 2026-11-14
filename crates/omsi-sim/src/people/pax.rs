@@ -216,6 +216,10 @@ pub struct Pax {
     pub leave_anywhere: bool,
     pub leave_now: bool,
     pub order: Option<super::pax_orders::PaxOrder>,
+    /// A bus they would not take after all (`people.cancel`): not boarded again while it is
+    /// at their stop.
+    pub refused: Option<BusId>,
+    pub cancel: bool,
 }
 
 impl Pax {
@@ -294,6 +298,8 @@ impl Pax {
             leave_anywhere: false,
             leave_now: false,
             order: None,
+            refused: None,
+            cancel: false,
         }
     }
 

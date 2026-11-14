@@ -509,9 +509,13 @@ impl PeopleSim {
                     return;
                 };
                 let (b, why) = b;
-                let Some(bn) = bus_ix.get(&b).map(|k| &buses[*k]) else {
-                    return;
-                };
+                // (K-OMSI: a bus they turned down - `people.cancel` - stays theirs no more)
+                match self.pax(i).unwrap().refused {
+                    Some(r) if r == b => return,
+                    Some(_) => self.pax_mut(i).unwrap().refused = None,
+                    None => {}
+                }
+                let Some(bn) = bus_ix.get(&b).map(|k| &buses[*k]) else { return };
                 // (a bus they gave up on at its shut doors: once it opens one)
                 if self.pax(i).unwrap().shunned == Some(b) {
                     if !bn.entry_open.iter().any(|o| *o) {
