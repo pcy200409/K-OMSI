@@ -34,3 +34,9 @@ patch/ai-overtake-abort
 patch/pax-tag-reach
 patch/paint-cti-stamp
 patch/texture-holes
+patch/lan-stop-bell
+patch/led-day-glow
+patch/korean-ime
+patch/plugin-budget
+patch/html-script-budget
+patch/pax-events
