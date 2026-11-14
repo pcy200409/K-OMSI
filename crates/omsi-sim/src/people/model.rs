@@ -286,6 +286,9 @@ pub struct PeopleSim {
     /// The buses coming to or listed at a stop near the player, for somebody running up late
     /// (`runners_tick`): (stop, bus) → where its roll stands.
     pub runner_rolls: HashMap<(i64, BusId), RollEntry>,
+    /// K-OMSI: the stop a plugin called somebody late to the player's bus at
+    /// (`people.runner`): they may come from behind it out of sight, as for a timetable bus.
+    pub runner_called: Option<i64>,
     /// Timetable buses to keep at their stop for a few seconds more (for the traffic): the
     /// bus, the stop it must be serving for it (none: any), the seconds.
     pub holds: Vec<(u64, Option<i64>, f32)>,

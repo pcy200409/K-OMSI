@@ -349,6 +349,12 @@ impl PeopleSim {
                     return;
                 };
                 let (b, why) = b;
+                // (K-OMSI: a bus they turned down - `people.cancel` - stays theirs no more)
+                match self.pax(i).unwrap().refused {
+                    Some(r) if r == b => return,
+                    Some(_) => self.pax_mut(i).unwrap().refused = None,
+                    None => {}
+                }
                 let Some(bn) = bus_ix.get(&b).map(|k| &buses[*k]) else { return };
                 // (a bus they gave up on at its shut doors: once it opens one)
                 if self.pax(i).unwrap().shunned == Some(b) {
@@ -422,6 +428,10 @@ impl PeopleSim {
             }
             Task::SittingInBus => {
                 let Some(b) = p.inside else { return };
+                // (K-OMSI: a plugin keeps them in - asleep, past their stop)
+                if p.stay {
+                    return;
+                }
                 let reg = at_stops.get(&b).cloned().unwrap_or_default();
                 let km = self.odometer.get(&b).copied().unwrap_or(0.0);
                 if let Some(bn) = bn {
@@ -549,7 +559,7 @@ impl PeopleSim {
             // in the doorway, but the plugins have not had their say about the ticket yet
             // (`TICKET_HOLD` at most): they could still make it a pass, which decides the
             // way in
-            if self.ticket_pending(i) {
+            if self.ticket_pending(i) || self.held(i) {
                 return;
             }
             // in the doorway: the driver is greeted (the player's bus)
@@ -621,6 +631,11 @@ impl PeopleSim {
             }
         }
         let p = self.pax(i).unwrap().clone();
+        // (K-OMSI: held at the validator - fumbling for the card)
+        if p.ticket == TICKET_STAMP && p.sub == 1 && self.held(i) {
+            self.pax_mut(i).unwrap().timer = 1.0;
+            return;
+        }
         if p.ticket == TICKET_STAMP {
             if p.sub == 1 && p.timer < 0.5 {
                 // the validator stamps
@@ -653,11 +668,11 @@ impl PeopleSim {
             self.pax_mut(i).unwrap().timer = 1.0;
         }
         let door_open = p.door.map(|d| bn.exit_open.get(d).copied().unwrap_or(false)).unwrap_or(false);
-        let may_leave = door_open && (reg.next.is_some() || p.complaint == 3);
+        let may_leave = door_open && (reg.next.is_some() || p.complaint == 3 || p.leave_anywhere);
         self.pax_mut(i).unwrap().short = !may_leave;
-        let out = p.st == 7 && bn.speed.abs() < 1.0 && may_leave;
+        let out = p.st == 7 && bn.speed.abs() < 1.0 && may_leave && !self.held(i);
         if !out {
-            if reg.next.is_none() {
+            if reg.next.is_none() && !p.leave_anywhere {
                 if bn.id == BusId::Player {
                     self.stop_request = true;
                 }
