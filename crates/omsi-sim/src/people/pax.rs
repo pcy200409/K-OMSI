@@ -209,6 +209,18 @@ pub struct Pax {
     /// Late for a bus pulling in to the stop: walking up to it, then hurrying for it (see
     /// `runners`).
     pub late: Option<Late>,
+    /// A plugin's orders (`pax_orders`): held where they are until this time, kept in the
+    /// bus past their stop, off wherever the doors open, off at the next stop (asked for in
+    /// the next step), another place to go to.
+    pub held_until: Option<f64>,
+    pub stay: bool,
+    pub leave_anywhere: bool,
+    pub leave_now: bool,
+    pub order: Option<super::pax_orders::PaxOrder>,
+    /// A bus they would not take after all (`people.cancel`): not boarded again while it is
+    /// at their stop.
+    pub refused: Option<BusId>,
+    pub cancel: bool,
 }
 
 impl Pax {
@@ -285,6 +297,13 @@ impl Pax {
             bad_at: [0.0; 3],
             moved: 0.0,
             late: None,
+            held_until: None,
+            stay: false,
+            leave_anywhere: false,
+            leave_now: false,
+            order: None,
+            refused: None,
+            cancel: false,
         }
     }
 
