@@ -31,15 +31,17 @@ struct Scaled {
 }
 
 pub(crate) struct ImageStore {
-    dirs: Vec<PathBuf>,
+    pub(crate) dirs: Vec<PathBuf>,
     files: Mutex<HashMap<String, Option<Arc<Img>>>>,
     scaled: Mutex<Scaled>,
+    /// The `<video>`s of the page (see `video`).
+    pub(crate) videos: VideoStore,
 }
 
 impl ImageStore {
     /// `dirs` are searched in order for a relative path (the page's folder first).
     pub(crate) fn new(dirs: Vec<PathBuf>) -> ImageStore {
-        ImageStore { dirs, files: Mutex::new(HashMap::new()), scaled: Mutex::new(Scaled::default()) }
+        ImageStore { dirs, files: Mutex::new(HashMap::new()), scaled: Mutex::new(Scaled::default()), videos: VideoStore::default() }
     }
 
     /// The picture behind `src`, `None` when there is none.
@@ -109,7 +111,7 @@ impl ImageStore {
 }
 
 /// Resize with a box filter while the picture is more than twice too big, then bilinear.
-fn resize(src: &Img, w: u32, h: u32) -> Img {
+pub(crate) fn resize(src: &Img, w: u32, h: u32) -> Img {
     let mut owned: Option<Img> = None;
     loop {
         let cur = owned.as_ref().unwrap_or(src);
