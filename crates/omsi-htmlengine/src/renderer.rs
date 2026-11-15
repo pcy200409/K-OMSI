@@ -8,6 +8,10 @@ pub struct EngineRenderer {
     pub(crate) width: u32,
     pub(crate) height: u32,
     pub(crate) js: Interp,
+    /// K-OMSI: the font files the page asks for (`<meta name="omsi-font">`, `omsi-font-bold`).
+    pub(crate) font_spec: Option<(String, Option<String>)>,
+    /// The page font once its file was found (see `page_font`).
+    pub(crate) page_font: Option<u8>,
     pub(crate) dirty: bool,
     pub(crate) warned: bool,
     pub(crate) start: std::time::Instant,
@@ -60,6 +64,8 @@ impl EngineRenderer {
             width: width.max(1),
             height: height.max(1),
             js,
+            font_spec: page_font::meta_content(html, "omsi-font").map(|reg| (reg, page_font::meta_content(html, "omsi-font-bold"))),
+            page_font: None,
             dirty: true,
             warned,
             start: std::time::Instant::now(),
@@ -67,6 +73,24 @@ impl EngineRenderer {
             imgs: Arc::new(ImageStore::new(Vec::new())),
             cache: Mutex::new(None),
             rendered_gen: 0,
+        }
+    }
+
+    /// K-OMSI: find the page's font files in `dirs` (as its pictures are found) and tell the
+    /// page (`omsi.pageFont`).
+    fn load_page_font(&mut self, dirs: &[std::path::PathBuf]) {
+        let Some((reg, bold)) = &self.font_spec else { return };
+        let find = |rel: &str| dirs.iter().map(|d| omsi_cfg::resolve_path(d, rel)).find(|p| omsi_cfg::vfs::is_file(p));
+        let Some(reg_path) = find(reg) else {
+            log::warn!("htmltexture: page font {reg} not found");
+            return;
+        };
+        let bold_path = bold.as_deref().and_then(find);
+        self.page_font = page_font::load(&reg_path, bold_path.as_deref());
+        if self.page_font.is_some() {
+            if let Some(omsi) = self.omsi() {
+                omsi.lock().unwrap().insert("pageFont".to_string(), Val::Bool(true));
+            }
         }
     }
 
@@ -127,6 +151,7 @@ impl EngineRenderer {
     /// The element at a point of the texture (pixels); the body when nothing is there.
     pub(crate) fn hit_node(&self, x: f32, y: f32) -> usize {
         let body = self.js.dom.body;
+        let _page_font = page_font::scope(self.page_font);
         with_fonts(|reg, bold| {
             let lay = Layouter { dom: &self.js.dom, reg, bold, vw: self.width as f32, vh: self.height as f32, imgs: &*self.imgs };
             let c = self.layout_cache(&lay);
@@ -252,6 +277,7 @@ impl EngineRenderer {
     }
 
     pub(crate) fn render(&self) -> Vec<u8> {
+        let _page_font = page_font::scope(self.page_font);
         let started = std::time::Instant::now();
         let mut cv = Canvas { w: self.width, h: self.height, px: vec![0; (self.width * self.height * 4) as usize] };
         with_fonts(|reg, bold| {
@@ -347,6 +373,7 @@ impl HtmlRenderer for EngineRenderer {
     }
 
     fn set_asset_dirs(&mut self, dirs: Vec<std::path::PathBuf>) {
+        self.load_page_font(&dirs);
         self.imgs = Arc::new(ImageStore::new(dirs));
         *self.cache.lock().unwrap() = None;
         self.dirty = true;
