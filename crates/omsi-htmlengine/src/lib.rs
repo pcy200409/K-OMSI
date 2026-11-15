@@ -75,6 +75,7 @@ mod dom;
 mod images;
 mod js;
 mod layout;
+mod page_font;
 mod renderer;
 mod style;
 
@@ -140,6 +141,11 @@ thread_local! {
 /// The face that draws `ch`, its glyph and which face it is (0 = `font`, 1 = the fallback):
 /// `font` itself, or the fallback face when `font` has no glyph for it.
 pub(crate) fn face_for<R>(font: &FontRef<'static>, bold: bool, ch: char, f: impl FnOnce(&FontRef<'static>, ab_glyph::GlyphId, u8) -> R) -> R {
+    // K-OMSI: the page's own font comes first (face numbers from 2 on, see `page_font`)
+    let f = match page_font::with_face(bold, ch, f) {
+        Ok(r) => return r,
+        Err(f) => f,
+    };
     let id = font.glyph_id(ch);
     if id.0 != 0 || ch.is_ascii() {
         return f(font, id, 0);
