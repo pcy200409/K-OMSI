@@ -434,9 +434,22 @@ impl VehicleType {
                 .get(1)
                 .map(|l| l.first_mesh)
                 .unwrap_or(model.meshes.len());
-            for (i, md) in model.meshes[start..end].iter().enumerate() {
-                let p = mesh_path(root, &dir, &model_dir, &md.file);
-                match omsi_o3d::load_mesh(&p) {
+            // The files read and parsed on all cores, the rest in the model's order below: a city
+            // bus with its displays and ticket machines has thousands of small meshes (2,967 in
+            // a Serise LFNSAC), and one by one they took 7-12 s of the start before the bus stood.
+            let loaded: Vec<_> = {
+                use rayon::prelude::*;
+                model.meshes[start..end]
+                    .par_iter()
+                    .map(|md| {
+                        let p = mesh_path(root, &dir, &model_dir, &md.file);
+                        let m = omsi_o3d::load_mesh(&p);
+                        (p, m)
+                    })
+                    .collect()
+            };
+            for (i, (md, (p, loaded))) in model.meshes[start..end].iter().zip(loaded).enumerate() {
+                match loaded {
                     Ok(m) => {
                         let skin: Vec<SkinBone> = if md.smooth_skin {
                             m.bones
