@@ -31,9 +31,11 @@ struct Scaled {
 }
 
 pub(crate) struct ImageStore {
-    dirs: Vec<PathBuf>,
+    pub(crate) dirs: Vec<PathBuf>,
     files: Mutex<HashMap<String, Option<Arc<Img>>>>,
     scaled: Mutex<Scaled>,
+    /// The `<video>`s of the page (see `video`).
+    pub(crate) videos: VideoStore,
 }
 
 impl ImageStore {
@@ -43,6 +45,7 @@ impl ImageStore {
             dirs,
             files: Mutex::new(HashMap::new()),
             scaled: Mutex::new(Scaled::default()),
+            videos: VideoStore::default(),
         }
     }
 
@@ -135,7 +138,7 @@ impl ImageStore {
 }
 
 /// Resize with a box filter while the picture is more than twice too big, then bilinear.
-fn resize(src: &Img, w: u32, h: u32) -> Img {
+pub(crate) fn resize(src: &Img, w: u32, h: u32) -> Img {
     let mut owned: Option<Img> = None;
     loop {
         let cur = owned.as_ref().unwrap_or(src);

@@ -3,7 +3,8 @@
 //!
 //! What a page may use:
 //! * HTML: nested elements, `<style>`, `<script>`, inline `style=""`, `id`, `class`, entities,
-//!   `<img src width height>` (bmp, dds, tga, jpg, png; looked up next to the page, see `images`).
+//!   `<img src width height>` (bmp, dds, tga, jpg, png; looked up next to the page, see `images`),
+//!   `<video src autoplay loop muted poster>` (silent, mp4 on Windows, see `video`).
 //! * CSS: selectors `tag`, `#id`, `.class`, `*`, compounds (`div.a#b`), descendant chains
 //!   and `,` lists; `color`, `background(-color)`, `font-size`, `font-weight`, `text-align`,
 //!   `line-height`, `margin*`, `padding*`, `width`, `height`, `display` (`none`, `inline`),
@@ -77,6 +78,7 @@ mod js;
 mod layout;
 mod renderer;
 mod style;
+mod video;
 
 use api::*;
 use canvas::*;
@@ -85,6 +87,7 @@ use images::*;
 use js::*;
 use layout::*;
 use style::*;
+use video::*;
 
 pub use renderer::EngineRenderer;
 
