@@ -40,6 +40,8 @@
 //! | `route.stops[i]` | `index`, `name`, `arrival`, `departure`, `arrivalSec`, `departureSec`, `served`, `current` |
 //! | `route.nextIndex`, `.delaySec`, `.source` | next stop, delay (s), `timetable` / `ibis` / `none` |
 //! | `route.ibis` | the IBIS's own numbers: `line`, `suffix`, `routeIndex`, `terminusIndex`, `terminusCode` |
+//! | `media.text`, `.frequency` | vehicle audio display or the game's current radio text |
+//! | `media.powerTrigger`, `.powered`, `.volumeVar`, `.volume`, `.playlists[]` | optional Higer-style vehicle audio controls; absent capabilities are null/empty |
 //!
 //! `window.omsi.time` (`hour`, `minute`, `second`, `asString`), `window.omsi.date` (`day`,
 //! `month`, `year`, `asString`) and `window.omsi.locale` come from [`environment`].
@@ -717,9 +719,44 @@ impl VehicleInstance {
         });
         if let ApiValue::Map(m) = &mut api {
             m.push(("route".to_string(), route));
+            m.push(("media".to_string(), media_snapshot(
+                &var, &text, &|name| self.ty.program.trigger(name).is_some(),
+                self.radio_text.as_deref(), self.radio_frequency.as_deref(),
+            )));
         }
         api
     }
+}
+
+/// Advertise only controls the vehicle actually declares. These are vehicle scripts,
+/// not a browser audio player or controls for the application's separate radio.
+fn media_snapshot(
+    var: &dyn Fn(&str) -> Option<f32>,
+    text: &dyn Fn(&str) -> String,
+    trigger: &dyn Fn(&str) -> bool,
+    radio_text: Option<&str>,
+    frequency: Option<&str>,
+) -> ApiValue {
+    let supported = var("audio_mode").is_some() && trigger("audio_mode");
+    let volume = if supported { var("audio_vol").filter(|v| v.is_finite()) } else { None };
+    let display = text("audio_display");
+    let radio_display = text("radio_display");
+    let display = if supported && var("audio_mode").unwrap_or(0.0) > 0.5 && !display.trim().is_empty() {
+        display.trim()
+    } else { radio_text.filter(|t| !t.trim().is_empty()).unwrap_or(radio_display.trim()) };
+    map(vec![
+        ("text", ApiValue::Str(display.into())),
+        ("frequency", ApiValue::Str(frequency.unwrap_or("").into())),
+        ("powerTrigger", if supported { ApiValue::Str("audio_mode".into()) } else { ApiValue::Null }),
+        ("powered", if supported { ApiValue::Bool(var("audio_mode").unwrap_or(0.0) > 0.5) } else { ApiValue::Null }),
+        ("volumeVar", if volume.is_some() { ApiValue::Str("audio_vol".into()) } else { ApiValue::Null }),
+        ("volume", volume.map_or(ApiValue::Null, |v| ApiValue::Num(v.clamp(0.0, 10.0) as f64))),
+        ("playlists", ApiValue::List(if supported {
+            (1..=3).map(|i| { let name = format!("audio_playlist{i}");
+                if trigger(&name) { ApiValue::Str(name) } else { ApiValue::Null }
+            }).collect()
+        } else { Vec::new() })),
+    ])
 }
 
 #[cfg(test)]
@@ -755,6 +792,22 @@ mod tests {
             (ApiValue::List(l), Ok(n)) => &l[n],
             _ => cur.get(key).unwrap_or_else(|| panic!("no {key} in {path}")),
         })
+    }
+
+    #[test]
+    fn android_auto_media_capabilities_match_vehicle_scripts() {
+        let var = |n: &str| match n { "audio_mode" => Some(1.0), "audio_vol" => Some(6.0), _ => None };
+        let text = |n: &str| if n == "audio_display" { "TRACK 03".into() } else { String::new() };
+        let supported = media_snapshot(&var, &text, &|n| matches!(n, "audio_mode" | "audio_playlist1"), Some("PC Radio"), None);
+        assert_eq!(at(&supported, "text"), &ApiValue::Str("TRACK 03".into()));
+        assert_eq!(at(&supported, "powerTrigger"), &ApiValue::Str("audio_mode".into()));
+        assert_eq!(at(&supported, "volume"), &ApiValue::Num(6.0));
+        assert_eq!(at(&supported, "playlists.0"), &ApiValue::Str("audio_playlist1".into()));
+        assert_eq!(at(&supported, "playlists.1"), &ApiValue::Null);
+        let unavailable = media_snapshot(&var, &text, &|_| false, Some("PC Radio"), None);
+        assert_eq!(at(&unavailable, "powerTrigger"), &ApiValue::Null);
+        assert_eq!(at(&unavailable, "volumeVar"), &ApiValue::Null);
+        assert_eq!(at(&unavailable, "text"), &ApiValue::Str("PC Radio".into()));
     }
 
     #[test]

@@ -3946,10 +3946,16 @@ name = "omsi-htmlengine"
 version = "0.1.0"
 dependencies = [
  "ab_glyph",
+ "arboard",
+ "base64 0.22.1",
  "log",
  "omsi-cfg",
  "omsi-sim",
  "omsi-texture",
+ "serde_json",
+ "tungstenite",
+ "ureq",
+ "windows 0.62.2",
 ]
 
 [[package]]
@@ -4148,6 +4154,7 @@ dependencies = [
  "hashbrown 0.17.1",
  "log",
  "omsi-cfg",
+ "omsi-htmlengine",
  "omsi-lan",
  "omsi-map",
  "omsi-mapdraw",
@@ -4158,6 +4165,7 @@ dependencies = [
  "omsi-texture",
  "omsi-timetable",
  "omsi-ui",
+ "serde_json",
  "wgpu",
 ]
 

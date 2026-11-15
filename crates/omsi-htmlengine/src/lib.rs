@@ -87,6 +87,21 @@ use layout::*;
 use style::*;
 
 pub use renderer::EngineRenderer;
+pub mod browser;
+
+/// Only the opt-in vehicle display uses Chromium; other pages retain the small engine.
+pub fn vehicle_renderer(width: u32, height: u32, html: &str, api: omsi_sim::htmltex::PageApi) -> Box<dyn HtmlRenderer> {
+    if html.contains("<title>K-OMSI Auto</title>") && std::env::var_os("K_OMSI_AUTO_NATIVE").is_none() {
+        if let Some(exe) = browser::executable() {
+            return Box::new(browser::BrowserRenderer::new(exe, width, height, html));
+        }
+    }
+    let mut native = EngineRenderer::with_api(width, height, html, api);
+    if html.contains("<title>K-OMSI Auto</title>") {
+        native.set_vars(&[], &[("k_omsi_browser_error".into(), "Browser unavailable".into())]);
+    }
+    Box::new(native)
+}
 
 pub(crate) const INTER: &[u8] = include_bytes!("../../../assets/fonts/InterVariable.ttf");
 thread_local! {
@@ -168,3 +183,5 @@ pub(crate) const DEPTH_LIMIT: u32 = 48;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod android_auto_tests;
