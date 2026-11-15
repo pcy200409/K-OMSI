@@ -4099,6 +4099,7 @@ dependencies = [
  "ab_glyph",
  "log",
  "omsi-cfg",
+ "omsi-media",
  "omsi-sim",
  "omsi-texture",
 ]
@@ -4259,6 +4260,15 @@ dependencies = [
  "omsi-map",
  "omsi-sim",
  "omsi-ui",
+]
+
+[[package]]
+name = "omsi-media"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "omsi-cfg",
+ "windows 0.62.2",
 ]
 
 [[package]]

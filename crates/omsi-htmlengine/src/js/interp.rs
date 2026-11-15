@@ -13,6 +13,25 @@ pub(crate) enum Flow {
     Cont,
 }
 
+/// The state of a `<video>` as its scripts see it. The renderer applies the requests
+/// (`paused`, `seek`) to the element's player and writes back what it plays.
+#[derive(Clone, Debug)]
+pub(crate) struct Media {
+    pub(crate) paused: bool,
+    pub(crate) seek: Option<f64>,
+    pub(crate) time: f64,
+    /// `NaN` until the file's length is known.
+    pub(crate) duration: f64,
+    pub(crate) ended: bool,
+}
+
+impl Media {
+    /// A video nobody touched yet: playing when it has `autoplay`.
+    pub(crate) fn of(n: &Node) -> Media {
+        Media { paused: n.attr("autoplay").is_none(), seek: None, time: 0.0, duration: f64::NAN, ended: false }
+    }
+}
+
 pub(crate) struct Timer {
     pub(crate) id: u32,
     pub(crate) due: f64,
@@ -42,6 +61,8 @@ pub(crate) struct Interp {
     /// The stops the page asked departures for (`omsi.getDepartures(stop)`), as keys: trimmed,
     /// lower case. Taken by the game, which fills `omsi.departures`.
     pub(crate) departure_wants: Vec<String>,
+    /// The `<video>` elements scripts know about, by node.
+    pub(crate) media: HashMap<usize, Media>,
 }
 
 impl Interp {
@@ -114,6 +135,7 @@ impl Interp {
             pending_err: None,
             requests: Vec::new(),
             departure_wants: Vec::new(),
+            media: HashMap::new(),
         };
         let math = obj_of(&[
             ("round", Val::Nat(Nat::Round)),
@@ -489,6 +511,18 @@ impl Interp {
                     "className" => Val::Str(n.classes.join(" ")),
                     "id" => Val::Str(n.id.clone()),
                     "src" => Val::Str(n.src.clone()),
+                    "paused" | "currentTime" | "duration" | "ended" | "loop" | "autoplay" | "muted" if n.tag == "video" => {
+                        let m = self.media.get(i).cloned().unwrap_or_else(|| Media::of(n));
+                        match key {
+                            "paused" => Val::Bool(m.paused),
+                            "currentTime" => Val::Num(m.time),
+                            "duration" => Val::Num(m.duration),
+                            "ended" => Val::Bool(m.ended),
+                            // (a page's video never makes a sound)
+                            "muted" => Val::Bool(true),
+                            _ => Val::Bool(n.attr(key).is_some()),
+                        }
+                    }
                     "style" => Val::Style(*i),
                     "classList" => Val::ClassList(*i),
                     "parentNode" | "parentElement" => match n.parent {
@@ -547,6 +581,21 @@ impl Interp {
                         self.dom.generation += 1;
                     }
                 }
+                "currentTime" if self.dom.nodes[*i].tag == "video" => {
+                        let t = to_num(&v);
+                        if t.is_finite() {
+                            let m = self.media_of(*i);
+                            m.seek = Some(t.max(0.0));
+                            m.time = t.max(0.0);
+                            m.ended = false;
+                        }
+                    }
+                    "loop" | "autoplay" if self.dom.nodes[*i].tag == "video" => {
+                        let on = truthy(&v).then(String::new);
+                        if self.dom.nodes[*i].set_attr(key, on) {
+                            self.dom.generation += 1;
+                        }
+                    }
                 k if k.len() > 2 && k.starts_with("on") => {
                     let ty = k[2..].to_string();
                     if matches!(v, Val::Func(_)) {
@@ -696,6 +745,23 @@ impl Interp {
                 Some(Val::Undef)
             }
             Val::Obj(_) if name == "preventDefault" => Some(Val::Undef),
+            Val::Elem(i) if self.dom.nodes[*i].tag == "video" && matches!(name, "play" | "pause" | "load") => {
+                let m = self.media_of(*i);
+                match name {
+                    "play" => {
+                        m.paused = false;
+                        m.ended = false;
+                    }
+                    "pause" => m.paused = true,
+                    _ => {
+                        m.seek = Some(0.0);
+                        m.time = 0.0;
+                        m.ended = false;
+                    }
+                }
+                // play() gives a promise in a browser: `v.play().catch(...)` must work
+                Some(Val::Obj(obj_of(&[("then", Val::Nat(Nat::Noop)), ("catch", Val::Nat(Nat::Noop))])))
+            }
             Val::Elem(i) if name == "addEventListener" => {
                 if let Some(f @ Val::Func(_)) = args.get(1) {
                     self.handlers.entry((*i, arg_s(0))).or_default().push(f.clone());
@@ -710,7 +776,7 @@ impl Interp {
                     "src" if !n.src.is_empty() => Val::Str(n.src.clone()),
                     "width" if !n.attr_w.is_empty() => Val::Str(n.attr_w.clone()),
                     "height" if !n.attr_h.is_empty() => Val::Str(n.attr_h.clone()),
-                    _ => Val::Null,
+                    k => n.attr(k).map_or(Val::Null, |v| Val::Str(v.to_string())),
                 })
             }
             Val::Elem(i) if name == "appendChild" => {
@@ -776,7 +842,15 @@ impl Interp {
                     "src" => n.src = v,
                     "width" => n.attr_w = v,
                     "height" => n.attr_h = v,
-                    _ => {}
+                    k => {
+                        n.set_attr(k, Some(v));
+                    }
+                }
+                Some(Val::Undef)
+            }
+            Val::Elem(i) if name == "removeAttribute" => {
+                if self.dom.nodes[*i].set_attr(&arg_s(0).to_ascii_lowercase(), None) {
+                    self.dom.generation += 1;
                 }
                 Some(Val::Undef)
             }
@@ -810,6 +884,12 @@ impl Interp {
             }
             _ => Err("not a function".into()),
         }
+    }
+
+    /// The script state of the `<video>` at `node`.
+    pub(crate) fn media_of(&mut self, node: usize) -> &mut Media {
+        let n = &self.dom.nodes[node];
+        self.media.entry(node).or_insert_with(|| Media::of(n))
     }
 
     pub(crate) fn call_nat(&mut self, n: Nat, args: &[Val]) -> Val {
@@ -938,6 +1018,7 @@ impl Interp {
                 }
                 Val::Undef
             }
+            Nat::Noop => Val::Undef,
             Nat::Log => {
                 log::info!("htmltexture console: {}", args.iter().map(to_str).collect::<Vec<_>>().join(" "));
                 Val::Undef
