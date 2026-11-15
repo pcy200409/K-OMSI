@@ -109,7 +109,7 @@ fn script_api_of_a_video_before_it_plays() {
          var s = a.join(',');</script></body>",
     );
     let s = r.js.global.lock().unwrap().vars.get("s").map(to_str);
-    assert_eq!(s.as_deref(), Some("true,true,false,true,true,,false,3,null,true"));
+    assert_eq!(s.as_deref(), Some("true,true,false,false,true,,false,3,null,true"));
     assert!(r.poll_frame().is_some());
 }
 
@@ -226,4 +226,68 @@ fn bench_video() {
     }
     let m = media(&r);
     eprintln!("{frames} frames in 10 s ({:.1}/s), {:.2} ms each on the game's thread, video at {:.2}s of {:.2}s", frames as f64 / 10.0, busy.as_secs_f64() * 1000.0 / frames.max(1) as f64, m.time, m.duration);
+}
+
+const TONE: &[u8] = include_bytes!("../tests/data/red_tone.mp4");
+
+/// A page whose `tone.mp4` is two seconds of red with a 440 Hz tone.
+fn tone_page(name: &str, html: &str) -> EngineRenderer {
+    let r = video_page(name, html, 16, 12);
+    let dir = r.imgs.dirs[0].clone();
+    std::fs::write(dir.join("tone.mp4"), TONE).unwrap();
+    r
+}
+
+/// Poll until the page's sounds satisfy `ok`.
+fn wait_sounds(r: &mut EngineRenderer, t: f64, what: &str, ok: impl Fn(&[omsi_sim::htmltex::PageSound]) -> bool) -> Vec<omsi_sim::htmltex::PageSound> {
+    let until = Instant::now() + Duration::from_secs(10);
+    loop {
+        clock_at(r, t);
+        let _ = r.poll_frame();
+        let s = r.sounds();
+        if ok(&s) {
+            return s;
+        }
+        assert!(Instant::now() < until, "never: {what}");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn a_video_that_is_not_muted_hands_its_sound_to_the_game() {
+    let mut r = tone_page("sound", "<body style='margin:0'><video id=v src='tone.mp4' autoplay loop width=16 height=12></video></body>");
+    let s = wait_sounds(&mut r, 0.0, "a sound", |s| s.len() == 1);
+    let stream = s[0].stream.clone().downcast::<omsi_media::StreamBuf>().expect("a mixer stream");
+    let until = Instant::now() + Duration::from_secs(10);
+    while stream.buffered() < 0.5 {
+        assert!(Instant::now() < until, "the tone was never decoded");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(s[0].gain, 1.0);
+    // paused: no sound; playing again: a new stream from where it stands
+    r.js.run("document.getElementById('v').pause()").unwrap();
+    wait_sounds(&mut r, 0.5, "silence when paused", |s| s.is_empty());
+    assert!(stream.is_closed(), "the old stream is closed, its decoder ends");
+    r.js.run("var v = document.getElementById('v'); v.play(); v.volume = 0.5").unwrap();
+    let again = wait_sounds(&mut r, 0.6, "a sound again", |s| s.len() == 1);
+    assert_ne!(again[0].id, s[0].id);
+    assert_eq!(again[0].gain, 0.5);
+    // muted from a script
+    r.js.run("document.getElementById('v').muted = true").unwrap();
+    wait_sounds(&mut r, 0.7, "silence when muted", |s| s.is_empty());
+}
+
+#[cfg(windows)]
+#[test]
+fn a_muted_video_has_no_sound() {
+    let mut r = tone_page("mute", "<body style='margin:0'><video src='tone.mp4' autoplay loop muted width=16 height=12></video></body>");
+    let mut last = None;
+    wait_for(&mut r, 0.0, 8, 6, Hue::Red, &mut last);
+    for k in 0..20 {
+        clock_at(&mut r, 0.1 + k as f64 * 0.05);
+        let _ = r.poll_frame();
+        assert!(r.sounds().is_empty());
+        std::thread::sleep(Duration::from_millis(10));
+    }
 }

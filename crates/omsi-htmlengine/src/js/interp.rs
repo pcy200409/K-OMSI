@@ -23,12 +23,16 @@ pub(crate) struct Media {
     /// `NaN` until the file's length is known.
     pub(crate) duration: f64,
     pub(crate) ended: bool,
+    /// Its sound is not heard (the `muted` attribute at first).
+    pub(crate) muted: bool,
+    /// 0..1.
+    pub(crate) volume: f64,
 }
 
 impl Media {
-    /// A video nobody touched yet: playing when it has `autoplay`.
+    /// A video nobody touched yet: playing when it has `autoplay`, heard unless `muted`.
     pub(crate) fn of(n: &Node) -> Media {
-        Media { paused: n.attr("autoplay").is_none(), seek: None, time: 0.0, duration: f64::NAN, ended: false }
+        Media { paused: n.attr("autoplay").is_none(), seek: None, time: 0.0, duration: f64::NAN, ended: false, muted: n.attr("muted").is_some(), volume: 1.0 }
     }
 }
 
@@ -511,15 +515,15 @@ impl Interp {
                     "className" => Val::Str(n.classes.join(" ")),
                     "id" => Val::Str(n.id.clone()),
                     "src" => Val::Str(n.src.clone()),
-                    "paused" | "currentTime" | "duration" | "ended" | "loop" | "autoplay" | "muted" if n.tag == "video" => {
+                    "paused" | "currentTime" | "duration" | "ended" | "loop" | "autoplay" | "muted" | "volume" if n.tag == "video" => {
                         let m = self.media.get(i).cloned().unwrap_or_else(|| Media::of(n));
                         match key {
                             "paused" => Val::Bool(m.paused),
                             "currentTime" => Val::Num(m.time),
                             "duration" => Val::Num(m.duration),
                             "ended" => Val::Bool(m.ended),
-                            // (a page's video never makes a sound)
-                            "muted" => Val::Bool(true),
+                            "muted" => Val::Bool(m.muted),
+                            "volume" => Val::Num(m.volume),
                             _ => Val::Bool(n.attr(key).is_some()),
                         }
                     }
@@ -588,6 +592,13 @@ impl Interp {
                             m.seek = Some(t.max(0.0));
                             m.time = t.max(0.0);
                             m.ended = false;
+                        }
+                    }
+                    "muted" if self.dom.nodes[*i].tag == "video" => self.media_of(*i).muted = truthy(&v),
+                    "volume" if self.dom.nodes[*i].tag == "video" => {
+                        let x = to_num(&v);
+                        if x.is_finite() {
+                            self.media_of(*i).volume = x.clamp(0.0, 1.0);
                         }
                     }
                     "loop" | "autoplay" if self.dom.nodes[*i].tag == "video" => {

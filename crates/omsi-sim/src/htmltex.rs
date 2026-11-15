@@ -79,6 +79,21 @@ pub trait HtmlRenderer: Send {
     fn take_departure_wants(&mut self) -> Vec<String> {
         Vec::new()
     }
+    /// What the page wants heard now (the sound of its `<video>`s that are not muted). The
+    /// game plays each stream as long as its `id` is in the list.
+    fn sounds(&self) -> Vec<PageSound> {
+        Vec::new()
+    }
+}
+
+/// A sound of a page: decoded sound in a stream for the mixer, at `gain` (0..1).
+#[derive(Clone)]
+pub struct PageSound {
+    /// Stays the same while the stream plays; a new stream (after a seek, a pause) has a new one.
+    pub id: u64,
+    /// An `omsi_audio::stream::StreamBuf` (this crate does not depend on the mixer's).
+    pub stream: std::sync::Arc<dyn std::any::Any + Send + Sync>,
+    pub gain: f32,
 }
 
 pub type BackendFactory = fn(width: u32, height: u32, html: &str, api: PageApi) -> Box<dyn HtmlRenderer>;
@@ -329,6 +344,11 @@ impl HtmlTexture {
     /// The pointer at (`u`, `v`), both 0..1 across the texture (`v` down from the top).
     pub fn pointer(&mut self, u: f32, v: f32, kind: PointerKind) {
         self.renderer.pointer(u * self.width as f32, v * self.height as f32, kind);
+    }
+
+    /// What the page wants heard now (see [`HtmlRenderer::sounds`]).
+    pub fn sounds(&self) -> Vec<PageSound> {
+        self.renderer.sounds()
     }
 }
 
