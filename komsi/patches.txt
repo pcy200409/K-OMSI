@@ -40,3 +40,4 @@ patch/korean-ime
 patch/plugin-budget
 patch/html-script-budget
 patch/pax-events
+patch/html-video
