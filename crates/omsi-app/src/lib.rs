@@ -813,6 +813,7 @@ fn assemble_app(args: Args, settings: settings::Settings) -> App {
         perf: PerfState::new(input_script, fps_t),
         sound: SoundState {
             radio,
+            page_sounds: Default::default(),
             milezero: Default::default(),
             switch_sound: Default::default(),
             audio: None,

@@ -1,17 +1,21 @@
 //! Video frames for the game's pages (`<video>` of an `[htmltexture]`): a file is decoded on
-//! a thread of its own into RGBA frames of a chosen size, without sound.
+//! a thread of its own into RGBA frames of a chosen size; its sound on another thread.
 //!
 //! * [`spawn`] starts the thread. It hands over [`Msg::Frame`]s through a channel that holds
 //!   [`AHEAD`] of them; when nobody takes them the thread waits, so a paused or hidden video
 //!   costs no CPU. [`Cmd`]s seek, change the frame size and switch looping.
 //! * Frame times count from the first frame (H.264 files often start at the encoder's delay)
 //!   and run on past the length when the video loops (every round adds the length).
+//! * [`spawn_sound`] decodes the sound track (when a page wants it heard) into a
+//!   [`StreamBuf`] the game's mixer plays, from a given point on.
 //! * Decoding uses Windows Media Foundation's source reader (H.264 in .mp4 everywhere, other
 //!   codecs where Windows has them); its video processor converts and scales. Its DLLs are
 //!   loaded at run time, so the game still starts where they are missing (Windows "N"
 //!   editions without the Media Feature Pack). Other systems get `None` from [`spawn`].
 
+pub use omsi_audio::stream::StreamBuf;
 use std::path::PathBuf;
+use std::sync::Arc;
 #[cfg(windows)]
 use std::sync::mpsc::TryRecvError;
 use std::sync::mpsc::{Receiver, Sender};
@@ -20,6 +24,36 @@ use std::sync::mpsc::{Receiver, Sender};
 pub const AHEAD: usize = 2;
 /// Largest frame that is handed over (pixels).
 pub const MAX_FRAME_PX: u64 = 4 * 1024 * 1024;
+
+/// Frames of sound the ring of a [`Sound`] holds (the decoder stays this far ahead at most).
+const SOUND_RING: usize = 48_000 * 4;
+/// Seconds of sound the mixer gathers before it plays.
+const PREBUFFER: f32 = 0.1;
+
+/// The sound track of a video, decoded from a point on into a stream the game's mixer plays
+/// (`AudioEngine::play_stream`). Dropping it stops the decoder.
+pub struct Sound {
+    pub stream: Arc<StreamBuf>,
+}
+
+impl Drop for Sound {
+    fn drop(&mut self) {
+        self.stream.close();
+    }
+}
+
+/// Start decoding the sound of `path` from `at` seconds on (`looping`: again from the start
+/// at the end) on a thread of its own. `None` where it cannot be played; a file without sound
+/// gives a stream that stays silent.
+#[cfg(windows)]
+pub fn spawn_sound(path: PathBuf, at: f64, looping: bool) -> Option<Sound> {
+    mf::spawn_sound(path, at, looping)
+}
+
+#[cfg(not(windows))]
+pub fn spawn_sound(_path: PathBuf, _at: f64, _looping: bool) -> Option<Sound> {
+    None
+}
 
 /// A decoded picture: RGBA8, opaque, top-left origin.
 pub struct Frame {
@@ -90,6 +124,7 @@ mod mf {
     use std::ffi::c_void;
     use std::path::Path;
     use std::sync::mpsc::{self, SyncSender};
+    use std::time::Instant;
     use std::sync::OnceLock;
     use windows::core::{Interface, GUID, HRESULT, HSTRING, PCWSTR};
     use windows::Win32::Media::MediaFoundation::*;
@@ -150,36 +185,179 @@ mod mf {
         Ok(unsafe { T::from_raw(p) })
     }
 
-    pub(super) fn spawn(path: PathBuf, size: (u32, u32), looping: bool) -> Option<(Sender<Cmd>, Receiver<Msg>)> {
-        let Some(api) = api() else {
-            log::warn!("htmltexture: video {} cannot be played: Media Foundation is not installed (Windows N: Media Feature Pack)", path.display());
-            return None;
-        };
-        let (ctx, crx) = mpsc::channel();
-        let (mtx, mrx) = mpsc::sync_channel(AHEAD);
-        let started = std::thread::Builder::new().name("htmltexture video".into()).spawn(move || {
-            // SAFETY: COM and Media Foundation are set up and torn down on this thread only
-            let com = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_ok();
-            if unsafe { (api.startup)(MF_VERSION, MFSTARTUP_NOSOCKET) }.is_ok() {
-                match Decoder::open(api, &path, size) {
-                    Ok(d) => d.run(looping, &crx, &mtx),
-                    Err(e) => {
-                        log::warn!("htmltexture: video {} cannot be played: {e}", path.display());
-                        let _ = mtx.send(Msg::Failed);
+    /// A source reader for `path` (from memory when it is inside an archive); with
+    /// `video`, its video processor may convert and scale.
+    unsafe fn open_reader(api: &'static Api, path: &Path, video: bool) -> windows::core::Result<IMFSourceReader> {
+        unsafe {
+            let mut p = std::ptr::null_mut();
+            let attrs: IMFAttributes = made((api.create_attributes)(&mut p, 2), p)?;
+            if video {
+                attrs.SetUINT32(&MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, 1)?;
+            }
+            let mut p = std::ptr::null_mut();
+            if omsi_cfg::vfs::is_virtual(path) {
+                // inside an archive: from memory
+                let bytes = omsi_cfg::vfs::read(path).map_err(|e| windows::core::Error::new(windows::Win32::Foundation::E_FAIL, e.to_string()))?;
+                let stream = SHCreateMemStream(Some(&bytes)).ok_or_else(|| windows::core::Error::from(windows::Win32::Foundation::E_OUTOFMEMORY))?;
+                let mut q = std::ptr::null_mut();
+                let bs: IMFByteStream = made((api.stream_on_istream)(stream.as_raw(), &mut q), q)?;
+                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+                let mime = match ext.as_str() {
+                    "mp4" | "m4v" | "mov" => Some(windows::core::w!("video/mp4")),
+                    "wmv" => Some(windows::core::w!("video/x-ms-wmv")),
+                    _ => None,
+                };
+                if let (Some(m), Ok(a)) = (mime, bs.cast::<IMFAttributes>()) {
+                    let _ = a.SetString(&MF_BYTESTREAM_CONTENT_TYPE, m);
+                }
+                made((api.reader_from_stream)(bs.as_raw(), attrs.as_raw(), &mut p), p)
+            } else {
+                let url = HSTRING::from(path.as_os_str());
+                made((api.reader_from_url)(PCWSTR(url.as_ptr()), attrs.as_raw(), &mut p), p)
+            }
+        }
+    }
+
+    /// Run `f` on a new thread with COM and Media Foundation set up for it.
+    fn mf_thread(name: &str, api: &'static Api, f: impl FnOnce() + Send + 'static) -> bool {
+        std::thread::Builder::new()
+            .name(name.into())
+            .spawn(move || {
+                // SAFETY: COM and Media Foundation are set up and torn down on this thread only
+                let com = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_ok();
+                if unsafe { (api.startup)(MF_VERSION, MFSTARTUP_NOSOCKET) }.is_ok() {
+                    f();
+                    unsafe {
+                        let _ = (api.shutdown)();
                     }
                 }
-                unsafe {
-                    let _ = (api.shutdown)();
+                if com {
+                    unsafe { CoUninitialize() };
                 }
-            } else {
+            })
+            .is_ok()
+    }
+
+    fn api_or_warn(path: &Path) -> Option<&'static Api> {
+        let api = api();
+        if api.is_none() {
+            log::warn!("htmltexture: video {} cannot be played: Media Foundation is not installed (Windows N: Media Feature Pack)", path.display());
+        }
+        api
+    }
+
+    pub(super) fn spawn(path: PathBuf, size: (u32, u32), looping: bool) -> Option<(Sender<Cmd>, Receiver<Msg>)> {
+        let api = api_or_warn(&path)?;
+        let (ctx, crx) = mpsc::channel();
+        let (mtx, mrx) = mpsc::sync_channel(AHEAD);
+        let started = mf_thread("htmltexture video", api, move || match Decoder::open(api, &path, size) {
+            Ok(d) => d.run(looping, &crx, &mtx),
+            Err(e) => {
+                log::warn!("htmltexture: video {} cannot be played: {e}", path.display());
                 let _ = mtx.send(Msg::Failed);
             }
-            if com {
-                unsafe { CoUninitialize() };
-            }
         });
-        started.ok()?;
+        if !started {
+            return None;
+        }
         Some((ctx, mrx))
+    }
+
+    pub(super) fn spawn_sound(path: PathBuf, at: f64, looping: bool) -> Option<Sound> {
+        let api = api_or_warn(&path)?;
+        let stream = Arc::new(StreamBuf::with_buffering(SOUND_RING, PREBUFFER, 0.2, 1.0));
+        let feed = stream.clone();
+        let asked = Instant::now();
+        let started = mf_thread("htmltexture sound", api, move || {
+            if let Err(e) = unsafe { play_sound(api, &path, at, looping, asked, &feed) } {
+                log::warn!("htmltexture: sound of video {} cannot be played: {e}", path.display());
+            }
+            feed.close();
+        });
+        started.then_some(Sound { stream })
+    }
+
+    /// Decode the sound track of `path` from `at` (s) into `out` until it is closed. The
+    /// start is cut by the time that passed since `asked` and the time the mixer waits
+    /// before it plays, so the sound lines up with the pictures that were shown meanwhile.
+    unsafe fn play_sound(api: &'static Api, path: &Path, at: f64, looping: bool, asked: Instant, out: &StreamBuf) -> windows::core::Result<()> {
+        const AUDIO: u32 = MF_SOURCE_READER_FIRST_AUDIO_STREAM.0 as u32;
+        unsafe {
+            let reader = open_reader(api, path, false)?;
+            reader.SetStreamSelection(MF_SOURCE_READER_ALL_STREAMS.0 as u32, false)?;
+            // (a file without sound: nothing to do)
+            if reader.SetStreamSelection(AUDIO, true).is_err() {
+                log::debug!("htmltexture: video {} has no sound", path.display());
+                return Ok(());
+            }
+            let mut p = std::ptr::null_mut();
+            let t: IMFMediaType = made((api.create_media_type)(&mut p), p)?;
+            t.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Audio)?;
+            t.SetGUID(&MF_MT_SUBTYPE, &MFAudioFormat_Float)?;
+            reader.SetCurrentMediaType(AUDIO, None, &t)?;
+            let cur = reader.GetCurrentMediaType(AUDIO)?;
+            let channels = cur.GetUINT32(&MF_MT_AUDIO_NUM_CHANNELS)?.max(1) as usize;
+            let rate = cur.GetUINT32(&MF_MT_AUDIO_SAMPLES_PER_SECOND)?.max(1);
+            if at > 0.0 {
+                seek_to(&reader, at)?;
+            }
+            // the first frame wanted, as a time into the file; set once decoding started
+            let mut from: Option<f64> = None;
+            loop {
+                if out.is_closed() {
+                    return Ok(());
+                }
+                let (mut flags, mut ts, mut sample) = (0u32, 0i64, None::<IMFSample>);
+                reader.ReadSample(AUDIO, 0, None, Some(&mut flags), Some(&mut ts), Some(&mut sample))?;
+                if flags & MF_SOURCE_READERF_ERROR.0 as u32 != 0 {
+                    return Err(windows::Win32::Foundation::E_FAIL.into());
+                }
+                if let Some(s) = sample {
+                    let start = from.get_or_insert_with(|| at + asked.elapsed().as_secs_f64() + PREBUFFER as f64);
+                    let buf = s.ConvertToContiguousBuffer()?;
+                    let mut ptr = std::ptr::null_mut();
+                    let mut len = 0u32;
+                    buf.Lock(&mut ptr, None, Some(&mut len))?;
+                    let n = len as usize / 4 / channels;
+                    let pcm = std::slice::from_raw_parts(ptr as *const f32, n * channels);
+                    // frames before the wanted start are left out
+                    let skip = (((*start - ts as f64 / 1e7) * rate as f64).max(0.0) as usize).min(n);
+                    let frames: Vec<[f32; 2]> = pcm.chunks_exact(channels).skip(skip).map(stereo).collect();
+                    let _ = buf.Unlock();
+                    out.push(rate, frames);
+                }
+                if flags & MF_SOURCE_READERF_ENDOFSTREAM.0 as u32 != 0 {
+                    if !looping {
+                        return Ok(());
+                    }
+                    seek_to(&reader, 0.0)?;
+                    // (the next round plays from its start)
+                    from = Some(0.0);
+                }
+            }
+        }
+    }
+
+    /// Two channels of one frame of `n` channels (5.1: FL FR C LFE BL BR).
+    fn stereo(f: &[f32]) -> [f32; 2] {
+        match f.len() {
+            1 => [f[0], f[0]],
+            2 => [f[0], f[1]],
+            _ => {
+                let c = f[2] * 0.707;
+                let (bl, br) = (f.get(4).copied().unwrap_or(0.0) * 0.707, f.get(5).copied().unwrap_or(0.0) * 0.707);
+                [(f[0] + c + bl).clamp(-1.0, 1.0), (f[1] + c + br).clamp(-1.0, 1.0)]
+            }
+        }
+    }
+
+    fn seek_to(reader: &IMFSourceReader, to: f64) -> windows::core::Result<()> {
+        let mut v = PROPVARIANT::default();
+        unsafe {
+            (*v.Anonymous.Anonymous).vt = VT_I8;
+            (*v.Anonymous.Anonymous).Anonymous.hVal = (to.max(0.0) * 1e7) as i64;
+            reader.SetCurrentPosition(&GUID::zeroed(), &v)
+        }
     }
 
     struct Decoder {
@@ -195,30 +373,7 @@ mod mf {
     impl Decoder {
         fn open(api: &'static Api, path: &Path, size: (u32, u32)) -> windows::core::Result<Decoder> {
             unsafe {
-                let mut p = std::ptr::null_mut();
-                let attrs: IMFAttributes = made((api.create_attributes)(&mut p, 2), p)?;
-                attrs.SetUINT32(&MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, 1)?;
-                let mut p = std::ptr::null_mut();
-                let reader: IMFSourceReader = if omsi_cfg::vfs::is_virtual(path) {
-                    // inside an archive: from memory
-                    let bytes = omsi_cfg::vfs::read(path).map_err(|e| windows::core::Error::new(windows::Win32::Foundation::E_FAIL, e.to_string()))?;
-                    let stream = SHCreateMemStream(Some(&bytes)).ok_or_else(|| windows::core::Error::from(windows::Win32::Foundation::E_OUTOFMEMORY))?;
-                    let mut q = std::ptr::null_mut();
-                    let bs: IMFByteStream = made((api.stream_on_istream)(stream.as_raw(), &mut q), q)?;
-                    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
-                    let mime = match ext.as_str() {
-                        "mp4" | "m4v" | "mov" => Some(windows::core::w!("video/mp4")),
-                        "wmv" => Some(windows::core::w!("video/x-ms-wmv")),
-                        _ => None,
-                    };
-                    if let (Some(m), Ok(a)) = (mime, bs.cast::<IMFAttributes>()) {
-                        let _ = a.SetString(&MF_BYTESTREAM_CONTENT_TYPE, m);
-                    }
-                    made((api.reader_from_stream)(bs.as_raw(), attrs.as_raw(), &mut p), p)?
-                } else {
-                    let url = HSTRING::from(path.as_os_str());
-                    made((api.reader_from_url)(PCWSTR(url.as_ptr()), attrs.as_raw(), &mut p), p)?
-                };
+                let reader = open_reader(api, path, true)?;
                 reader.SetStreamSelection(MF_SOURCE_READER_ALL_STREAMS.0 as u32, false)?;
                 reader.SetStreamSelection(STREAM, true)?;
                 let duration = reader
