@@ -345,7 +345,7 @@ pub struct Navigator {
     /// Street names of the map's lanes (from its street name signs).
     streets: Option<std::sync::Arc<Streets>>,
     #[allow(clippy::type_complexity)]
-    building: Option<std::sync::mpsc::Receiver<(Network, HashMap<i64, DVec3>, Streets, Option<omsi_map::package::Package>, NameHints)>>,
+    building: Option<std::sync::mpsc::Receiver<(Network, HashMap<i64, DVec3>, Streets, Option<omsi_map::package::Package>, NameHints, Vec<omsi_scene::SpeedCamera>, Vec<omsi_scene::SignalHead>)>>,
     /// What the street names were made from (signs and weaker hints), to make them again
     /// when the timetable's stop names add hints; and whether those were added.
     name_hints: NameHints,
@@ -462,6 +462,8 @@ pub struct Navigator {
     street_here: Option<String>,
     /// Seconds of delay the jams ahead on the route cost.
     jam_cost: f32,
+    /// The C-ITS warnings beside the speed (the light ahead, the cameras, ...).
+    cits: cits::Cits,
     first: bool,
     screen: Option<Screen>,
     screen_state: screen::ScreenState,
@@ -647,6 +649,7 @@ impl Navigator {
             street_here: None,
             dist_t: 0.0,
             jam_cost: 0.0,
+            cits: Default::default(),
             first: true,
             screen: None,
             screen_state: Default::default(),
@@ -673,7 +676,7 @@ impl Navigator {
                 confirm_road_surfaces(&mut net, &m.road_surfaces);
                 probe_lanes(&net);
                 let streets = build_streets(&net, &m.signs, &m.names);
-                let _ = tx.send((net, m.places, streets, surface, (m.signs, m.names)));
+                let _ = tx.send((net, m.places, streets, surface, (m.signs, m.names), m.cameras, m.signal_heads));
             })
             .ok();
         self.building = Some(rx);
@@ -709,6 +712,8 @@ impl Navigator {
         let global = std::sync::Arc::new(net);
         self.global = Some(global);
         self.stop_pos = std::sync::Arc::new(map.places);
+        self.cits.cameras = std::sync::Arc::new(map.cameras);
+        self.cits.set_heads(map.signal_heads);
         self.global_version += 1;
         self.reset_navigation_network();
     }
@@ -1229,8 +1234,10 @@ impl Navigator {
         self.day_clock = (f.time, f.weekday);
         if let Some(rx) = self.building.as_ref() {
             match rx.try_recv() {
-                Ok((net, pos, streets, surface, hints)) => {
+                Ok((net, pos, streets, surface, hints, cameras, heads)) => {
                     self.name_hints = hints;
+                    self.cits.cameras = std::sync::Arc::new(cameras);
+                    self.cits.set_heads(heads);
                     log::info!("navigator: the map's road network is there ({} lanes, {} streets named)", net.lanes.len(), streets.names.len());
                     self.streets = Some(std::sync::Arc::new(streets));
                     self.set_surface(surface);
@@ -1278,6 +1285,8 @@ impl Navigator {
         self.update_congestion(f);
         self.update_drawn_cars(f);
         self.poll_road_job();
+        // (K-OMSI: the C-ITS warnings, see `cits`)
+        self.update_cits(f);
         // camera: zoomed out with speed, turned with the bus (both eased)
         let want = zoom_target(f.speed_kmh, self.next_turn.as_ref().map(|t| t.2), angle_diff(self.cam_heading, f.heading));
         if self.first {
@@ -1474,6 +1483,7 @@ mod live;
 mod build;
 pub use build::{Built, MapGround};
 mod cull;
+mod cits;
 mod city_map;
 mod destination;
 mod remote;
@@ -1484,6 +1494,8 @@ pub use city_map::*;
 use lines_panel::*;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod cits_tests;
 
 
 #[cfg(test)]
