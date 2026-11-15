@@ -22,6 +22,8 @@ pub mod people;
 pub mod physics;
 pub mod rail;
 pub mod rigid;
+pub mod road_ice;
+pub mod potholes;
 pub mod scenery;
 pub mod scripttex;
 pub mod sim_thread;
