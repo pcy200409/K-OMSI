@@ -33,6 +33,13 @@ impl App {
             self.frame_navigator(dt, [0.0, 0.0, 1.0, 1.0], vr_active, true, vr_nav_display);
             return vr_nav_display;
         }
+        // the water over the flooded low ground (`OMSI_FLOOD`)
+        if let (Some(w), Some(r), Some(scene)) = (self.world.as_ref(), self.renderer.as_ref(), self.scene.as_mut()) {
+            self.gfx.flood_water.sync(w, r, scene, &self.session.flood.flood);
+        }
+        if let Some(msg) = self.session.flood.notice.take() {
+            self.service_msg = Some((msg, 10.0));
+        }
         let (notes, tooltip) = self.frame_notes(dt, mirror_help);
         let __t = Instant::now();
         // (the frame's overlays start empty; the notes are the interface's, in
@@ -40,6 +47,10 @@ impl App {
         // pictures' only)
         if let Some(scene) = self.scene.as_mut() {
             scene.overlays.clear();
+        }
+        // the camera under the flood water: the picture veiled (under the interface drawn next)
+        if let (Some(r), Some(scene), Some(cam), Some(surf)) = (self.renderer.as_ref(), self.scene.as_mut(), self.camera.as_ref(), self.gfx.surface.as_ref()) {
+            self.gfx.flood_water.veil_under_water(r, scene, &self.session.flood.flood, cam.position, (surf.config.width, surf.config.height));
         }
         let hud = self
             .gfx.surface
