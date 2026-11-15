@@ -145,7 +145,7 @@ const graphics = {
         { type: 'select', key: 'graphics_api', label: 'Graphics API', options: [['auto', 'Automatic'], ['vulkan', 'Vulkan'], ['dx12', 'DirectX 12'], ['gl', 'OpenGL'], ['angle', 'ANGLE (DirectX 11)']], when: windows },
         { type: 'select', key: 'graphics_api', label: 'Graphics API', options: [['auto', 'Automatic'], ['vulkan', 'Vulkan'], ['gl', 'OpenGL']], when: (s, p) => p !== 'windows' && p !== 'macos' },
         { type: 'section', title: 'World & memory' },
-        { type: 'select', key: 'view_distance', label: 'View distance', options: [['auto', 'Default (1200 m)'], ['600', '600 m - fastest'], ['900', '900 m'], ['1200', '1200 m'], ['1500', '1500 m'], ['2000', '2000 m'], ['2500', '2500 m']], heavy: (v) => Number(v) >= 2000 },
+        { type: 'select', key: 'view_distance', label: 'View distance', options: [['auto', 'Default (1200 m)'], ['600', '600 m - fastest'], ['900', '900 m'], ['1200', '1200 m'], ['1500', '1500 m'], ['2000', '2000 m'], ['2500', '2500 m'], ['map', 'Whole map (heavy)']], heavy: (v) => v === 'map' || Number(v) >= 2000 },
         { type: 'select', key: 'max_obj_dist', label: 'Object distance', options: [['auto', 'Automatic'], ['500', '500 m'], ['750', '750 m'], ['900', '900 m'], ['1500', '1500 m'], ['3000', '3000 m']], heavy: (v) => Number(v) >= 1500 },
         { type: 'select', key: 'min_obj_size', label: 'Small objects', options: [['0.005', 'All'], ['0.013', 'Normal'], ['0.02', 'Fewer (faster)'], ['0.03', 'Few (fastest)']] },
         { type: 'select', key: 'mirror_size', label: 'Mirrors', options: [['0', 'Off'], ['128', 'Low (128)'], ['256', 'Normal (256)'], ['512', 'High (512)'], ['1024', 'Very high (1024)']] },
