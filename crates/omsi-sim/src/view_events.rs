@@ -83,6 +83,8 @@ pub struct FrameSnapshot {
     light: Vec<f32>,
     night: Vec<f32>,
     uv: Vec<[f32; 2]>,
+    /// `[visible]` of each part's lower-level meshes (K-OMSI: a conditional lower level).
+    far: Vec<bool>,
     /// The cars' looks (`TrafficSim::snapshot_looks`), and their variable values and interior
     /// lamps in flat buffers.
     looks: Vec<CarLooks>,
@@ -114,6 +116,7 @@ pub struct PartFrame {
     /// The body's rotation (heading, pitch and roll), for its interior lamps.
     pub rotation: glam::Mat4,
     meshes: Span,
+    far: Span,
 }
 
 /// How one mesh of a vehicle is drawn: its transform relative to the vehicle's position,
@@ -142,6 +145,7 @@ impl FrameSnapshot {
         self.light.clear();
         self.night.clear();
         self.uv.clear();
+        self.far.clear();
         self.looks.clear();
         self.vars.clear();
         self.lamps.clear();
@@ -152,18 +156,21 @@ impl FrameSnapshot {
     pub fn add_car(&mut self, id: u64, vehicle: &crate::VehicleInstance) {
         let start = self.parts.len() as u32;
         if vehicle.ai_visuals {
+            // (a coupled part runs no scripts of its own: its conditions read the leading
+            // vehicle's variables)
+            let var = |n: &str| vehicle.var(n);
             let meshes = (0..vehicle.mesh_props.len()).map(|i| (vehicle.mesh_local_transform(i), &vehicle.mesh_props[i]));
-            self.add_part(vehicle.position, &vehicle.ty, vehicle.body_rotation(), meshes);
+            self.add_part(vehicle.position, &vehicle.ty, vehicle.body_rotation(), meshes, &var);
             for t in &vehicle.trailers {
                 let meshes = (0..t.mesh_props.len()).map(|i| (t.mesh_local_transform(i), &t.mesh_props[i]));
-                self.add_part(t.position, &t.ty, t.body_rotation(), meshes);
+                self.add_part(t.position, &t.ty, t.body_rotation(), meshes, &var);
             }
         }
         let parts = Span { start, len: self.parts.len() as u32 - start };
         self.cars.push(CarFrame { id, shown: vehicle.ai_visuals, parts, looks: None });
     }
 
-    fn add_part<'a>(&mut self, position: glam::DVec3, ty: &Arc<VehicleType>, rotation: glam::Mat4, meshes: impl Iterator<Item = (glam::Mat4, &'a crate::vehicle::MeshProps)>) {
+    fn add_part<'a>(&mut self, position: glam::DVec3, ty: &Arc<VehicleType>, rotation: glam::Mat4, meshes: impl Iterator<Item = (glam::Mat4, &'a crate::vehicle::MeshProps)>, var: &dyn Fn(&str) -> Option<f32>) {
         let start = self.meshes.len() as u32;
         for (i, (local, p)) in meshes.enumerate() {
             let frame = MeshFrame {
@@ -179,7 +186,15 @@ impl FrameSnapshot {
             self.meshes.push(frame);
         }
         let meshes = Span { start, len: self.meshes.len() as u32 - start };
-        self.parts.push(PartFrame { ty: ty.clone(), position, rotation, meshes });
+        // the lower levels' `[visible]` (an unknown variable leaves the mesh shown, as the
+        // full model's)
+        let fstart = self.far.len() as u32;
+        for k in ty.far_meshes() {
+            let def = &ty.model.meshes[ty.lod_meshes[k].def_index];
+            self.far.push(def.visible_by(var).unwrap_or(true));
+        }
+        let far = Span { start: fstart, len: self.far.len() as u32 - fstart };
+        self.parts.push(PartFrame { ty: ty.clone(), position, rotation, meshes, far });
     }
 
     /// The parts of `car`: its body first, then its coupled parts in their order.
@@ -190,6 +205,11 @@ impl FrameSnapshot {
     /// The meshes of `part`, in the vehicle type's order.
     pub fn meshes(&self, part: &PartFrame) -> &[MeshFrame] {
         &self.meshes[part.meshes.range()]
+    }
+
+    /// Whether each lower-level mesh of `part` shows, in `VehicleType::far_meshes` order.
+    pub fn far_visible(&self, part: &PartFrame) -> &[bool] {
+        &self.far[part.far.range()]
     }
 
     /// The alpha multiplier of each material slot of `m`.
