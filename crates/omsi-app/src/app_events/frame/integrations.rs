@@ -64,6 +64,20 @@ impl App {
         if !plugins.is_empty() {
             self.plugin_watch(&mut plugins);
         }
+        // the plugins switched off turned on again (the game menu's line, Ctrl+Shift+L)
+        if std::mem::take(&mut self.integrations.plugins_turn_on) {
+            let off = plugins.switched_off();
+            if off.is_empty() {
+                self.service_msg = Some(("No plugin is switched off".into(), 3.0));
+            } else {
+                let mut io = crate::plugins::Io::new(self, dt, Vec::new(), Vec::new(), Vec::new());
+                for name in &off {
+                    plugins.turn_on(&mut io, name);
+                }
+                drop(io);
+                log::info!("plugins turned on again by the player: {}", off.join(", "));
+            }
+        }
         // the mouse on the plugins' script textures since their frame, and which those are now
         plugins.pointer = std::mem::take(&mut self.integrations.plugin_pointer.pending);
         self.integrations.plugin_pointer.pages = plugins.pointer_textures();
