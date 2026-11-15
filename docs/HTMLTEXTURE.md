@@ -380,7 +380,7 @@ need a few changes. When something doesn't show up, check this list first.
 * `<img src width height>` (bmp, dds, tga, jpg, png). The file is looked up next to the page (see
   `htmlengine/images.rs`). `img.src` can be changed from a script. Pictures are cached,
   a missing file is cached too.
-* `<video src autoplay loop muted poster>`: a silent video, see [Video](#video) below.
+* `<video src autoplay loop muted poster>`: a video with or without its sound, see [Video](#video) below.
 * `<head>`, `<title>`, `<meta>`, `<link>` are read and then ignored.
 
 Not available: canvas, tables, lists (`ul`/`li`), forms and `input` fields, iframes, svg.
@@ -394,13 +394,19 @@ Not available: canvas, tables, lists (`ul`/`li`), forms and `input` fields, ifra
 * The file is looked up like a picture: next to the page first (a `<source src>` inside the
   element works too). The video fills the element's box; give the box a size (CSS or the
   `width`/`height` attributes), otherwise it is 300x150.
-* Sound is never played, with or without `muted`.
+* Sound: a video **with** `muted` is silent, one **without** it is heard (as in a browser). The
+  sound comes from the screen that shows the page: in full in the bus (driver's and passenger
+  views), quiet and muffled through the bodywork from outside, silent while the game is paused.
+  Typical use: the coach's and intercity bus's monitor without `muted`, the city bus's
+  advertising screen with it. A script can switch it: `v.muted = true/false`, `v.volume = 0..1`.
+  Only the player's own bus is heard; pages of scenery objects and AI buses stay silent.
 * `autoplay` starts it as soon as the page shows it, `loop` starts it again at the end.
   Without `autoplay` the first frame stands until a script calls `play()`.
 * `poster` (a picture) shows until the first frame is there, and instead of the video where it
   cannot be played.
 * Scripts: `play()`, `pause()`, `load()` (back to the start), `paused`, `ended`,
-  `currentTime` (setting it seeks), `duration` (`NaN` until known), `loop`, `autoplay`.
+  `currentTime` (setting it seeks), `duration` (`NaN` until known), `loop`, `autoplay`,
+  `muted`, `volume`.
   `play()` returns an object with `then`/`catch` that do nothing, so `v.play().catch(...)`
   does no harm. There are no media events (`onended` ...); read `ended` from a timer.
 * Decoding runs on a thread of its own, with Windows Media Foundation: H.264 in `.mp4`
@@ -411,6 +417,7 @@ Not available: canvas, tables, lists (`ul`/`li`), forms and `input` fields, ifra
   picture instead of the whole page (about 1.5 ms per frame for 857x458 on a desktop CPU).
 * For the smallest load, encode the file at the size of the box and at most 30 fps, for
   example `ffmpeg -i in.mp4 -an -vf scale=856:458 -r 30 -c:v libx264 -pix_fmt yuv420p out.mp4`
+  (`-an` drops the sound; for a video that is heard use `-c:a aac -b:a 128k` instead)
   (H.264 needs even sizes; a pixel more or less is scaled away).
 
 ### CSS
