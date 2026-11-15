@@ -337,6 +337,7 @@ flags! {
     OMSI_LAN_SAY: Text, Test, Use, "-", "\"30=Hallo;45=Bye\": LAN chat lines said at these seconds of the session.";
     OMSI_LAN_TRACE: Text, Debug, Use, "-", "LAN CSV file: where the host's people are drawn.";
     OMSI_LAUNCHER: Text, Setup, Use, "-", "Program a plain start opens as the launcher instead of the desktop launcher (openomsi-launcher-app) beside the game.";
+    OMSI_LED_SIGN_DAY: Num, Tuning, Use, "default", "How bright a page's LED destination sign burns by day (the screen's white = 1; default 4).";
     OMSI_LIGHT_GRID_SQUARES: Bool, Switch, Frame, "off", "A light goes into every cell of the light grid's square round its range, the corners its range misses too (A/B).";
     OMSI_LIST_ALIGNED: Bool, Debug, Use, "off", "Log the splines aligned to the terrain.";
     OMSI_MAIN_SPLIT: Bool, Switch, Frame, "off", "Split the main pass's bundles in two (encoded apart, the second part loads what the first stored).";

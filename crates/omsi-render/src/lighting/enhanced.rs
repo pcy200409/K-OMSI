@@ -19,6 +19,16 @@ pub(crate) fn debug_view() -> f32 {
     })
 }
 
+/// How bright a page's LED destination sign (`MaterialExtra::led_sign`) burns by day, in the
+/// screen's white: the other LED panels' 0.8 left it under the sky a tinted windscreen
+/// mirrors over it. Faded to 0.8 with the night (`OMSI_LED_SIGN_DAY` tries other values).
+/// (4: a side window's sign reads as lit by day; 8 began to bleach its light blue to white)
+const LED_SIGN_DAY: f32 = 4.0;
+fn led_sign_day() -> f32 {
+    static DAY: std::sync::OnceLock<f32> = std::sync::OnceLock::new();
+    *DAY.get_or_init(|| omsi_cfg::flags::OMSI_LED_SIGN_DAY.parse().unwrap_or(LED_SIGN_DAY))
+}
+
 /// The metering: the share of the metered difference that is corrected, its target (log2 of
 /// the picture's mean luminance), how far it may darken and brighten (EV), the exposure
 /// bias (EV) and the night vision strength. `OMSI_METER=gain,target,dark,bright,bias,night`
@@ -849,8 +859,9 @@ impl Renderer {
             eye: eye_off.extend(if lighting.low_clouds { CLOUD_STEPS_LOW } else { CLOUD_STEPS } as f32).to_array(),
             // x how bright an LED panel's dots burn (see `MaterialExtra::led`; the settings'
             // 16 levels give 0 = off .. 3.75), y whether the LED panels' `\S:n` masks keep
-            // their mip chain (0: at full resolution, the dots stay visible when small)
-            led: [lighting.led_glow, lighting.led_mips, if self.options.light_glow { 1.0 } else { 0.0 }, 0.0],
+            // their mip chain (0: at full resolution, the dots stay visible when small), w how
+            // bright a page's destination sign burns by day (`led_sign_day`)
+            led: [lighting.led_glow, lighting.led_mips, if self.options.light_glow { 1.0 } else { 0.0 }, led_sign_day()],
             moon: lighting.moon_dir.normalize_or_zero().extend(MOON_RADIUS).to_array(),
             // (w of the first: the veil's optical depth, which the sky draws as the high
             // layer; of the second: how far the veil spreads the sun, which softens shadows)
