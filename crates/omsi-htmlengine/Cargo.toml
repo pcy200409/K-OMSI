@@ -7,6 +7,8 @@ description = "The built-in [htmltexture] backend: a small HTML/CSS/JavaScript e
 
 [dependencies]
 omsi-cfg = { path = "../omsi-cfg" }
+# (`<video>` frames)
+omsi-media = { path = "../omsi-media" }
 omsi-sim = { path = "../omsi-sim" }
 ab_glyph.workspace = true
 log.workspace = true
