@@ -41,3 +41,4 @@ patch/plugin-budget
 patch/html-script-budget
 patch/pax-events
 patch/html-video
+patch/ticket-interior-light
