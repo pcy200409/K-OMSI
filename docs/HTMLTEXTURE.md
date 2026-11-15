@@ -396,7 +396,22 @@ Not available: canvas, tables, lists (`ul`/`li`), forms and `input` fields, ifra
 * Layout is plain block flow with wrapped inline text.
 
 Not available: flexbox, grid, floats, `position`, borders, gradients, shadows, `opacity`,
-`overflow`, animations and transitions, custom fonts. Text is drawn in Inter.
+`overflow`, animations and transitions, `font-family` and `@font-face`. Text is drawn in Inter
+(Hangul and other characters Inter lacks in the game's fallback face), unless the page names a
+font of its own:
+
+```html
+<meta name="omsi-font" content="fonts/NotoSansKR-Regular.ttf">
+<meta name="omsi-font-bold" content="fonts/NotoSansKR-Bold.ttf">
+```
+
+The files (`.ttf`/`.otf`) are looked up like the page's pictures, next to the page first. Every
+character the font has is drawn with it, Latin letters and digits too; the others are drawn as
+before. Without `omsi-font-bold` bold text uses the same file (at weight 700 when it is a
+variable font). The font is the whole page's - there is one per page, not per element - and
+only that page's: other pages keep their faces. A page whose font was found reads
+`omsi.pageFont === true` (it is missing otherwise: an older game, a file that is not there), so
+it can choose sizes that fit either case.
 
 Since there is no `overflow`, a box doesn't clip its content. If a text is too long for its
 box, shorten it yourself.
