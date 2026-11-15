@@ -241,7 +241,8 @@ impl PeopleSim {
                 }
             }
             let yaw = p.yaw;
-            person.vel = if p.st == 1 || p.st == 5 {
+            // (K-OMSI: and the step up to a card reader, `pax_move`)
+            person.vel = if p.st == 1 || p.st == 5 || (p.st == 9 && p.moved > 0.0) {
                 DVec2::new(yaw.sin(), yaw.cos()) * p.speed as f64
             } else {
                 DVec2::ZERO
@@ -439,6 +440,24 @@ impl PeopleSim {
         let turn = dh.signum() * dh.abs().min(dt_ms as f64 / 150.0);
         p.yaw = wrap(p.yaw + turn);
         if st == 9 {
+            // K-OMSI: a step up to the card reader, facing it, before the hand goes out to
+            // it (the tag waits: the timer stays full); the floor stays as it is
+            if p.tag_walk > 0.0 && p.sub == 1 && p.inside.is_some() {
+                let flat = d.truncate();
+                let h = flat.length() as f32;
+                let left = h - tag_points::stand_off(d.z as f32);
+                if left > 0.02 && h > 0.0 && dh.abs() < 1.0 {
+                    let s = (p.walk_speed * 0.7 * dt_ms / 1000.0).min(left).min(p.tag_walk);
+                    p.pos += (flat * (s / h) as f64).extend(0.0);
+                    p.tag_walk -= s;
+                    p.moved = s;
+                    p.speed = s / (dt_ms / 1000.0).max(1e-3);
+                    p.timer = p.timer.max(1.0);
+                } else if left <= 0.02 || dh.abs() < 1.0 {
+                    p.tag_walk = 0.0;
+                    p.speed = 0.0;
+                }
+            }
             return;
         }
         let mut moved = p.speed * dt_ms / 1000.0;

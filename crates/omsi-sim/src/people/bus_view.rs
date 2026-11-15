@@ -47,6 +47,8 @@ pub struct CabinView {
     /// Its rear sections (`part_frames`) and the places switched off (`places_off`).
     pub trailers: Vec<PartFrame>,
     pub places_off: Vec<bool>,
+    /// K-OMSI: the card readers shown, bus frame (`tag_points::shown_readers`).
+    pub readers: Vec<Vec3>,
 }
 
 impl PeopleSim {
@@ -55,7 +57,13 @@ impl PeopleSim {
     pub fn player_bus_view(&self, v: &VehicleInstance) -> PlayerBusView {
         let cabin = self.player_cabin.as_ref().map(|cabin| {
             let (entry_open, exit_open) = Self::doors_open(v, cabin.entries.len(), cabin.exits.len());
-            CabinView { entry_open, exit_open, trailers: part_frames(v, cabin), places_off: places_off(v, cabin) }
+            CabinView {
+                entry_open,
+                exit_open,
+                trailers: part_frames(v, cabin),
+                places_off: places_off(v, cabin),
+                readers: tag_points::shown_readers(v, &self.player_reader_meshes),
+            }
         });
         // the destination shown: the row the display's scripts chose (target_index_int, as
         // Omsi.exe's people read it), else the depot file's row the IBIS was set to (the
