@@ -4,7 +4,11 @@
 //! * Every `<video>` that is drawn has a [`Player`]. Its decoder runs on a thread of its own
 //!   (`omsi_media`) and hands over finished RGBA frames already at the size of the element's
 //!   box, a couple of them ahead of the clock; when nobody takes them the thread waits, so a
-//!   paused or hidden video costs no CPU. Sound is never decoded: a page's video is silent.
+//!   paused or hidden video costs no CPU.
+//! * Sound: a video without `muted` that plays has its sound decoded from where its
+//!   pictures are (`omsi_media::spawn_sound`) into a stream the game plays at the page's
+//!   screen (`HtmlRenderer::sounds`). Pausing, seeking or muting drops that stream; playing
+//!   on starts a new one where the pictures stand.
 //! * The clock is the page's own (`js.now`, real time). A frame becomes visible once its time
 //!   has come; a player that fell far behind (the page was not drawn for a while) seeks
 //!   instead of decoding its way through everything it missed.
@@ -16,7 +20,7 @@
 //!
 //! From scripts: `play()`, `pause()`, `load()` (back to the start), `paused`, `ended`,
 //! `currentTime` (read and set, setting seeks), `duration` (`NaN` until known), `loop`,
-//! `autoplay`. See `Interp::media`.
+//! `autoplay`, `muted`, `volume`. See `Interp::media`.
 
 use super::*;
 use omsi_media::{Cmd, Msg};
@@ -50,13 +54,24 @@ pub(crate) struct Player {
     last_seek: f64,
     /// Made by the last paint and not given its state by the page yet.
     pub(crate) new: bool,
+    /// The file, for its sound.
+    path: Option<PathBuf>,
+    /// The page wants the sound heard (`muted` off) at `volume`.
+    pub(crate) want_sound: bool,
+    pub(crate) volume: f32,
+    /// The sound playing now and its id for the game (see `HtmlRenderer::sounds`).
+    pub(crate) sound: Option<(u64, omsi_media::Sound)>,
 }
+
+/// Ids of sound streams, unique in the process (a new one for every start).
+static NEXT_SOUND: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 impl Player {
     /// A paused player for `src` (a file found with `dirs`); one that cannot play is kept
     /// too, so the file is not looked for in every frame.
     pub(crate) fn open(dirs: &[PathBuf], src: &str, size: (u32, u32), looping: bool, now: f64) -> Player {
-        let link = find(dirs, src).and_then(|p| omsi_media::spawn(p, size, looping));
+        let path = find(dirs, src);
+        let link = path.clone().and_then(|p| omsi_media::spawn(p, size, looping));
         Player {
             src: src.to_string(),
             link,
@@ -74,6 +89,29 @@ impl Player {
             shown_t: 0.0,
             last_seek: now,
             new: true,
+            path,
+            want_sound: false,
+            volume: 1.0,
+            sound: None,
+        }
+    }
+
+    /// Start the sound where the pictures are, or stop it: it plays while the video plays and
+    /// the page wants it heard. A seek starts it again at the new place.
+    pub(crate) fn update_sound(&mut self, now: f64) {
+        let wanted = self.want_sound && self.playing && !self.ended && self.link.is_some() && self.volume > 0.0;
+        match (&self.sound, wanted) {
+            (Some(_), false) => self.sound = None,
+            (None, true) => {
+                let at = self.current_time(now);
+                let path = self.path.clone();
+                self.sound = path.and_then(|p| omsi_media::spawn_sound(p, at, self.looping)).map(|s| (NEXT_SOUND.fetch_add(1, std::sync::atomic::Ordering::Relaxed), s));
+                // (a player that cannot start it does not try again in every frame)
+                if self.sound.is_none() {
+                    self.path = None;
+                }
+            }
+            _ => {}
         }
     }
 
@@ -138,6 +176,7 @@ impl Player {
     }
 
     pub(crate) fn seek(&mut self, to: f64, now: f64) {
+        self.sound = None;
         let to = if self.duration > 0.0 { to.clamp(0.0, self.duration) } else { to.max(0.0) };
         self.epoch = self.epoch.wrapping_add(1);
         self.base = to;

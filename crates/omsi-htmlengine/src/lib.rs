@@ -4,7 +4,7 @@
 //! What a page may use:
 //! * HTML: nested elements, `<style>`, `<script>`, inline `style=""`, `id`, `class`, entities,
 //!   `<img src width height>` (bmp, dds, tga, jpg, png; looked up next to the page, see `images`),
-//!   `<video src autoplay loop muted poster>` (silent, mp4 on Windows, see `video`).
+//!   `<video src autoplay loop muted poster>` (heard unless `muted`, mp4 on Windows, see `video`).
 //! * CSS: selectors `tag`, `#id`, `.class`, `*`, compounds (`div.a#b`), descendant chains
 //!   and `,` lists; `color`, `background(-color)`, `font-size`, `font-weight`, `text-align`,
 //!   `line-height`, `margin*`, `padding*`, `width`, `height`, `display` (`none`, `inline`),

@@ -139,6 +139,9 @@ impl EngineRenderer {
             }
             p.set_playing(!m.paused, now);
             changed |= p.tick(now);
+            p.want_sound = !m.muted;
+            p.volume = m.volume as f32;
+            p.update_sound(now);
             m.paused = !p.playing;
             m.ended = p.ended;
             m.time = p.current_time(now);
@@ -423,5 +426,13 @@ impl HtmlRenderer for EngineRenderer {
 
     fn take_departure_wants(&mut self) -> Vec<String> {
         std::mem::take(&mut self.js.departure_wants)
+    }
+
+    fn sounds(&self) -> Vec<omsi_sim::htmltex::PageSound> {
+        let players = self.imgs.videos.players.lock().unwrap();
+        players
+            .values()
+            .filter_map(|p| p.sound.as_ref().map(|(id, s)| omsi_sim::htmltex::PageSound { id: *id, stream: s.stream.clone(), gain: p.volume }))
+            .collect()
     }
 }
