@@ -19,6 +19,9 @@ pub struct EngineRenderer {
     pub(crate) cache: Mutex<Option<LayoutCache>>,
     /// `dom.generation` of the last frame handed out.
     pub(crate) rendered_gen: u64,
+    /// The last frame, kept while the page shows a video: a new video frame is drawn into a
+    /// copy of it instead of painting the whole page again.
+    pub(crate) last: Option<Vec<u8>>,
 }
 
 /// The laid-out body and the root style it was built with.
@@ -67,6 +70,7 @@ impl EngineRenderer {
             imgs: Arc::new(ImageStore::new(Vec::new())),
             cache: Mutex::new(None),
             rendered_gen: 0,
+            last: None,
         }
     }
 
@@ -113,6 +117,34 @@ impl EngineRenderer {
             }
         }
         true
+    }
+
+    /// Give every video player what its scripts asked for, take the frames whose time has
+    /// come and tell the scripts where each video is. True when a visible frame changed.
+    pub(crate) fn sync_videos(&mut self) -> bool {
+        let now = self.js.now;
+        let mut players = self.imgs.videos.players.lock().unwrap();
+        let mut changed = false;
+        for (&node, p) in players.iter_mut() {
+            let Some(n) = self.js.dom.nodes.get(node) else { continue };
+            let looping = n.attr("loop").is_some();
+            let m = self.js.media.entry(node).or_insert_with(|| Media::of(n));
+            if std::mem::take(&mut p.new) && m.seek.is_none() && m.time > 0.0 {
+                // drawn again after it was hidden: go on where it was
+                m.seek = Some(m.time);
+            }
+            p.set_loop(looping, now);
+            if let Some(t) = m.seek.take() {
+                p.seek(t, now);
+            }
+            p.set_playing(!m.paused, now);
+            changed |= p.tick(now);
+            m.paused = !p.playing;
+            m.ended = p.ended;
+            m.time = p.current_time(now);
+            m.duration = if p.duration > 0.0 { p.duration } else { f64::NAN };
+        }
+        changed
     }
 
     /// The root (`html`) style is what the body inherits from.
@@ -254,6 +286,7 @@ impl EngineRenderer {
     pub(crate) fn render(&self) -> Vec<u8> {
         let started = std::time::Instant::now();
         let mut cv = Canvas { w: self.width, h: self.height, px: vec![0; (self.width * self.height * 4) as usize] };
+        self.imgs.videos.begin(self.js.now);
         with_fonts(|reg, bold| {
             let lay = Layouter { dom: &self.js.dom, reg, bold, vw: self.width as f32, vh: self.height as f32, imgs: &*self.imgs };
             let mut c = self.layout_cache(&lay);
@@ -274,6 +307,7 @@ impl EngineRenderer {
             c.b.st.bg_img = bg_img;
             *self.cache.lock().unwrap() = Some(c);
         });
+        self.imgs.videos.end();
         log::debug!("htmltexture: rendered {}x{} in {:?}", self.width, self.height, started.elapsed());
         cv.px
     }
@@ -329,12 +363,30 @@ impl HtmlRenderer for EngineRenderer {
     fn poll_frame(&mut self) -> Option<Vec<u8>> {
         self.clock();
         self.run_timers();
+        let video_moved = self.sync_videos();
         if !self.dirty && self.js.dom.generation == self.rendered_gen {
-            return None;
+            // only video frames changed: draw them into the last frame
+            if !video_moved {
+                return None;
+            }
+            let px = self.last.take()?;
+            let mut cv = Canvas { w: self.width, h: self.height, px };
+            self.imgs.repaint_videos(&mut cv);
+            let frame = cv.px.clone();
+            self.last = Some(cv.px);
+            return Some(frame);
         }
         self.dirty = false;
         let frame = self.render();
         self.rendered_gen = self.js.dom.generation;
+        // a player made by this paint gets its play state and first frame right away
+        if self.sync_videos() {
+            let mut cv = Canvas { w: self.width, h: self.height, px: frame };
+            self.imgs.repaint_videos(&mut cv);
+            self.last = Some(cv.px.clone());
+            return Some(cv.px);
+        }
+        self.last = self.imgs.videos.any_placed().then(|| frame.clone());
         Some(frame)
     }
 
@@ -348,6 +400,7 @@ impl HtmlRenderer for EngineRenderer {
 
     fn set_asset_dirs(&mut self, dirs: Vec<std::path::PathBuf>) {
         self.imgs = Arc::new(ImageStore::new(dirs));
+        self.last = None;
         *self.cache.lock().unwrap() = None;
         self.dirty = true;
     }

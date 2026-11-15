@@ -380,9 +380,38 @@ need a few changes. When something doesn't show up, check this list first.
 * `<img src width height>` (bmp, dds, tga, jpg, png). The file is looked up next to the page (see
   `htmlengine/images.rs`). `img.src` can be changed from a script. Pictures are cached,
   a missing file is cached too.
+* `<video src autoplay loop muted poster>`: a silent video, see [Video](#video) below.
 * `<head>`, `<title>`, `<meta>`, `<link>` are read and then ignored.
 
-Not available: canvas, tables, lists (`ul`/`li`), forms and `input` fields, iframes, video, svg.
+Not available: canvas, tables, lists (`ul`/`li`), forms and `input` fields, iframes, svg.
+
+### Video
+
+```html
+<video src="ad.mp4" autoplay loop muted poster="ad.png" style="width:857px;height:458px"></video>
+```
+
+* The file is looked up like a picture: next to the page first (a `<source src>` inside the
+  element works too). The video fills the element's box; give the box a size (CSS or the
+  `width`/`height` attributes), otherwise it is 300x150.
+* Sound is never played, with or without `muted`.
+* `autoplay` starts it as soon as the page shows it, `loop` starts it again at the end.
+  Without `autoplay` the first frame stands until a script calls `play()`.
+* `poster` (a picture) shows until the first frame is there, and instead of the video where it
+  cannot be played.
+* Scripts: `play()`, `pause()`, `load()` (back to the start), `paused`, `ended`,
+  `currentTime` (setting it seeks), `duration` (`NaN` until known), `loop`, `autoplay`.
+  `play()` returns an object with `then`/`catch` that do nothing, so `v.play().catch(...)`
+  does no harm. There are no media events (`onended` ...); read `ended` from a timer.
+* Decoding runs on a thread of its own, with Windows Media Foundation: H.264 in `.mp4`
+  works everywhere; HEVC and others only where Windows has their codec. Windows "N" editions
+  need the Media Feature Pack. On other systems the poster is shown.
+* Cost: frames are decoded ahead at the size of the box (two at most), so memory stays at a
+  few MB per video. When only the video changed, the engine draws the new frame into the last
+  picture instead of the whole page (about 1.5 ms per frame for 857x458 on a desktop CPU).
+* For the smallest load, encode the file at the size of the box and at most 30 fps, for
+  example `ffmpeg -i in.mp4 -an -vf scale=856:458 -r 30 -c:v libx264 -pix_fmt yuv420p out.mp4`
+  (H.264 needs even sizes; a pixel more or less is scaled away).
 
 ### CSS
 

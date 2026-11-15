@@ -1,0 +1,13 @@
+[package]
+name = "omsi-media"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Video frames for [htmltexture] pages: a file decoded on a thread of its own (Windows Media Foundation, loaded at run time), silent"
+
+[dependencies]
+omsi-cfg = { path = "../omsi-cfg" }
+log.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = ["Win32_Foundation", "Win32_Media_MediaFoundation", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_LibraryLoader", "Win32_System_Variant", "Win32_UI_Shell"] }

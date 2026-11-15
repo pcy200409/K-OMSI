@@ -2,7 +2,7 @@ use super::*;
 
 const DEMO: &str = include_str!("../../../docs/examples/htmltexture/demo.html");
 
-fn px(frame: &[u8], w: u32, x: u32, y: u32) -> [u8; 4] {
+pub(crate) fn px(frame: &[u8], w: u32, x: u32, y: u32) -> [u8; 4] {
     let i = ((y * w + x) * 4) as usize;
     [frame[i], frame[i + 1], frame[i + 2], frame[i + 3]]
 }
@@ -673,7 +673,7 @@ fn prefix_increment_and_decrement() {
 // ─────────────── pictures ───────────────
 
 /// A solid 24-bit BMP.
-fn bmp(w: u32, h: u32, rgb: [u8; 3]) -> Vec<u8> {
+pub(crate) fn bmp(w: u32, h: u32, rgb: [u8; 3]) -> Vec<u8> {
     let row = ((w * 3 + 3) / 4 * 4) as usize;
     let data = row * h as usize;
     let mut b = Vec::with_capacity(54 + data);
@@ -947,7 +947,7 @@ fn hangul_is_drawn_with_the_fallback_face() {
 
 /// The pictures are read through omsi-sim's decoder, which the game registers at start:
 /// the tests register the same one.
-fn install_decoder() {
+pub(crate) fn install_decoder() {
     omsi_sim::image_decode::install(|path| {
         omsi_texture::decode_file(path)
             .map(|i| omsi_sim::image_decode::DecodedImage { width: i.width, height: i.height, rgba: i.rgba, has_alpha: i.has_alpha })
