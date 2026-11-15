@@ -65,6 +65,8 @@ pub(crate) enum Nat {
     ClearLine,
     SetNextStop,
     GetDepartures,
+    /// Does nothing (`then`/`catch` of what `video.play()` returns).
+    Noop,
 }
 
 #[derive(Clone)]

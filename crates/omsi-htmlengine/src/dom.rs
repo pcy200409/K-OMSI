@@ -17,6 +17,36 @@ pub(crate) struct Node {
     /// `width` / `height` attributes of an `<img>` (`"64"`, `"50%"`), empty when absent.
     pub(crate) attr_w: String,
     pub(crate) attr_h: String,
+    /// Every other attribute (`autoplay`, `loop`, `poster` of a `<video>` ...), as written.
+    pub(crate) attrs: Vec<(String, String)>,
+}
+
+impl Node {
+    /// The value of an attribute kept in `attrs` (`Some("")` for a bare `loop`).
+    pub(crate) fn attr(&self, name: &str) -> Option<&str> {
+        self.attrs.iter().find(|(k, _)| k == name).map(|(_, v)| v.as_str())
+    }
+
+    /// Set (`Some`) or remove (`None`) an attribute kept in `attrs`; true when it changed.
+    pub(crate) fn set_attr(&mut self, name: &str, value: Option<String>) -> bool {
+        let at = self.attrs.iter().position(|(k, _)| k == name);
+        match (at, value) {
+            (Some(i), Some(v)) if self.attrs[i].1 == v => false,
+            (Some(i), Some(v)) => {
+                self.attrs[i].1 = v;
+                true
+            }
+            (None, Some(v)) => {
+                self.attrs.push((name.to_string(), v));
+                true
+            }
+            (Some(i), None) => {
+                self.attrs.remove(i);
+                true
+            }
+            (None, None) => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -187,7 +217,7 @@ impl Dom {
                         "width" => node.attr_w = v,
                         "height" => node.attr_h = v,
                         e if e.len() > 2 && e.starts_with("on") => node.on.push((e[2..].to_string(), v)),
-                        _ => {}
+                        _ => node.attrs.push((k, v)),
                     }
                 }
                 let idx = dom.nodes.len();

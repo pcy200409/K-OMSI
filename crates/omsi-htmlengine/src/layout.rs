@@ -163,7 +163,7 @@ impl<'a> Layouter<'a> {
                 st.align = 1;
                 st.radius = 4.0;
             }
-            "img" => st.inline_block = true,
+            "img" | "video" => st.inline_block = true,
             "head" | "style" | "script" | "title" | "meta" | "link" => st.none = true,
             _ => {}
         }
@@ -187,8 +187,12 @@ impl<'a> Layouter<'a> {
         for (k, v) in &n.inline {
             st.apply(k, v, pf, self.vw, self.vh);
         }
-        if n.tag == "img" {
+        if n.tag == "img" || n.tag == "video" {
             self.size_img(idx, &mut st);
+        }
+        // what is inside a <video> (<source>, words for old browsers) is not drawn
+        if n.parent.is_some_and(|p| self.dom.nodes[p].tag == "video") {
+            st.none = true;
         }
         st.node = idx;
         st
@@ -205,9 +209,17 @@ impl<'a> Layouter<'a> {
         if st.height.is_none() && !n.attr_h.is_empty() {
             st.height = parse_len(&n.attr_h, &u);
         }
-        let (nw, nh) = match self.imgs.dims(&n.src) {
-            Some((w, h)) if !n.src.is_empty() => (w as f32, h as f32),
-            _ => (0.0, 0.0),
+        let (nw, nh) = if n.tag == "video" {
+            // the frame size is known only once the decoder runs: the poster's, else 300x150
+            match n.attr("poster").filter(|p| !p.is_empty()).and_then(|p| self.imgs.dims(p)) {
+                Some((w, h)) => (w as f32, h as f32),
+                None => (300.0, 150.0),
+            }
+        } else {
+            match self.imgs.dims(&n.src) {
+                Some((w, h)) if !n.src.is_empty() => (w as f32, h as f32),
+                _ => (0.0, 0.0),
+            }
         };
         match (st.width, st.height) {
             (None, None) => {
