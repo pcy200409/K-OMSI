@@ -89,13 +89,14 @@ fn ticket_change(t: &Value) -> Result<TicketChange, ApiError> {
     let field = |k: &str| t.get(k).filter(|v| !v.is_nil());
     let text = |k: &str| field(k).map(|v| v.to_text().ok_or_else(|| bad(k, "a string"))).transpose();
     Ok(TicketChange {
-        kind: field("kind").map(|v| v.to_text().and_then(|s| TicketKind::parse(&s)).ok_or_else(|| bad("kind", "\"none\", \"stamp\" or \"buy\""))).transpose()?,
+        kind: field("kind").map(|v| v.to_text().and_then(|s| TicketKind::parse(&s)).ok_or_else(|| bad("kind", "\"none\", \"stamp\", \"buy\" or \"hand\""))).transpose()?,
         ticket: field("ticket").map(|v| v.as_i64().filter(|n| (0..=255).contains(n)).map(|n| n as u8).ok_or_else(|| bad("ticket", "a ticket's number (0 to 255)"))).transpose()?,
         name: text("name")?,
         price: field("price").map(|v| v.as_f64().filter(|n| n.is_finite() && *n >= 0.0).map(|n| n as f32).ok_or_else(|| bad("price", "a number of 0 or more"))).transpose()?,
         voice: text("voice")?,
         tag: text("tag")?,
         payment: field("payment").map(|v| v.as_f64().filter(|n| n.is_finite() && *n >= 0.0).map(|n| n as f32).ok_or_else(|| bad("payment", "a number of 0 or more"))).transpose()?,
+        paper: text("paper")?,
     })
 }
 
@@ -165,11 +166,11 @@ pub static FNS: &[ApiFn] = &[
             _ => true,
         }).map(person).collect()))
     }),
-    def!("people.get", "people", [p("id", "integer")], "table or nil", "One person by id, as `people.list` gives them, and more: `stop_name` (the timetable's name of the stop they wait or waited at), `ticket` (the name of the ticket they ask for), `ticket_kind` (`\"none\"`, `\"stamp\"`, `\"buy\"`), `ticket_index` (the ticket pack's, from 1; 0 none), `ticket_price`, `ticket_voice`, `ticket_by` (the plugin that changed it), `ticket_asked` (asked for at the cash desk already), `tag` (`people.set_ticket`'s), `age`, `model` (the `.hum` file), `voice` (its voice folder). `people.list` gives the same fields.", TICKETS, None, false, |c, a| {
+    def!("people.get", "people", [p("id", "integer")], "table or nil", "One person by id, as `people.list` gives them, and more: `stop_name` (the timetable's name of the stop they wait or waited at), `ticket` (the name of the ticket they ask for), `ticket_kind` (`\"none\"`, `\"stamp\"`, `\"buy\"`, `\"hand\"`), `ticket_index` (the ticket pack's, from 1; 0 none), `ticket_price`, `ticket_voice`, `ticket_by` (the plugin that changed it), `ticket_asked` (asked for at the cash desk already), `tag` (`people.set_ticket`'s), `age`, `model` (the `.hum` file), `voice` (its voice folder). `people.list` gives the same fields.", TICKETS, None, false, |c, a| {
         let id = a.int(0)?;
         Ok::<_, ApiError>(c.io().people_list().into_iter().find(|p| p.id as i64 == id).map(person))
     }),
-    def!("people.set_ticket", "people", [p("id", "integer"), p("ticket", "table")], "true, or false and the reason", "Changes the ticket of a passenger boarding the player's bus (the `passenger_ticket` event names them): `{kind, ticket, name, price, payment, voice, tag}`, each optional. `kind` (`\"none\"`: a pass, `\"stamp\"`, `\"buy\"`) can only be changed until they are in the bus; `ticket` selects another ticket from the pack (starting at 1, with its name and price; a buyer must have a ticket: 0 is refused, and a buyer created without `ticket` gets the pack's ticket for their age). `name` and `price` set the ticket name and ticket price, respectively, until the passenger has asked at the cash desk. `payment` specifies the amount of money handed over for a ticket purchase; it does not change the ticket price and is raised to at least the ticket price. It must be set before the passenger reaches the cash desk. If the currency's denominations cannot represent the requested amount exactly, the amount handed over may be higher. `voice` selects a line from the passenger's voice folder to use instead of `Ticket_<n>_<k>` (`\"Zone_4\"` selects `Zone_4.wav`; if the file is missing, the usual line is used; `\"\"` also falls back to the usual line), until the passenger has asked at the cash desk. `tag` is plugin-defined text kept with the person (`people.get`), and can be set at any time. Returns `false` and the reason when nothing changed.", TICKETS, TrafficWrite, true, |c, a| {
+    def!("people.set_ticket", "people", [p("id", "integer"), p("ticket", "table")], "true, or false and the reason", "Changes the ticket of a passenger boarding the player's bus (the `passenger_ticket` event names them): `{kind, ticket, name, price, payment, voice, tag}`, each optional. `kind` (`\"none\"`: a pass, `\"stamp\"`, `\"buy\"`, K-OMSI `\"hand\"`: a paper ticket handed to the driver, printed on `paper`: `Texture/K-OMSI/paper_ticket/<paper>.png`) can only be changed until they are in the bus; `ticket` selects another ticket from the pack (starting at 1, with its name and price; a buyer must have a ticket: 0 is refused, and a buyer created without `ticket` gets the pack's ticket for their age). `name` and `price` set the ticket name and ticket price, respectively, until the passenger has asked at the cash desk. `payment` specifies the amount of money handed over for a ticket purchase; it does not change the ticket price and is raised to at least the ticket price. It must be set before the passenger reaches the cash desk. If the currency's denominations cannot represent the requested amount exactly, the amount handed over may be higher. `voice` selects a line from the passenger's voice folder to use instead of `Ticket_<n>_<k>` (`\"Zone_4\"` selects `Zone_4.wav`; if the file is missing, the usual line is used; `\"\"` also falls back to the usual line), until the passenger has asked at the cash desk. `tag` is plugin-defined text kept with the person (`people.get`), and can be set at any time. Returns `false` and the reason when nothing changed.", TICKETS, TrafficWrite, true, |c, a| {
         let id = a.int(0)?;
         let change = ticket_change(a.table(1)?)?;
         let by = c.state().name.clone();
@@ -197,6 +198,10 @@ pub static FNS: &[ApiFn] = &[
     }),
     def!("people.runner", "people", [], "true, or false and the reason", "K-OMSI: somebody late runs for the player's bus standing at a stop - out of sight behind it, or a pedestrian walking near - and boards if the doors open for them; left behind, they stand a moment and walk back. `people.list` marks them `late`. False and the reason when the bus stands at no stop.", NEW, TrafficWrite, true, |c, a| {
         Ok::<_, ApiError>(super::core::ok_or_reason(c.io().people_order(0, &PaxCommand::Runner)))
+    }),
+    def!("people.take_ticket", "people", [p("id", "integer")], "true, or false and the reason", "K-OMSI: the driver takes the paper ticket a passenger of the player's bus laid on the cash desk (`kind = \"hand\"`, the `ticket_handed` event names them), as a click on it does: they go on to their place. False and the reason when no ticket of theirs lies there.", NEW, TrafficWrite, true, |c, a| {
+        let id = person_id(a.int(0)?, "take_ticket")?;
+        Ok::<_, ApiError>(super::core::ok_or_reason(c.io().people_order(id, &PaxCommand::TakeTicket)))
     }),
     def!("people.move", "people", [p("id", "integer"), p("to", "string")], "true, or false and the reason", "K-OMSI: a rider of the player's bus, at their place, walks to another free place while the bus runs: `\"seat\"`, `\"stand\"` (a standing place) or `\"door\"` (the standing place nearest an exit, without asking to stop). False and the reason when there is no free place of that kind.", NEW, TrafficWrite, true, |c, a| {
         let id = person_id(a.int(0)?, "move")?;

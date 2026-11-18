@@ -3066,7 +3066,7 @@
       "name": "people.get",
       "group": "people",
       "since": "0.3",
-      "doc": "One person by id, as `people.list` gives them, and more: `stop_name` (the timetable's name of the stop they wait or waited at), `ticket` (the name of the ticket they ask for), `ticket_kind` (`\"none\"`, `\"stamp\"`, `\"buy\"`), `ticket_index` (the ticket pack's, from 1; 0 none), `ticket_price`, `ticket_voice`, `ticket_by` (the plugin that changed it), `ticket_asked` (asked for at the cash desk already), `tag` (`people.set_ticket`'s), `age`, `model` (the `.hum` file), `voice` (its voice folder). `people.list` gives the same fields.",
+      "doc": "One person by id, as `people.list` gives them, and more: `stop_name` (the timetable's name of the stop they wait or waited at), `ticket` (the name of the ticket they ask for), `ticket_kind` (`\"none\"`, `\"stamp\"`, `\"buy\"`, `\"hand\"`), `ticket_index` (the ticket pack's, from 1; 0 none), `ticket_price`, `ticket_voice`, `ticket_by` (the plugin that changed it), `ticket_asked` (asked for at the cash desk already), `tag` (`people.set_ticket`'s), `age`, `model` (the `.hum` file), `voice` (its voice folder). `people.list` gives the same fields.",
       "params": [
         {
           "name": "id",
@@ -3187,7 +3187,7 @@
       "name": "people.set_ticket",
       "group": "people",
       "since": "0.3",
-      "doc": "Changes the ticket of a passenger boarding the player's bus (the `passenger_ticket` event names them): `{kind, ticket, name, price, payment, voice, tag}`, each optional. `kind` (`\"none\"`: a pass, `\"stamp\"`, `\"buy\"`) can only be changed until they are in the bus; `ticket` selects another ticket from the pack (starting at 1, with its name and price; a buyer must have a ticket: 0 is refused, and a buyer created without `ticket` gets the pack's ticket for their age). `name` and `price` set the ticket name and ticket price, respectively, until the passenger has asked at the cash desk. `payment` specifies the amount of money handed over for a ticket purchase; it does not change the ticket price and is raised to at least the ticket price. It must be set before the passenger reaches the cash desk. If the currency's denominations cannot represent the requested amount exactly, the amount handed over may be higher. `voice` selects a line from the passenger's voice folder to use instead of `Ticket_<n>_<k>` (`\"Zone_4\"` selects `Zone_4.wav`; if the file is missing, the usual line is used; `\"\"` also falls back to the usual line), until the passenger has asked at the cash desk. `tag` is plugin-defined text kept with the person (`people.get`), and can be set at any time. Returns `false` and the reason when nothing changed.",
+      "doc": "Changes the ticket of a passenger boarding the player's bus (the `passenger_ticket` event names them): `{kind, ticket, name, price, payment, voice, tag}`, each optional. `kind` (`\"none\"`: a pass, `\"stamp\"`, `\"buy\"`, K-OMSI `\"hand\"`: a paper ticket handed to the driver, printed on `paper`: `Texture/K-OMSI/paper_ticket/<paper>.png`) can only be changed until they are in the bus; `ticket` selects another ticket from the pack (starting at 1, with its name and price; a buyer must have a ticket: 0 is refused, and a buyer created without `ticket` gets the pack's ticket for their age). `name` and `price` set the ticket name and ticket price, respectively, until the passenger has asked at the cash desk. `payment` specifies the amount of money handed over for a ticket purchase; it does not change the ticket price and is raised to at least the ticket price. It must be set before the passenger reaches the cash desk. If the currency's denominations cannot represent the requested amount exactly, the amount handed over may be higher. `voice` selects a line from the passenger's voice folder to use instead of `Ticket_<n>_<k>` (`\"Zone_4\"` selects `Zone_4.wav`; if the file is missing, the usual line is used; `\"\"` also falls back to the usual line), until the passenger has asked at the cash desk. `tag` is plugin-defined text kept with the person (`people.get`), and can be set at any time. Returns `false` and the reason when nothing changed.",
       "params": [
         {
           "name": "id",
@@ -3234,6 +3234,22 @@
       "returns": "list of tables",
       "multi": false,
       "permission": null
+    },
+    {
+      "name": "people.take_ticket",
+      "group": "people",
+      "since": "0.2.22",
+      "doc": "K-OMSI: the driver takes the paper ticket a passenger of the player's bus laid on the cash desk (`kind = \"hand\"`, the `ticket_handed` event names them), as a click on it does: they go on to their place. False and the reason when no ticket of theirs lies there.",
+      "params": [
+        {
+          "name": "id",
+          "type": "integer",
+          "optional": false
+        }
+      ],
+      "returns": "true, or false and the reason",
+      "multi": true,
+      "permission": "traffic_write"
     },
     {
       "name": "people.waiting",
@@ -5490,6 +5506,32 @@
       ],
       "doc": "Somebody boarding the player's bus has decided about their ticket, on their way to the door - they wait in the doorway for this frame, so it can still change before they get in and ask for it at the cash desk: `{id, age, kind, ticket, name, price, stop, stop_name, destination, stop_number, destination_number}` - `kind` `\"none\"`, `\"stamp\"` or `\"buy\"`, `ticket` the ticket pack's (from 1; 0 none fits their age - the desk then asks for the pack's first) with the `name` and `price` they will ask for, `stop` the map object id they board at and `stop_name` its timetable name, `destination` the stop they ride to, and where both are in the duty's trip (from 1, `nil` where the trip does not have them). `people.set_ticket(id, ...)` changes it.",
       "since": "0.3"
+    },
+    {
+      "name": "ticket_handed",
+      "args": [
+        "id",
+        "ticket",
+        "price"
+      ],
+      "doc": "K-OMSI: a passenger of the player's bus laid their paper ticket on the cash desk (`kind = \"hand\"`) and waits for the driver to take it (a click on it, `people.take_ticket`): their id, the ticket's name and price.",
+      "since": "0.2.22"
+    },
+    {
+      "name": "ticket_taken",
+      "args": [
+        "id"
+      ],
+      "doc": "K-OMSI: the driver took a passenger's paper ticket off the desk; they go on to their place.",
+      "since": "0.2.22"
+    },
+    {
+      "name": "ticket_stamped",
+      "args": [
+        "id"
+      ],
+      "doc": "K-OMSI: a passenger of the player's bus stamped (scanned) a ticket at a validator of the bus: a card, or a paper ticket at a reader.",
+      "since": "0.2.22"
     },
     {
       "name": "stop_arrive",

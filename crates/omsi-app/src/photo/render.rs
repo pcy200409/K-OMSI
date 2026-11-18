@@ -216,6 +216,7 @@ impl crate::App {
                     riders.extend(p.driver.iter().flat_map(|d| d.instances()));
                     riders.extend(self.session.humans.iter().flat_map(|h| h.sim.money.iter()).flat_map(|m| m.placed.iter().map(|coin| coin.0)));
                     riders.extend(self.gfx.sim_view.people.ticket_blocks.iter().flat_map(|b| b.instances()));
+                    riders.extend(self.gfx.sim_view.people.paper.instances());
                     omsi_photo::motion_parts(&p.render.instances, &trailers, &riders).into_iter().filter_map(|i| scene.instances.get(i).map(|x| (i, x.origin, x.transform))).collect()
                 }
                 _ => Vec::new(),

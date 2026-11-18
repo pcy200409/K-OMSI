@@ -335,6 +335,10 @@ pub struct PeopleSim {
     pub ticket_points: u32,
     //sale events to play money sounds
     pub sale_events: Vec<(BusId, SaleEvent)>,
+    /// K-OMSI: the paper tickets handed over at the player's desk (`paper_ticket`): who has
+    /// laid theirs down and waits for the driver, whose the driver has taken, and what the
+    /// plugins hear of it.
+    pub paper: super::paper_ticket::PaperDesk,
     /// `PAX_Entry<i>_Req`: somebody at the kerb wants in through entry `i`.
     pub entry_req: Vec<bool>,
     /// `PAX_Exit<i>_Req`: somebody inside wants out through exit `i`.
