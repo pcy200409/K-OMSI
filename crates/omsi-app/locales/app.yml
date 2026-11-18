@@ -110720,6 +110720,9 @@ _version: 2
 "Signal":
   de: "Ampel"
   ko: "신호"
+"Traffic info":
+  de: "Verkehrsdaten"
+  ko: "교통정보"
 "Section":
   de: "Abschnitt"
   ko: "구간"
@@ -110729,6 +110732,3 @@ _version: 2
 "Signal and speed":
   de: "Ampel und Tempo"
   ko: "신호과속"
-"Traffic info":
-  de: "Verkehrsdaten"
-  ko: "교통정보"
