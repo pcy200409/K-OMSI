@@ -908,6 +908,9 @@ impl PluginIo for Io<'_> {
     fn map_objects_near(&self, x: f64, y: f64, r: f64) -> Vec<(i64, [f64; 4])> {
         self.app().map(|a| pduty::objects_near(a, x, y, r)).unwrap_or_default()
     }
+    fn map_object_types(&self, ids: &[i64]) -> Vec<(i64, String)> {
+        self.app().map(|a| pduty::object_types(a, ids)).unwrap_or_default()
+    }
     fn map_ground(&self, x: f64, y: f64) -> (Option<f64>, Option<f64>) {
         self.app().and_then(|a| a.world.as_ref()).map(|w| (w.ground_height(x, y), w.ground_terrain(x, y))).unwrap_or_default()
     }

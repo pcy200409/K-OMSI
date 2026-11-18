@@ -1049,6 +1049,7 @@ fn a_crossing_far_over_the_ground_is_draped_by_its_height_field() {
     let ot = world.object_type("deck.sco").expect("the deck loads");
     assert!(ot.deform.is_some());
     let staged = |z: f64| StagedTile {
+        object_files: Vec::new(),
         tx: 0,
         ty: 0,
         origin: DVec3::ZERO,
