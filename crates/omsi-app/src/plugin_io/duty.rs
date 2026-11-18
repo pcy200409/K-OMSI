@@ -190,6 +190,13 @@ pub(crate) fn objects_near(app: &App, x: f64, y: f64, r: f64) -> Vec<(i64, [f64;
     all.iter().filter(|(_, (p, _))| (p.x - x).hypot(p.y - y) <= r).map(|(id, (p, rot))| (*id, [p.x, p.y, p.z, rot[0]])).collect()
 }
 
+/// K-OMSI: the `.sco` files of map objects on the tiles read now.
+pub(crate) fn object_types(app: &App, ids: &[i64]) -> Vec<(i64, String)> {
+    let Some(w) = app.world.as_ref() else { return Vec::new() };
+    let want: std::collections::HashSet<i64> = ids.iter().copied().collect();
+    w.object_files(&|id| want.contains(&id)).into_iter().map(|(id, f)| (id, f.to_string())).collect()
+}
+
 pub(crate) fn entrypoints(app: &App) -> Vec<op::Entry> {
     let Some(w) = app.world.as_ref() else { return Vec::new() };
     w.global

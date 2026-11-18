@@ -60,6 +60,7 @@ fn strip(stations: &[(f32, f32)]) -> String {
 
 fn staged(path: PathBuf, ot: Arc<ObjectType>, pose: Pose) -> StagedTile {
     StagedTile {
+        object_files: Vec::new(),
         tx: 0,
         ty: 0,
         origin: DVec3::ZERO,
