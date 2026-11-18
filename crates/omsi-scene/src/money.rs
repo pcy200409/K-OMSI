@@ -328,6 +328,134 @@ impl TicketBlocks {
     }
 }
 
+/// K-OMSI: the paper tickets passengers laid on the cash desk (`TICKET_HAND`), until the
+/// driver takes them. Any bus with a money point: a card of paper made here, printed with
+/// the paper the plugin chose (`Texture/K-OMSI/paper_ticket/<paper>.png` of the game
+/// folder) or the default one (`paper_ticket.png` there, or in `Texture/K-OMSI`), plain
+/// white without any, so no bus or ticket pack has to bring a model.
+#[derive(Default)]
+pub struct PaperTickets {
+    made: Option<(MeshId, omsi_geometry::MeshData)>,
+    /// The material of each paper ("" the default), made the first time it is laid down.
+    papers: std::collections::HashMap<String, Vec<MaterialId>>,
+    /// (whose, instance, place on the point, the mesh it lies on)
+    desk: Vec<(u32, usize, Mat4, Option<String>)>,
+}
+
+/// The paper ticket's size (m): a Korean bus ticket.
+const PAPER_W: f32 = 0.075;
+const PAPER_L: f32 = 0.13;
+
+impl PaperTickets {
+    fn mesh(&mut self, renderer: &Renderer, scene: &mut Scene) -> MeshId {
+        if let Some((id, _)) = &self.made {
+            return *id;
+        }
+        let (w, l, z) = (PAPER_W / 2.0, PAPER_L / 2.0, 0.0015);
+        let data = omsi_geometry::MeshData {
+            positions: vec![Vec3::new(-w, -l, z), Vec3::new(w, -l, z), Vec3::new(w, l, z), Vec3::new(-w, l, z)],
+            normals: vec![Vec3::Z; 4],
+            uvs: vec![glam::Vec2::new(0.0, 1.0), glam::Vec2::new(1.0, 1.0), glam::Vec2::new(1.0, 0.0), glam::Vec2::new(0.0, 0.0)],
+            ranges: vec![(0, 6, 0)],
+            indices: vec![0, 1, 2, 0, 2, 3],
+            one_sided: false,
+        };
+        let id = renderer.add_mesh(scene, &data);
+        self.made = Some((id, data));
+        id
+    }
+
+    /// The material of `paper` (none or unknown: the default paper).
+    fn paper(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, paper: Option<&str>) -> Vec<MaterialId> {
+        let key = paper.map(str::trim).unwrap_or("").to_string();
+        if let Some(m) = self.papers.get(&key) {
+            return m.clone();
+        }
+        let own = omsi_cfg::resolve_path(&world.root, "Texture/K-OMSI/paper_ticket");
+        let komsi = omsi_cfg::resolve_path(&world.root, "Texture/K-OMSI");
+        let found = if key.is_empty() {
+            let dirs = [own.as_path(), komsi.as_path()];
+            omsi_texture::find_texture("paper_ticket.png", &dirs)
+        } else {
+            omsi_texture::find_texture(&format!("{key}.png"), &[own.as_path()])
+        };
+        let mats = match found {
+            Some(path) => {
+                let tex = world.textures.get_gpu_fast(&path).map(|(img, _)| renderer.add_texture_data(scene, &img));
+                vec![renderer.add_material(scene, tex, AlphaMode::Opaque, [1.0; 4], false)]
+            }
+            None if !key.is_empty() => {
+                log::warn!("paper tickets: no Texture/K-OMSI/paper_ticket/{key}.png, the default paper");
+                self.paper(world, renderer, scene, None)
+            }
+            None => {
+                log::info!("paper tickets: no Texture/K-OMSI/paper_ticket/paper_ticket.png, drawn plain");
+                vec![renderer.add_material(scene, None, AlphaMode::Opaque, [1.0; 4], false)]
+            }
+        };
+        self.papers.insert(key, mats.clone());
+        mats
+    }
+
+    /// `person`'s ticket, on `paper`, laid on the money point (`r`: the coins' random place
+    /// on it).
+    #[allow(clippy::too_many_arguments)]
+    pub fn place(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, person: u32, paper: Option<&str>, point: Vec3, var: [f32; 2], parent: Option<&str>, r: [f32; 3]) {
+        self.remove(person, renderer, scene);
+        let id = self.mesh(renderer, scene);
+        let mats = self.paper(world, renderer, scene, paper);
+        // (a little above the coins, one over the other: no flicker between them)
+        let local = Money::coin_place(point + Vec3::new(0.0, 0.0, 0.002 + self.desk.len() as f32 * 0.001), var, r);
+        let inst = renderer.add_instance(scene, id, DVec3::ZERO, Mat4::IDENTITY, mats);
+        self.desk.push((person, inst, local, parent.map(str::to_string)));
+    }
+
+    /// `person`'s ticket off the desk (the driver took it).
+    pub fn remove(&mut self, person: u32, renderer: &Renderer, scene: &mut Scene) {
+        self.desk.retain(|(p, inst, ..)| {
+            if *p == person {
+                renderer.remove_instance(scene, *inst);
+            }
+            *p != person
+        });
+    }
+
+    /// Every ticket out of the picture (the bus is gone or another is driven).
+    pub fn clear(&mut self, renderer: &Renderer, scene: &mut Scene) {
+        for (_, inst, ..) in self.desk.drain(..) {
+            renderer.remove_instance(scene, inst);
+        }
+    }
+
+    pub fn instances(&self) -> impl Iterator<Item = usize> + '_ {
+        self.desk.iter().map(|t| t.1)
+    }
+
+    /// The tickets where the bus is now.
+    pub fn sync(&self, renderer: &Renderer, scene: &mut Scene, bus: &VehicleInstance) {
+        let rot = bus.body_rotation();
+        for (_, inst, local, parent) in &self.desk {
+            let on = parent.as_deref().map(|n| mesh_of(bus, n)).unwrap_or(Mat4::IDENTITY);
+            renderer.set_transform(scene, *inst, bus.position, rot * on * *local);
+        }
+    }
+
+    /// Whose ticket a ray from `origin` along `dir` hits first.
+    pub fn hit(&self, origin: DVec3, dir: Vec3, bus: &VehicleInstance) -> Option<u32> {
+        let (_, data) = self.made.as_ref()?;
+        let o = (origin - bus.position).as_vec3();
+        let rot = bus.body_rotation();
+        self.desk
+            .iter()
+            .filter_map(|(p, _, local, parent)| {
+                let on = parent.as_deref().map(|n| mesh_of(bus, n)).unwrap_or(Mat4::IDENTITY);
+                omsi_geometry::ray_mesh(o, dir, data, &(rot * on * *local)).map(|t| (t, *p))
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|h| h.1)
+    }
+}
+
 fn take_of_type(desk: &mut Vec<DeskTicket>, ticket_type: usize) -> Option<usize> {
     let index = desk.iter().position(|ticket| ticket.ticket_type == ticket_type)?;
     Some(desk.remove(index).instance)

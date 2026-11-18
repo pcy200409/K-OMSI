@@ -163,6 +163,16 @@ impl App {
         }
         if let (Some(h), Some(p)) = (self.session.humans.as_mut(), self.player.as_ref()) {
             let hurt = steps::people_in_career(&mut self.session.career, h, p, self.settings.collision_pedestrians);
+            // K-OMSI: paper tickets handed over, taken, tickets stamped
+            for (id, ev) in h.take_ticket_events() {
+                let mut args = vec![omsi_plugin::InfoValue::Num(id as f64)];
+                if ev == omsi_sim::people::TicketEvent::Handed {
+                    let (name, price) = h.ticket_of(id);
+                    args.push(omsi_plugin::InfoValue::Text(name));
+                    args.push(crate::plugins::num_f32(price));
+                }
+                crate::plugins::queue_event(&mut self.integrations.plugin_events, ev.name(), args);
+            }
             for (name, price) in h.take_sales() {
                 let args = vec![omsi_plugin::InfoValue::Text(name.trim().to_string()), crate::plugins::num_f32(price)];
                 crate::plugins::queue_event(&mut self.integrations.plugin_events, "ticket_sold", args);

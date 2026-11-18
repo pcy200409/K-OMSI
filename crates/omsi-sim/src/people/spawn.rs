@@ -154,6 +154,7 @@ impl PeopleSim {
             dialog: None,
             duty: None,
             stamped: Vec::new(),
+            paper: Default::default(),
             pedestrians: 14,
             max_people: people_limit,
             stroll_timer: 0.0,
@@ -767,6 +768,7 @@ impl PeopleSim {
             self.request = None;
             self.change_due = None;
         }
+        self.paper_forget(id);
     }
 }
 

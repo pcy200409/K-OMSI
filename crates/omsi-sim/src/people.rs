@@ -77,6 +77,7 @@ pub mod pax_driver;
 pub mod runners;
 pub mod ticket_hook;
 pub mod pax_orders;
+pub mod paper_ticket;
 // What the renderer has to follow, the money on the desk and what the people need of the map.
 pub mod bodies;
 pub mod pose_facts;
@@ -92,6 +93,8 @@ mod ticket_hook_tests;
 mod bad_driving_tests;
 #[cfg(test)]
 mod desk_ticket_tests;
+#[cfg(test)]
+mod paper_ticket_tests;
 #[cfg(test)]
 mod destination_tests;
 
@@ -114,6 +117,7 @@ pub use pose_facts::PoseFacts;
 pub use pax::DutyTrip;
 pub use ticket_hook::{TicketAsk, TicketChange};
 pub use pax_orders::PaxOrder;
+pub use paper_ticket::{PaperDesk, TicketEvent};
 pub use world::World;
 
 /// The map's traffic keeps left (its stops are on the left): see the doors of `Cabin`.
