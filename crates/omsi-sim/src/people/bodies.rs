@@ -21,6 +21,11 @@ pub enum BodyOp {
     Renamed { from: u32, to: u32 },
     /// Coins on a point of the player's cabin (`Money::place`).
     Coins { coins: Vec<usize>, point: Vec3, var: [f32; 2], change: bool, parent: Option<String> },
+    /// K-OMSI: a passenger's paper ticket laid on the cash desk's money point (`person`: whose).
+    /// `paper`: the paper it is printed on (`Texture/K-OMSI/paper_ticket/<paper>.png`).
+    PaperTicket { person: u32, point: Vec3, var: [f32; 2], parent: Option<String>, paper: Option<String> },
+    /// K-OMSI: the driver took that paper ticket: off the desk.
+    PaperGone { person: u32 },
 }
 
 impl BodyOp {
