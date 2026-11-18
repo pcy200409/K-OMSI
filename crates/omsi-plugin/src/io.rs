@@ -823,6 +823,9 @@ pub enum TicketKind {
     Stamp,
     /// Buys one at the cash desk.
     Buy,
+    /// K-OMSI: hands a paper ticket to the driver at the cash desk, and boards only once
+    /// the driver has taken it.
+    Hand,
 }
 
 impl TicketKind {
@@ -831,22 +834,23 @@ impl TicketKind {
             TicketKind::None => "none",
             TicketKind::Stamp => "stamp",
             TicketKind::Buy => "buy",
+            TicketKind::Hand => "hand",
         }
     }
 
     pub fn parse(s: &str) -> Option<TicketKind> {
-        [TicketKind::None, TicketKind::Stamp, TicketKind::Buy]
+        [TicketKind::None, TicketKind::Stamp, TicketKind::Buy, TicketKind::Hand]
             .into_iter()
             .find(|k| k.as_str().eq_ignore_ascii_case(s.trim()))
     }
 
-    /// `AccessTicketRequest`'s `kind`: 0 nothing, 1 stamp, 2 buy.
+    /// `AccessTicketRequest`'s `kind`: 0 nothing, 1 stamp, 2 buy (K-OMSI: 3 hand).
     pub fn code(self) -> i32 {
         self as i32
     }
 
     pub fn from_code(c: i32) -> Option<TicketKind> {
-        [TicketKind::None, TicketKind::Stamp, TicketKind::Buy]
+        [TicketKind::None, TicketKind::Stamp, TicketKind::Buy, TicketKind::Hand]
             .get(usize::try_from(c).ok()?)
             .copied()
     }
@@ -902,6 +906,8 @@ pub enum PaxCommand {
     Move(String),
     /// Not get on after all: back to the stop.
     Cancel,
+    /// The driver takes the paper ticket the passenger laid on the desk.
+    TakeTicket,
     /// Somebody late runs for the player's bus standing at a stop (the id: nobody).
     Runner,
 }
@@ -921,6 +927,8 @@ pub struct TicketChange {
     pub tag: Option<String>,
     /// The amount of money the passenger pays (the plugin may change it, or leave it as the ticket's price).
     pub payment: Option<f32>,
+    /// K-OMSI: the paper a handed-over ticket is printed on (`Texture/K-OMSI/paper_ticket/<paper>.png`).
+    pub paper: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]

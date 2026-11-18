@@ -26,6 +26,11 @@ impl App {
             } else if self.player.is_none() {
                 // (the bus removed, the player on foot: its ticket blocks go with it)
                 crate::view_sync::people::drop_ticket_blocks(&mut self.gfx.sim_view.people, r, scene);
+                // (and the paper tickets lying on its desk)
+                self.gfx.sim_view.people.paper.clear(r, scene);
+                if let Some(h) = self.session.humans.as_mut() {
+                    h.sim.paper.on_desk.clear();
+                }
             }
             if let (Some(eye), Some(cam), Some(d)) = (self.session.on_foot.as_ref().and_then(|f| f.eye_aboard()), self.camera.as_mut(), moved) {
                 cam.position = eye + d;
