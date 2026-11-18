@@ -409,6 +409,11 @@ pub trait PluginIo {
     fn map_objects_near(&self, _x: f64, _y: f64, _r: f64) -> Vec<(i64, [f64; 4])> {
         Vec::new()
     }
+    /// K-OMSI: the files (`.sco`, as the map writes them) of these map objects, where their
+    /// tile is read.
+    fn map_object_types(&self, _ids: &[i64]) -> Vec<(i64, String)> {
+        Vec::new()
+    }
     /// The ground at x, y: the road or the terrain, and the terrain alone (loaded tiles).
     fn map_ground(&self, _x: f64, _y: f64) -> (Option<f64>, Option<f64>) {
         (None, None)
