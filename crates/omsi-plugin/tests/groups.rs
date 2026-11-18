@@ -119,6 +119,7 @@ fn the_map() {
         assert(omsi.map.stops()[1].name == "Zoo")
         local x, y, z, h = omsi.map.object(11); assert(h == 90 and omsi.map.object(5) == nil)
         local near = omsi.map.objects_near(0, 0, 50); assert(#near == 2 and near[1].id == 11 and near[2].distance == 10)
+        assert(near[1].type:find("HiPass.sco", 1, true) and near[2].type == nil)
         assert(omsi.map.ground(1, 1) == 2.5 and omsi.map.terrain(1, 1) == 2)
         assert(omsi.map.lane(0, 0).speed_limit == 50 and omsi.map.speed_limit() == 50)
         assert(omsi.map.entrypoints()[1].name == "Depot" and omsi.map.entrypoints()[1].index == 1)

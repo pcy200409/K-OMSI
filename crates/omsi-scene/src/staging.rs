@@ -62,6 +62,13 @@ pub struct DynamicTextureGroup {
 }
 
 impl World {
+    /// K-OMSI: the files (`.sco`, as the map writes them) of the `[object]`s on the tiles
+    /// read now that `want` asks for, by id.
+    pub fn object_files(&self, want: &dyn Fn(i64) -> bool) -> Vec<(i64, Arc<str>)> {
+        let staged = self.staged.lock();
+        staged.values().flat_map(|t| t.object_files.iter()).filter(|(id, _)| want(*id)).cloned().collect()
+    }
+
     /// The map's indexed parking lists: index 0 is `parklist_p.txt`, and an
     /// editor caption of 1 selects `parklist_p_1.txt` for that parking space. The newest
     /// active chrono scenario that has the file gives it, else the map: the parked cars
@@ -938,6 +945,9 @@ pub struct StagedTile {
     /// speed limit), its overhead wires and tunnels - world points every few metres.
     pub(super) sound_lines: Vec<(omsi_geometry::LineKind, f32, Vec<DVec3>)>,
     pub(super) objects: Vec<StagedObject>,
+    /// K-OMSI: every `[object]` record of the tile with its file as the map writes it
+    /// (`World::object_files`), also those this installation lacks or does not show.
+    pub(super) object_files: Vec<(i64, Arc<str>)>,
     /// The spline attachment rows `[attachObj]` records can hang on: (row id, where its first
     /// object stands, the row's own type - a car park row's, not its car's).
     pub(super) anchors: Vec<(i64, Pose, Arc<ObjectType>)>,
