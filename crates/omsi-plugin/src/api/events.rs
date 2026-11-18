@@ -244,6 +244,9 @@ pub static EVENTS: &[EventDef] = &[
         TICKETS,
         "Somebody boarding the player's bus has decided about their ticket, on their way to the door - they wait in the doorway for this frame, so it can still change before they get in and ask for it at the cash desk: `{id, age, kind, ticket, name, price, stop, stop_name, destination, stop_number, destination_number}` - `kind` `\"none\"`, `\"stamp\"` or `\"buy\"`, `ticket` the ticket pack's (from 1; 0 none fits their age - the desk then asks for the pack's first) with the `name` and `price` they will ask for, `stop` the map object id they board at and `stop_name` its timetable name, `destination` the stop they ride to, and where both are in the duty's trip (from 1, `nil` where the trip does not have them). `people.set_ticket(id, ...)` changes it.",
     ),
+    ev("ticket_handed", &["id", "ticket", "price"], NEW, "K-OMSI: a passenger of the player's bus laid their paper ticket on the cash desk (`kind = \"hand\"`) and waits for the driver to take it (a click on it, `people.take_ticket`): their id, the ticket's name and price."),
+    ev("ticket_taken", &["id"], NEW, "K-OMSI: the driver took a passenger's paper ticket off the desk; they go on to their place."),
+    ev("ticket_stamped", &["id"], NEW, "K-OMSI: a passenger of the player's bus stamped (scanned) a ticket at a validator of the bus: a card, or a paper ticket at a reader."),
     ev(
         "stop_arrive",
         &["name", "id", "number", "delay"],

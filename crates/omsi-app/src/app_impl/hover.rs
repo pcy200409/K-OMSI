@@ -221,6 +221,7 @@ impl App {
             .ticket_blocks
             .as_ref()
             .is_some_and(|b| b.hit(o, d, &p.vehicle).is_some())
+            || self.gfx.sim_view.people.paper.hit(o, d, &p.vehicle).is_some()
             || h.sim
                 .money
                 .as_ref()

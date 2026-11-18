@@ -175,12 +175,7 @@ impl PeopleSim {
                         p.stamper = bn.cabin.nearest_stamper(local);
                         p.pt_target = p.stamper.and_then(|k| bn.cabin.stampers[k].0);
                     }
-                    TICKET_BUY => {
-                        p.pt_target = bn.cabin.in_group(
-                            vec![bn.cabin.sale.and_then(|s| s.0)],
-                            bn.cabin.group_at(p.pt),
-                        )[0]
-                    }
+                    TICKET_BUY | TICKET_HAND => p.pt_target = bn.cabin.in_group(vec![bn.cabin.sale.and_then(|s| s.0)], bn.cabin.group_at(p.pt))[0],
                     _ => self.route_to_place(i, bn),
                 }
                 let p = self.pax_mut(i).unwrap();
@@ -379,7 +374,8 @@ impl PeopleSim {
         let open: Vec<bool> = (0..list.len())
             .map(|k| bn.entry_open.get(k).copied().unwrap_or(false))
             .collect();
-        let is_buying = p.ticket == TICKET_BUY;
+        // (K-OMSI: a passenger handing a paper ticket goes to the cash desk as a buyer does)
+        let is_buying = matches!(p.ticket, TICKET_BUY | TICKET_HAND);
         // A buyer skips the `{noticketsale}` doors only as `omsi_nearest` does (sub_625b98
         // asks sub_72506c to avoid them for a passenger in state 3): with every door that sells shut and no
         // button, Omsi.exe searches again without it and the buyer walks to an open door
@@ -876,6 +872,7 @@ impl PeopleSim {
             if p.sub == 1 && p.timer < 0.5 {
                 // the validator stamps
                 self.stamped.push((bn.id, p.stamper));
+                self.note_stamped(i, bn.id);
                 let pp = self.pax_mut(i).unwrap();
                 pp.sub = 2;
                 pp.reach = false;
@@ -891,6 +888,8 @@ impl PeopleSim {
             }
         } else if p.ticket == TICKET_BUY {
             self.desk_sale(i, dt, bn, player_bus, taken_ticket);
+        } else if p.ticket == TICKET_HAND {
+            self.desk_hand(i, dt, bn);
         }
     }
 
