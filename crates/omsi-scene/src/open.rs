@@ -612,7 +612,7 @@ pub fn navigation_map_of(root: &Path, tiles: &[(i32, i32, PathBuf)], chrono_dirs
         .clone()
     };
     #[allow(clippy::type_complexity)]
-    let parts: Vec<(Vec<Lane>, Vec<(i64, DVec3)>, Vec<(DVec3, f64, String)>, Vec<(Vec<DVec3>, f32)>, Vec<(DVec3, String)>, Vec<SpeedCamera>, Vec<LampObject>, Vec<(i64, Option<i64>, Option<DVec3>)>)> = tiles
+    let parts: Vec<(Vec<Lane>, Vec<(i64, DVec3)>, Vec<(DVec3, f64, String)>, Vec<(Vec<DVec3>, f32)>, Vec<(DVec3, String)>, Vec<SpeedCamera>, Vec<SpeedSign>, Vec<LampObject>, Vec<(i64, Option<i64>, Option<DVec3>)>)> = tiles
         .par_iter()
         .map(|(tx, ty, path)| {
             let (tx, ty) = (*tx, *ty);
@@ -622,11 +622,12 @@ pub fn navigation_map_of(root: &Path, tiles: &[(i32, i32, PathBuf)], chrono_dirs
             let mut roads = Vec::new();
             let mut names = Vec::new();
             let mut cameras = Vec::new();
+            let mut speed_signs = Vec::new();
             let mut lamps = Vec::new();
             // what the attached parts hang on: (id, the object it hangs on, or where it stands)
             let mut holders = Vec::new();
             let Some(tile) = omsi_world::map_index::read_tile(path, chrono_dirs) else {
-                return (lanes, positions, signs, roads, names, cameras, lamps, holders);
+                return (lanes, positions, signs, roads, names, cameras, speed_signs, lamps, holders);
             };
             let origin2 = DVec2::new(tx as f64 * tile_size(), ty as f64 * tile_size());
             let terrain = Terrain::load(&tile_companion(&path, ".terrain")).unwrap_or_else(|_| Terrain::flat());
@@ -671,8 +672,12 @@ pub fn navigation_map_of(root: &Path, tiles: &[(i32, i32, PathBuf)], chrono_dirs
                         signs.push((DVec3::new(x, y, o.pos[2] + ground()), o.rot[0], name));
                     }
                 }
-                if let Some(kind) = camera_kind(&o.file) {
+                // a camera, the plate saying what it watches, or a speed limit sign
+                let pictures = sign_pictures(&o.file, &o.extra, &sco_of);
+                if let Some(kind) = camera_kind(&o.file).or_else(|| plate_kind(&o.file, &pictures)) {
                     cameras.push(SpeedCamera { position: DVec3::new(x, y, o.pos[2] + ground()), heading: o.rot[0], kind, limit: camera_limit(&o.file, &o.extra) });
+                } else if let Some(limit) = posted_limit(&o.file, &pictures) {
+                    speed_signs.push(SpeedSign { position: DVec3::new(x, y, o.pos[2] + ground()), heading: o.rot[0], limit });
                 }
                 let Some(sco) = sco_of(&o.file) else {
                     positions.push((o.id, DVec3::new(x, y, o.pos[2] + ground())));
@@ -734,9 +739,11 @@ pub fn navigation_map_of(root: &Path, tiles: &[(i32, i32, PathBuf)], chrono_dirs
                         holders.push((a.id, None, Some(ro.pose.pos)));
                     }
                 }
-                let kind = camera_kind(&a.file);
+                let pictures = sign_pictures(&a.file, &a.strings, &sco_of);
+                let kind = camera_kind(&a.file).or_else(|| plate_kind(&a.file, &pictures));
+                let posted = kind.is_none().then(|| posted_limit(&a.file, &pictures)).flatten();
                 let light = a.var_parent.zip(a.strings.first().and_then(|t| t.trim().parse::<usize>().ok()));
-                if kind.is_none() && light.is_none() {
+                if kind.is_none() && posted.is_none() && light.is_none() {
                     continue;
                 }
                 let lenses = match light {
@@ -748,12 +755,15 @@ pub fn navigation_map_of(root: &Path, tiles: &[(i32, i32, PathBuf)], chrono_dirs
                     if let Some(kind) = kind {
                         cameras.push(SpeedCamera { position: pos, heading, kind, limit: camera_limit(&a.file, &a.strings) });
                     }
+                    if let Some(limit) = posted {
+                        speed_signs.push(SpeedSign { position: pos, heading, limit });
+                    }
                     if let (Some((crossing, light)), false) = (light, lenses.is_empty()) {
                         lamps.push(LampObject { id: a.id, parent: None, crossing, light, position: Some((pos, heading)), place: Some(pos), lenses: lenses.clone() });
                     }
                 }
             }
-            (lanes, positions, signs, roads, names, cameras, lamps, holders)
+            (lanes, positions, signs, roads, names, cameras, speed_signs, lamps, holders)
         })
         .collect();
     let mut lanes = Vec::new();
@@ -762,15 +772,17 @@ pub fn navigation_map_of(root: &Path, tiles: &[(i32, i32, PathBuf)], chrono_dirs
     let mut roads = Vec::new();
     let mut names = Vec::new();
     let mut cameras = Vec::new();
+    let mut speed_signs = Vec::new();
     let mut lamps = Vec::new();
     let mut holders = HashMap::new();
-    for (l, p, s, r, n, c, h, k) in parts {
+    for (l, p, s, r, n, c, v, h, k) in parts {
         lanes.extend(l);
         positions.extend(p);
         signs.extend(s);
         roads.extend(r);
         names.extend(n);
         cameras.extend(c);
+        speed_signs.extend(v);
         lamps.extend(h);
         holders.extend(k.into_iter().map(|(id, parent, at)| (id, (parent, at))));
     }
@@ -796,18 +808,19 @@ pub fn navigation_map_of(root: &Path, tiles: &[(i32, i32, PathBuf)], chrono_dirs
     let signal_heads = signal_heads(lamps);
     log::info!("navigation map: {} roads without a path for cars", roads.len());
     log::info!(
-        "navigation map: {} tiles, {} lanes, {} objects placed, {} street name signs, {} enforcement cameras, {} signal heads, {} object types, {} spline types, {:.1} s",
+        "navigation map: {} tiles, {} lanes, {} objects placed, {} street name signs, {} enforcement cameras, {} speed limit signs, {} signal heads, {} object types, {} spline types, {:.1} s",
         tiles.len(),
         lanes.len(),
         positions.len(),
         signs.len(),
         cameras.len(),
+        speed_signs.len(),
         signal_heads.len(),
         scos.lock().len(),
         slis.lock().len(),
         t0.elapsed().as_secs_f64()
     );
-    NavigationMap { lanes, road_surfaces: roads, places: positions, signs, names, cameras, signal_heads }
+    NavigationMap { lanes, road_surfaces: roads, places: positions, signs, names, cameras, speed_signs, signal_heads }
 }
 
 /// The whole map for the navigator (see [`World::navigation_map`]).
@@ -824,6 +837,8 @@ pub struct NavigationMap {
     pub names: Vec<(DVec3, String)>,
     /// The speed and red-light cameras placed on the map (the navigator's warnings).
     pub cameras: Vec<SpeedCamera>,
+    /// The speed limit signs placed on the map: a camera's speed is the one posted by it.
+    pub speed_signs: Vec<SpeedSign>,
     /// The traffic lights' heads: their lenses in order and the crossing light of each
     /// (the navigator's signal card draws a head as the bus sees it).
     pub signal_heads: Vec<SignalHead>,
@@ -1040,6 +1055,10 @@ pub enum CameraKind {
     SectionStart,
     SectionEnd,
     SectionPoint,
+    /// A camera that enforces nothing: one standing alone, without a plate or a speed sign
+    /// by it and away from a stop line, gathers the traffic's speeds (Korea's 교통정보 수집
+    /// 장비). The navigator decides (`Unspecified` on the map).
+    Info,
 }
 
 /// A camera of the map: where it stands, which way it faces (degrees), what it watches and
@@ -1082,6 +1101,78 @@ pub fn camera_kind(file: &str) -> Option<CameraKind> {
     }
     let speed = ["speedcctv", "speedcam", "blitzer", "fotoradar", "radarcam", "radarfalle"].iter().any(|k| name.contains(k));
     speed.then_some(CameraKind::Speed)
+}
+
+/// A speed limit sign of the map: where it stands, which way it faces and the speed it posts.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SpeedSign {
+    pub position: DVec3,
+    pub heading: f64,
+    pub limit: f32,
+}
+
+/// A file's name, lower case, without folder and extension.
+fn file_stem(t: &str) -> String {
+    let t = t.trim().rsplit(['/', '\\']).next().unwrap_or("").to_ascii_lowercase();
+    t.rsplit_once('.').map_or(t.clone(), |(a, _)| a.to_string())
+}
+
+/// The pictures a sign object shows (see `file_stem`): the ones its texts name (a
+/// `[matl_freetex]` sign takes its picture from the map: Korea's `Traffic Rule` plates,
+/// `red\speed60.bmp`), else - for an object that looks like a sign - its free pictures' own
+/// (`Speed50.bmp`, the plate's when the map names none).
+fn sign_pictures(file: &str, texts: &[String], sco_of: &dyn Fn(&str) -> Option<Arc<SceneryObject>>) -> Vec<String> {
+    let picture = |t: &str| {
+        let t = t.trim().to_ascii_lowercase();
+        [".bmp", ".png", ".jpg", ".jpeg", ".dds", ".tga"].iter().any(|e| t.ends_with(e))
+    };
+    let named: Vec<String> = texts.iter().take(4).filter(|t| picture(t)).map(|t| file_stem(t)).collect();
+    if !named.is_empty() {
+        return named;
+    }
+    let f = file.to_ascii_lowercase();
+    if !["sign", "singal", "schild", "zeichen", "speed", "rule"].iter().any(|k| f.contains(k)) {
+        return Vec::new();
+    }
+    let Some(sco) = sco_of(file) else { return Vec::new() };
+    sco.model.meshes.iter().flat_map(|m| m.materials.iter()).filter(|t| t.freetex.is_some()).map(|t| file_stem(&t.texture)).collect()
+}
+
+/// What a plate put by a camera says it watches, by its picture: Korea's `Traffic Rule`
+/// plates (`speedcam` "과속 단속 장비", `speedcam_tp2` "신호.과속 단속장비", `speedcam2`
+/// "구간 단속 시점", `speedcam3` "구간 단속 종점"; the plate's own picture, `signal_long`,
+/// "과속 단속 장비"). Not the `speedcam_alert` sign ("단속중") that announces cameras.
+pub fn plate_kind(file: &str, pictures: &[String]) -> Option<CameraKind> {
+    pictures.iter().find_map(|p| match p.as_str() {
+        "speedcam" => Some(CameraKind::Speed),
+        "speedcam_tp2" => Some(CameraKind::SignalSpeed),
+        "speedcam2" => Some(CameraKind::SectionStart),
+        "speedcam3" => Some(CameraKind::SectionEnd),
+        "signal_long" if file.to_ascii_lowercase().contains("kor_signalset") => Some(CameraKind::Speed),
+        _ => None,
+    })
+}
+
+/// The speed a speed limit sign posts, by its picture (`speed60`, `Speed120(han)`) or its
+/// file's name (`VZ_OhneMast_HGeschw_50`); not a minimum speed (`MinSpeed50`).
+pub fn posted_limit(file: &str, pictures: &[String]) -> Option<f32> {
+    let name = file_stem(file);
+    pictures.iter().map(String::as_str).chain(std::iter::once(name.as_str())).find_map(|p| {
+        let p: String = p.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+        if p.contains("min") {
+            return None;
+        }
+        let rest = if let Some(r) = p.strip_prefix("speed") {
+            r.strip_prefix("limit").unwrap_or(r)
+        } else if let Some(i) = p.find("geschw") {
+            p[i + 6..].trim_start_matches(|c: char| c.is_ascii_alphabetic())
+        } else {
+            return None;
+        };
+        // (the number right after: `speed60`, not `speedcam_tp2`)
+        let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+        digits.parse::<u32>().ok().filter(|v| (10..=130).contains(v) && v % 10 == 0).map(|v| v as f32)
+    })
 }
 
 /// The speed a camera's object names: a number of 20 to 130 in its file name (`..._60kmh`)

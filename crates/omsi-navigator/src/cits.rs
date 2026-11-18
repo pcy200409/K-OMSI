@@ -12,7 +12,7 @@
 //! Worked out a few times a second; drawn as small badges beside the speed and its limit.
 
 use super::*;
-use omsi_scene::{CameraKind, LensColor, LensShape, SignalHead, SpeedCamera};
+use omsi_scene::{CameraKind, LensColor, LensShape, SignalHead, SpeedCamera, SpeedSign};
 use omsi_sim::traffic::{Aspect, TrafficLightController};
 
 /// How often the warnings are worked out (s).
@@ -299,6 +299,8 @@ struct Approach {
     camera: usize,
     dist: f64,
     limit: Option<f32>,
+    /// A speed limit sign stands by it (its speed is `limit`, unless the camera says one).
+    posted: bool,
 }
 
 /// An average speed check being driven through.
@@ -314,6 +316,10 @@ struct Section {
 #[derive(Default)]
 pub(crate) struct Cits {
     pub cameras: std::sync::Arc<Vec<SpeedCamera>>,
+    /// The map's speed limit signs: a camera holds to the one posted by it.
+    pub speed_signs: std::sync::Arc<Vec<SpeedSign>>,
+    /// The speed posted by the camera approached (the sign may be passed before it is).
+    posted: Option<(usize, f32)>,
     /// The map's traffic light heads by their crossing object.
     pub heads: std::sync::Arc<HashMap<i64, Vec<SignalHead>>>,
     t: f32,
@@ -347,16 +353,19 @@ pub(crate) struct LightView {
     pub lenses: Vec<(LensColor, LensShape, bool)>,
 }
 
-/// The camera ahead: the speed sign grows and gets a red tab with the distance.
+/// The camera ahead: the speed sign grows and gets a red tab with the distance (a blue one
+/// for a camera that only gathers the traffic).
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct CameraView {
     pub dist: f64,
     pub limit: Option<f32>,
-    /// What it watches (`Speeding`, `Signal`, `Signal and speed`, `Section`), on the tab.
+    /// What it watches (`Speeding`, `Signal`, `Signal and speed`, `Section`, `Traffic info`), on the tab.
     pub tag: Option<&'static str>,
     pub over: bool,
     /// Flashing: over its speed, or a moment at a new stage (1 km, 500 m, 300 m).
     pub flash: bool,
+    /// It only gathers the traffic (`Traffic info`): a blue tab, never flashing.
+    pub info: bool,
 }
 
 /// An average speed check being driven through: its average so far against its limit.
@@ -528,6 +537,14 @@ impl Navigator {
             }
             // the cameras
             let cams = self.cits.cameras.clone();
+            // (the speed limit signs on the way: a camera's speed is the one posted by it)
+            let posted: Vec<(f64, f32)> = self
+                .cits
+                .speed_signs
+                .iter()
+                .filter(|s| (s.position - f.bus).truncate().length() < CAMERA_REACH + 60.0)
+                .filter_map(|s| on_path(net, &lanes_by, s.position).map(|(d, _)| (d, s.limit)))
+                .collect();
             let near = cams
                 .iter()
                 .enumerate()
@@ -536,13 +553,21 @@ impl Navigator {
                     let (d, l) = on_path(net, &lanes_by, c.position)?;
                     (d > 0.0 && d <= CAMERA_REACH).then(|| {
                         let lim = c.limit.or_else(|| Some(net.lanes[l].speed_limit_kmh).filter(|v| *v > 1.0 && *v < 200.0));
-                        Approach { camera: i, dist: d, limit: lim }
+                        Approach { camera: i, dist: d, limit: lim, posted: false }
                     })
                 })
                 .collect::<Vec<_>>();
             // (a camera, its sign and its mast stand together: the one that says most of them)
             let first = near.iter().map(|a| a.dist).fold(f64::INFINITY, f64::min);
-            let near = near.into_iter().filter(|a| a.dist < first + 20.0).max_by_key(|a| (kind_rank(cams[a.camera].kind), std::cmp::Reverse((a.dist * 10.0) as i64)));
+            let group: Vec<Approach> = near.into_iter().filter(|a| a.dist < first + 20.0).collect();
+            let mut near = group.iter().copied().max_by_key(|a| (kind_rank(cams[a.camera].kind), std::cmp::Reverse((a.dist * 10.0) as i64)));
+            // its speed: what one of them says, else the sign posted by it, else the street's
+            if let Some(n) = near.as_mut() {
+                let sign = posted_by(&posted, n.dist).or(self.cits.posted.filter(|p| p.0 == n.camera).map(|p| p.1));
+                self.cits.posted = sign.map(|s| (n.camera, s));
+                n.posted = sign.is_some();
+                n.limit = group.iter().find_map(|a| cams[a.camera].limit).or(sign).or(n.limit);
+            }
             // passed the one approached: an average speed check begins or ends there
             if let Some(prev) = self.cits.approach.filter(|p| p.dist < 40.0 && near.is_none_or(|n| n.camera != p.camera)) {
                 match cams.get(prev.camera).map_or(CameraKind::Speed, |c| c.kind) {
@@ -559,14 +584,17 @@ impl Navigator {
             }
             self.cits.stage = stage;
             if let Some(n) = near {
-                let over = n.limit.is_some_and(|l| kmh > l + 0.5);
-                let tag = Some(match camera_watches(cams[n.camera].kind, n.dist, &stop_lines) {
+                let watches = camera_watches(cams[n.camera].kind, n.dist, &stop_lines, n.posted);
+                let info = watches == CameraKind::Info;
+                let over = !info && n.limit.is_some_and(|l| kmh > l + 0.5);
+                let tag = Some(match watches {
                     CameraKind::Speed | CameraKind::Unspecified => "Speeding",
                     CameraKind::Signal => "Signal",
                     CameraKind::SignalSpeed => "Signal and speed",
+                    CameraKind::Info => "Traffic info",
                     _ => "Section",
                 });
-                camera_view = Some(CameraView { dist: n.dist, limit: n.limit, tag, over, flash: over || self.cits.pulse > 0.0 });
+                camera_view = Some(CameraView { dist: n.dist, limit: if info { None } else { n.limit }, tag, over, flash: over || (!info && self.cits.pulse > 0.0), info });
             }
         }
         // inside an average speed check: the average so far
@@ -590,20 +618,29 @@ impl Navigator {
 /// What a camera `dist` m ahead watches: what its object or plate says, and a camera that
 /// does not say watches the red light where it stands by a stop line of the way (`stop_lines`,
 /// m ahead: from 30 m before it, a camera on the near side, to 60 m past it, on the mast
-/// across the junction), else the speed.
-pub(crate) fn camera_watches(kind: CameraKind, dist: f64, stop_lines: &[f64]) -> CameraKind {
+/// across the junction), else the speed where a speed limit sign is `posted` by it; one alone
+/// only gathers the traffic (Korea's 교통정보 수집 장비).
+pub(crate) fn camera_watches(kind: CameraKind, dist: f64, stop_lines: &[f64], posted: bool) -> CameraKind {
     match kind {
         CameraKind::Unspecified if stop_lines.iter().any(|&s| (-30.0..=60.0).contains(&(dist - s))) => CameraKind::Signal,
-        CameraKind::Unspecified => CameraKind::Speed,
+        CameraKind::Unspecified if posted => CameraKind::Speed,
+        CameraKind::Unspecified => CameraKind::Info,
         k => k,
     }
+}
+
+/// The speed posted by a camera `dist` m ahead: of the speed limit signs on the way (`signs`,
+/// m ahead and their speed), the one nearest it from 150 m before it to 20 m past it (Korea's
+/// stand on the camera's pole, under its plate).
+pub(crate) fn posted_by(signs: &[(f64, f32)], dist: f64) -> Option<f32> {
+    signs.iter().filter(|s| (dist - 150.0..=dist + 20.0).contains(&s.0)).min_by(|a, b| (a.0 - dist).abs().total_cmp(&(b.0 - dist).abs())).map(|s| s.1)
 }
 
 /// Which of a camera, its plate and its mast standing together says most: a plate over a
 /// camera box that does not say.
 fn kind_rank(k: CameraKind) -> u8 {
     match k {
-        CameraKind::Unspecified => 0,
+        CameraKind::Unspecified | CameraKind::Info => 0,
         CameraKind::Speed => 1,
         CameraKind::Signal => 2,
         CameraKind::SignalSpeed => 3,

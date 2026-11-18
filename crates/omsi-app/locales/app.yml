@@ -110729,3 +110729,6 @@ _version: 2
 "Signal and speed":
   de: "Ampel und Tempo"
   ko: "신호과속"
+"Traffic info":
+  de: "Verkehrsdaten"
+  ko: "교통정보"
