@@ -80,6 +80,8 @@ pub fn shut_door_wait(previous: Option<f64>, now: f64, at_shut_door: bool) -> (O
 pub const TICKET_NONE: u8 = 0;
 pub const TICKET_STAMP: u8 = 2;
 pub const TICKET_BUY: u8 = 3;
+/// K-OMSI: a paper ticket handed to the driver at the cash desk (`paper_ticket`).
+pub const TICKET_HAND: u8 = 4;
 
 /// One passenger's state: the fields of the original's human the tasks use.
 #[derive(Debug, Clone)]
