@@ -111684,6 +111684,9 @@ _version: 2
 "Signal":
   de: "Ampel"
   ko: "신호"
+"Traffic info":
+  de: "Verkehrsdaten"
+  ko: "교통정보"
 "Section":
   de: "Abschnitt"
   ko: "구간"
