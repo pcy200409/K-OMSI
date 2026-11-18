@@ -727,9 +727,9 @@ impl Navigator {
                 .as_ref()
                 .map(|c| {
                     let d = units.distance(c.dist);
-                    (c.tag.map(|t| format!("{} {d}", omsi_ui::tr(t))).unwrap_or(d), c.flash)
+                    (c.tag.map(|t| format!("{} {d}", omsi_ui::tr(t))).unwrap_or(d), c.flash, c.info)
                 })
-                .or_else(|| avg.map(|a| (format!("{} {:.0}", omsi_ui::tr("Average"), units.speed(a.kmh).0), a.over)));
+                .or_else(|| avg.map(|a| (format!("{} {:.0}", omsi_ui::tr("Average"), units.speed(a.kmh).0), a.over, false)));
             let lc = Vec2::new(c.x + r * 2.0 + 2.0 * s, c.y);
             let lr = 15.0 * s;
             let red = Color::rgba(214, 38, 38, 1.0);
@@ -745,11 +745,12 @@ impl Navigator {
             let t = format!("{:.0}", units.speed_limit(v));
             let px = if t.len() > 2 { 9.5 } else { 12.0 } * s;
             ui.text(&mut self.atlas, &self.fonts, &t, px, Weight::Black, Vec2::new(lc.x, lc.y + self.fonts.cap_height(px, Weight::Black) * 0.5), Align::Center, if lit { Color::WHITE } else { Color::rgba(15, 15, 15, 1.0) });
-            if let Some((text, _)) = tab {
+            if let Some((text, _, info)) = tab {
                 let px = 9.5 * s;
                 let w = self.fonts.width(&text, px, Weight::Bold) + 10.0 * s;
                 let b = Rect::new(lc.x - w * 0.5, lc.y + lr - 3.0 * s, w, 13.0 * s);
-                ui.rounded(b, 3.0 * s, red);
+                // (a camera that only gathers the traffic: blue)
+                ui.rounded(b, 3.0 * s, if info { Color::rgba(30, 110, 200, 1.0) } else { red });
                 ui.text_in(&mut self.atlas, &self.fonts, &text, px, Weight::Bold, b, Align::Center, Color::WHITE);
             }
         }

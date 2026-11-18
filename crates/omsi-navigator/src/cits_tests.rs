@@ -221,23 +221,35 @@ fn the_way_at_a_junction_is_the_one_the_bus_takes() {
 }
 
 /// A camera alone, with no plate by it, watches the red light where it stands by the way's
-/// stop line, else the speed; a plate says for itself.
+/// stop line, else the speed where a speed limit sign stands by it, else nothing (it gathers
+/// the traffic); a plate says for itself.
 #[test]
 fn a_camera_alone_watches_the_light_it_stands_by() {
-    assert_eq!(camera_watches(CameraKind::Unspecified, 300.0, &[260.0]), CameraKind::Signal);
-    assert_eq!(camera_watches(CameraKind::Unspecified, 300.0, &[320.0]), CameraKind::Signal);
-    assert_eq!(camera_watches(CameraKind::Unspecified, 300.0, &[120.0, 600.0]), CameraKind::Speed);
-    assert_eq!(camera_watches(CameraKind::Unspecified, 300.0, &[]), CameraKind::Speed);
-    assert_eq!(camera_watches(CameraKind::SignalSpeed, 300.0, &[]), CameraKind::SignalSpeed);
-    assert_eq!(camera_watches(CameraKind::Speed, 300.0, &[300.0]), CameraKind::Speed);
+    assert_eq!(camera_watches(CameraKind::Unspecified, 300.0, &[260.0], false), CameraKind::Signal);
+    assert_eq!(camera_watches(CameraKind::Unspecified, 300.0, &[320.0], true), CameraKind::Signal);
+    assert_eq!(camera_watches(CameraKind::Unspecified, 300.0, &[120.0, 600.0], true), CameraKind::Speed);
+    assert_eq!(camera_watches(CameraKind::Unspecified, 300.0, &[120.0, 600.0], false), CameraKind::Info);
+    assert_eq!(camera_watches(CameraKind::Unspecified, 300.0, &[], false), CameraKind::Info);
+    assert_eq!(camera_watches(CameraKind::SignalSpeed, 300.0, &[], false), CameraKind::SignalSpeed);
+    assert_eq!(camera_watches(CameraKind::Speed, 300.0, &[300.0], false), CameraKind::Speed);
     // the plate by a camera box says what it watches
     let mut n = nav(vec![cam(6.0, 400.0, CameraKind::Unspecified), cam(6.5, 401.0, CameraKind::SignalSpeed)]);
     n.update_cits(&at(0.0, 45.0));
     assert_eq!(n.cits.camera.as_ref().and_then(|c| c.tag), Some("Signal and speed"));
-    // alone (no traffic: no stop line known), the speed
+    // alone (no traffic: no stop line known) and no sign by it: it gathers the traffic,
+    // never flashing, whatever the speed
     let mut n = nav(vec![cam(6.0, 400.0, CameraKind::Unspecified)]);
-    n.update_cits(&at(0.0, 45.0));
-    assert_eq!(n.cits.camera.as_ref().and_then(|c| c.tag), Some("Speeding"));
+    n.update_cits(&at(0.0, 75.0));
+    let c = n.cits.camera.clone().expect("the camera ahead");
+    assert_eq!((c.tag, c.info, c.over, c.flash, c.limit), (Some("Traffic info"), true, false, false, None));
+    // with a speed limit sign on its pole: the speed, and the sign's
+    let mut n = nav(vec![cam(6.0, 400.0, CameraKind::Unspecified)]);
+    n.cits.speed_signs = std::sync::Arc::new(vec![omsi_scene::SpeedSign { position: DVec3::new(6.0, 398.6, 0.0), heading: 180.0, limit: 70.0 }]);
+    n.update_cits(&at(0.0, 65.0));
+    let c = n.cits.camera.clone().expect("the camera ahead");
+    assert_eq!((c.tag, c.info, c.over, c.limit), (Some("Speeding"), false, false, Some(70.0)));
+    n.update_cits(&at(10.0, 75.0));
+    assert!(n.cits.camera.as_ref().is_some_and(|c| c.over));
 }
 
 /// Korean crossing sets put a stop line's light on a path of its own, a metre long, beside
@@ -297,4 +309,35 @@ fn the_head_drawn_is_the_one_by_the_stop_line() {
     // a head with no place known is drawn when no other shows the light
     let unplaced = SignalHead { place: None, ..mine.clone() };
     assert_eq!(pick_head([unplaced.clone()].iter(), &ours, 0, stop), Some(&unplaced));
+}
+
+/// The speed a camera holds to is the one posted by it: the sign nearest it from 150 m before
+/// it to 20 m past it.
+#[test]
+fn the_speed_posted_by_a_camera() {
+    assert_eq!(posted_by(&[(380.0, 60.0), (399.0, 70.0)], 400.0), Some(70.0));
+    assert_eq!(posted_by(&[(200.0, 60.0)], 400.0), None);
+    assert_eq!(posted_by(&[(300.0, 80.0), (415.0, 30.0)], 400.0), Some(30.0));
+    assert_eq!(posted_by(&[], 400.0), None);
+}
+
+/// Korea's `Traffic Rule` plates and speed signs take their picture from the map's text.
+#[test]
+fn plates_and_speed_signs_by_their_picture() {
+    use omsi_scene::{plate_kind, posted_limit};
+    let pics = |p: &[&str]| p.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    let plate = "Sceneryobjects\\KOR_SignalSet\\Traffic Rule\\Singal(Square_3).sco";
+    assert_eq!(plate_kind(plate, &pics(&["speedcam_tp2"])), Some(CameraKind::SignalSpeed));
+    assert_eq!(plate_kind(plate, &pics(&["speedcam"])), Some(CameraKind::Speed));
+    assert_eq!(plate_kind(plate, &pics(&["speedcam2"])), Some(CameraKind::SectionStart));
+    assert_eq!(plate_kind(plate, &pics(&["speedcam3"])), Some(CameraKind::SectionEnd));
+    assert_eq!(plate_kind(plate, &pics(&["signal_long"])), Some(CameraKind::Speed));
+    assert_eq!(plate_kind(plate, &pics(&["speedcam_alert"])), None);
+    let sign = "Sceneryobjects\\KOR_SignalSet\\Traffic Rule\\Singal(C_RS).sco";
+    assert_eq!(posted_limit(sign, &pics(&["speed60"])), Some(60.0));
+    assert_eq!(posted_limit(sign, &pics(&["speed120(han)"])), Some(120.0));
+    assert_eq!(posted_limit(sign, &pics(&["minspeed50(han)"])), None);
+    assert_eq!(posted_limit(sign, &pics(&["noright"])), None);
+    assert_eq!(posted_limit(plate, &pics(&["speedcam_tp2"])), None);
+    assert_eq!(posted_limit("Sceneryobjects\\Nemolus Objekte\\Verkehrszeichen\\VZ_OhneMast_HGeschw_60.sco", &[]), Some(60.0));
 }
