@@ -124,6 +124,13 @@ impl ApplicationHandler for App {
             // (minimised or covered entirely, macOS and Wayland: the focus goes with it, and a
             // window merely covered by another may still be the one the player drives with)
             WindowEvent::Occluded(hidden) => self.gfx.window_hidden = hidden,
+            // a label of the object editor's being typed: what an input method composes goes
+            // into it, and the keys the IME takes for its composing are not the list's
+            WindowEvent::Ime(ref ime) if self.label_ime(ime) => {}
+            WindowEvent::KeyboardInput { ref event, .. }
+                if self.menus.menu_edit_label.is_some()
+                    && event.state == ElementState::Pressed
+                    && event.logical_key == winit::keyboard::Key::Named(winit::keyboard::NamedKey::Process) => {}
             WindowEvent::Focused(true) => {
                 self.input.window_focused = true;
                 if let Some(ctl) = self.input.controllers.as_mut() {
