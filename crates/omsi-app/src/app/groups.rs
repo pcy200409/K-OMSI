@@ -490,6 +490,8 @@ pub(crate) struct MenuState {
     /// `menu_edit` is a label of the object picked in the object editor being typed (its
     /// line; `Some(None)`: a new last line), see `editor_lists`.
     pub(crate) menu_edit_label: Option<Option<usize>>,
+    /// Characters of the IME's syllable being composed that stand in that label.
+    pub(crate) menu_label_preedit: usize,
     pub(crate) streets_seen: usize,
     /// The search the open list is filtered by (empty: none).
     pub(crate) menu_search: String,
