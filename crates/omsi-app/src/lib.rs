@@ -63,7 +63,9 @@ use omsi_scene::wheel_surface;
 use omsi_vehicle::cam_approach;
 #[rustfmt::skip]
 mod duty_book;
+mod editor_links;
 mod editor_lists;
+mod editor_splines;
 #[rustfmt::skip]
 mod first_graphics;
 #[rustfmt::skip]

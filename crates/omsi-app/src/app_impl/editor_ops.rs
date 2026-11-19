@@ -34,7 +34,7 @@ impl App {
             .map(|w| ed.describe(w))
             .unwrap_or_default();
         self.menus.editor = Some(ed);
-        let help = "click picks, drag moves, wheel turns (Shift: height), P place an object, T labels, Delete, C copy, V variant, Backspace undo, PgUp/PgDn/F ground, [ ] brush, Ctrl+S save, Esc leave";
+        let help = "click picks, drag moves, wheel turns (Shift: height), P place an object, T labels, Delete, C copy, V variant, Backspace undo, PgUp/PgDn/F ground, [ ] brush, Y spline, Shift+P spline type, E new spline, R station links, Ctrl+S save, Esc leave";
         self.service_msg = Some((
             omsi_ui::i18n::said(
                 format!("{msg} - {}", omsi_ui::tr(help)),
@@ -54,6 +54,9 @@ impl App {
             return false;
         };
         let (eye, fwd, yaw) = (cam.position, cam.forward(), cam.yaw as f64);
+        if self.editor_spline_key(code, shift, ctrl) {
+            return true;
+        }
         let Some(action) = action_for(code, shift, ctrl, yaw) else {
             return false;
         };
@@ -85,7 +88,7 @@ impl App {
                         self.editor_reload(&[tile]);
                         self.menus.editor.as_ref().unwrap().describe(&world)
                     }
-                    Err(e) => e,
+                    Err(e) => omsi_ui::tr(&e).into_owned(),
                 }
             }
             crate::editor::Action::Pick => {
