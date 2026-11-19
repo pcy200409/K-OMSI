@@ -181,7 +181,13 @@ impl App {
                 let text = self.menus.menu_edit.clone().unwrap_or_default();
                 self.end_label_edit();
                 if let Some(slot) = slot {
-                    self.apply_label(slot, &text);
+                    if matches!(self.menus.list_kind, Some(ListKind::EditorSplineValues)) {
+                        if let Some(k) = slot {
+                            self.apply_spline_value(k, &text);
+                        }
+                    } else {
+                        self.apply_label(slot, &text);
+                    }
                 }
             }
             _ => {}

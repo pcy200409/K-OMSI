@@ -54,6 +54,8 @@ mod duty_book;
 mod first_graphics;
 mod game_lists;
 mod editor_lists;
+mod editor_splines;
+mod editor_links;
 mod game_panels;
 mod game_controller_menu;
 mod rail_drive;

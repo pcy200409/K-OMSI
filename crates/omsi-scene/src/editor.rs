@@ -29,6 +29,9 @@ use glam::{DVec3, Vec3};
 use hashbrown::HashMap;
 use std::path::{Path, PathBuf};
 
+mod splines;
+pub use splines::NEW_LENGTH;
+
 /// An object put on the map in this session: a record of its own in its tile's text.
 #[derive(Clone, Debug)]
 pub struct Placed {
@@ -50,6 +53,12 @@ pub struct Editor {
     next: usize,
     /// The ground brush's radius (m; 0: the default).
     brush: f64,
+    /// The spline picked (Y), instead of an object: its id and its tile.
+    pub spline: Option<(i64, (i32, i32))>,
+    /// The spline type a new spline gets (the one last picked or chosen).
+    pub spline_type: Option<String>,
+    /// The tiles' texts before each spline change (`None`: the tile's file), newest last.
+    undo: Vec<Vec<((i32, i32), Option<String>)>>,
 }
 
 /// The ground brush's radius when none is set, and its limits (m).
@@ -81,6 +90,7 @@ pub enum Action {
 impl Editor {
     /// The objects in front of the camera, those nearest the middle of the view first.
     pub fn pick(&mut self, world: &World, eye: DVec3, forward: Vec3) -> Option<i64> {
+        self.spline = None;
         let f = forward.as_dvec3().normalize_or_zero();
         let objects = world.edit_objects.lock();
         let edits = world.object_edits.lock();
@@ -445,12 +455,18 @@ impl Editor {
 /// The `.sco` files of folder `dir_rel` (relative to the game's folder, `\` or `/`), from
 /// the content folders and the game's folder, sorted, each name once.
 pub fn sco_names(root: &Path, dir_rel: &str) -> Vec<String> {
+    files_of(root, dir_rel, "sco")
+}
+
+/// The files of folder `dir_rel` with extension `ext` (as [`sco_names`]).
+pub fn files_of(root: &Path, dir_rel: &str, ext: &str) -> Vec<String> {
+    let suffix = format!(".{}", ext.to_ascii_lowercase());
     let mut out: Vec<String> = Vec::new();
     for base in omsi_cfg::content_roots().iter().chain(std::iter::once(&root.to_path_buf())) {
         let dir = omsi_cfg::resolve_path(base, dir_rel);
         for (n, is_dir) in omsi_cfg::vfs::list_dir(&dir).unwrap_or_default() {
             let n = n.to_string_lossy().to_string();
-            if !is_dir && n.to_ascii_lowercase().ends_with(".sco") && !out.iter().any(|o| o.eq_ignore_ascii_case(&n)) {
+            if !is_dir && n.to_ascii_lowercase().ends_with(&suffix) && !out.iter().any(|o| o.eq_ignore_ascii_case(&n)) {
                 out.push(n);
             }
         }

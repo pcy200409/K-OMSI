@@ -81,6 +81,7 @@ pub mod host;
 pub mod head_idle;
 pub mod hud;
 pub mod editor;
+pub mod spline_edit;
 pub mod tiles;
 pub mod schedule_paper;
 pub mod check;
