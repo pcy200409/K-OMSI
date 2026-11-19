@@ -296,7 +296,7 @@ impl Editor {
             .and_then(|o| o.sco.file_name().map(|n| n.to_string_lossy().to_string()));
         let Some(name) = name else {
             return match self.placed.iter().find(|p| p.id == id) {
-                Some(p) => format!("New object {id} {}: loading...", p.file.rsplit(['\\', '/']).next().unwrap_or(&p.file)),
+                Some(p) => omsi_ui::tr("New object {id} {name}: loading...").replace("{id}", &id.to_string()).replace("{name}", p.file.rsplit(['\\', '/']).next().unwrap_or(&p.file)),
                 None => format!("Object {id}: not loaded"),
             };
         };
@@ -305,7 +305,7 @@ impl Editor {
         if e.deleted {
             format!("Object {id} {name}: deleted (Delete brings it back)")
         } else if new && e == ObjectEdit::default() {
-            format!("New object {id} {name}: V for the next of its folder, T labels, C copies it")
+            omsi_ui::tr("New object {id} {name}: V for the next of its folder, T labels, C copies it").replace("{id}", &id.to_string()).replace("{name}", &name)
         } else if e == ObjectEdit::default() {
             omsi_ui::i18n::said(omsi_ui::tr("Object {id} {name}").replace("{id}", &id.to_string()).replace("{name}", &name), format!("Object {id} {name}"))
         } else {

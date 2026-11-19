@@ -8761,3 +8761,27 @@ _version: 2
   en: "Folders of objects and splines that no other map uses go with it: {n}, {size}."
 "Folders of objects and splines that another map still uses stay: {n}.":
   en: "Folders of objects and splines that another map still uses stay: {n}."
+"click picks, drag moves, wheel turns (Shift: height), P place an object, T labels, Delete, C copy, V variant, Backspace undo, PgUp/PgDn/F ground, [ ] brush, Ctrl+S save, Esc leave":
+  en: "click picks, drag moves, wheel turns (Shift: height), P place an object, T labels, Delete, C copy, V variant, Backspace undo, PgUp/PgDn/F ground, [ ] brush, Ctrl+S save, Esc leave"
+"Place an object":
+  en: "Place an object"
+"Labels":
+  en: "Labels"
+"No objects in this folder":
+  en: "No objects in this folder"
+"+ Add a label line":
+  en: "+ Add a label line"
+"{name} placed: drag it, wheel turns, T labels, Ctrl+S saves":
+  en: "{name} placed: drag it, wheel turns, T labels, Ctrl+S saves"
+"Not placed ({e})":
+  en: "Not placed ({e})"
+"Object {id}: label set - Ctrl+S saves":
+  en: "Object {id}: label set - Ctrl+S saves"
+"Label not set ({e})":
+  en: "Label not set ({e})"
+"New object {id} {name}: V for the next of its folder, T labels, C copies it":
+  en: "New object {id} {name}: V for the next of its folder, T labels, C copies it"
+"New object {id} {name}: loading...":
+  en: "New object {id} {name}: loading..."
+"V changes only an object placed in this session (P or C)":
+  en: "V changes only an object placed in this session (P or C)"
