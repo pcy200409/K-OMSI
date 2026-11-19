@@ -305,6 +305,9 @@ impl Lane {
 /// Speed limit of a flight path without a `[rule] speedlimit` (km/h): none, the aircraft
 /// flies at its own speed.
 pub const AIR_NO_LIMIT_KMH: f32 = 1000.0;
+/// (K-OMSI) Speed on a lane driven backwards (`Lane::reverse_drive`) when the map sets no
+/// `[rule] speedlimit` of its own (km/h): a walking pace, as a bus backs out of a bay.
+pub const BACKING_LIMIT_KMH: f32 = 6.0;
 
 /// Builds lanes from analytic descriptions.
 pub struct LaneBuilder;
