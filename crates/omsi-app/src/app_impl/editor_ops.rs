@@ -20,7 +20,7 @@ impl App {
         let ed = crate::editor::Editor::default();
         let msg = self.world.as_ref().map(|w| ed.describe(w)).unwrap_or_default();
         self.menus.editor = Some(ed);
-        let help = "click picks, drag moves, wheel turns (Shift: height), Delete, C copy, V variant, Backspace undo, PgUp/PgDn/F ground, [ ] brush, Ctrl+S save, Esc leave";
+        let help = "click picks, drag moves, wheel turns (Shift: height), P place an object, T labels, Delete, C copy, V variant, Backspace undo, PgUp/PgDn/F ground, [ ] brush, Ctrl+S save, Esc leave";
         self.service_msg = Some((omsi_ui::i18n::said(format!("{msg} - {}", omsi_ui::tr(help)), format!("{} - {help}", omsi_ui::i18n::english(&msg))), 10.0));
     }
 
@@ -36,6 +36,29 @@ impl App {
             crate::editor::Action::Leave => {
                 self.toggle_editor();
                 return true;
+            }
+            crate::editor::Action::Objects => {
+                self.open_editor_objects();
+                return true;
+            }
+            crate::editor::Action::Labels => {
+                self.open_editor_labels();
+                return true;
+            }
+            a @ (crate::editor::Action::Copy | crate::editor::Action::Variant) => {
+                let root = self.args.root.clone();
+                let ed = self.menus.editor.as_mut().unwrap();
+                let done = match a {
+                    crate::editor::Action::Copy => ed.copy(&world),
+                    _ => ed.variant(&world, &root),
+                };
+                match done {
+                    Ok(tile) => {
+                        self.editor_reload(&[tile]);
+                        self.menus.editor.as_ref().unwrap().describe(&world)
+                    }
+                    Err(e) => e,
+                }
             }
             crate::editor::Action::Pick => {
                 let ed = self.menus.editor.as_mut().unwrap();
@@ -136,16 +159,8 @@ impl App {
         let (Some(cam), Some(s), Some(world)) = (self.camera.as_ref(), self.gfx.surface.as_ref(), self.world.clone()) else { return true };
         let (o, d) = self.world_cursor_ray(cam, (s.config.width, s.config.height));
         let ed = self.menus.editor.as_mut().unwrap();
-        // (the copy being edited stays the one dragged while it is under the cursor)
-        let on_added = ed.editing_added.and_then(|k| ed.added.get(k)).map(|a| {
-            let p = a.base + a.moved - o;
-            let along = p.dot(d.as_dvec3());
-            along > 0.0 && (p - d.as_dvec3() * along).length() < 2.5
-        }).unwrap_or(false);
-        if !on_added {
-            ed.pick(&world, o, d);
-        }
-        self.menus.editor_drag = on_added || ed.selected.is_some();
+        ed.pick(&world, o, d);
+        self.menus.editor_drag = ed.selected.is_some();
         let msg = ed.describe(&world);
         self.service_msg = Some((msg, 5.0));
         true
@@ -195,6 +210,8 @@ pub fn action_for(code: winit::keyboard::KeyCode, shift: bool, ctrl: bool, yaw: 
     Some(match code {
         K::Enter | K::NumpadEnter => Action::Pick,
         K::KeyC if !ctrl => Action::Copy,
+        K::KeyP if !ctrl => Action::Objects,
+        K::KeyT if !ctrl => Action::Labels,
         K::KeyV if !ctrl => Action::Variant,
         K::Tab => Action::NextPick,
         K::KeyI => Action::Move(fwd),
