@@ -187,9 +187,9 @@ impl App {
         let msg = match ed.set_label(&world, id, slot, text) {
             Ok(tile) => {
                 self.editor_reload(&[tile]);
-                format!("Object {id}: label set - Ctrl+S saves")
+                omsi_ui::tr("Object {id}: label set - Ctrl+S saves").replace("{id}", &id.to_string())
             }
-            Err(e) => format!("Label not set ({e})"),
+            Err(e) => omsi_ui::tr("Label not set ({e})").replace("{e}", &e),
         };
         log::info!("object editor: {msg}");
         self.service_msg = Some((msg, 4.0));
@@ -210,9 +210,9 @@ impl App {
         let msg = match ed.place(&world, file, at, heading) {
             Ok(tile) => {
                 self.editor_reload(&[tile]);
-                format!("{} placed: drag it, wheel turns, T labels, Ctrl+S saves", file.rsplit('\\').next().unwrap_or(file))
+                omsi_ui::tr("{name} placed: drag it, wheel turns, T labels, Ctrl+S saves").replace("{name}", file.rsplit('\\').next().unwrap_or(file))
             }
-            Err(e) => format!("Not placed ({e})"),
+            Err(e) => omsi_ui::tr("Not placed ({e})").replace("{e}", &e),
         };
         log::info!("object editor: {msg}");
         self.service_msg = Some((msg, 6.0));
