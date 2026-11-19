@@ -779,6 +779,7 @@ fn assemble_app(args: Args, settings: settings::Settings) -> App {
             menu_edit_ident: false,
             menu_edit_search: false,
             menu_edit_label: None,
+            menu_label_preedit: 0,
             streets_seen: 0,
             menu_search: String::new(),
             swap_pending: false,

@@ -119,6 +119,7 @@ impl App {
 
     /// Typing a label stops (nothing set).
     pub(crate) fn end_label_edit(&mut self) {
+        self.menus.menu_label_preedit = 0;
         if self.menus.menu_edit_label.take().is_some() {
             self.menus.menu_edit = None;
             crate::platform::text_input(self.window.as_deref(), false);
@@ -140,21 +141,28 @@ impl App {
         self.refresh_list();
     }
 
-    /// An input method's text for the label being typed (`None`: one character rubbed out,
-    /// a syllable being composed put back); false when no label is typed.
-    #[allow(dead_code)]
-    pub(crate) fn label_ime_type(&mut self, text: Option<&str>) -> bool {
+    /// What an input method says while a label is typed: the syllable being composed
+    /// (standing in the label, put back with each change) and the text it gives up. False
+    /// when no label is typed (the IME's text is another field's).
+    pub(crate) fn label_ime(&mut self, ime: &winit::event::Ime) -> bool {
+        use winit::event::Ime;
         if self.menus.menu_edit_label.is_none() {
+            self.menus.menu_label_preedit = 0;
             return false;
         }
-        match text {
-            Some(t) => self.label_edit_text(t),
-            None => {
-                if let Some(d) = self.menus.menu_edit.as_mut() {
-                    d.pop();
-                }
-                self.refresh_list();
+        let composed = std::mem::take(&mut self.menus.menu_label_preedit);
+        if let Some(d) = self.menus.menu_edit.as_mut() {
+            for _ in 0..composed {
+                d.pop();
             }
+        }
+        match ime {
+            Ime::Preedit(text, _) => {
+                self.label_edit_text(text);
+                self.menus.menu_label_preedit = text.chars().filter(|c| !c.is_control()).count();
+            }
+            Ime::Commit(text) => self.label_edit_text(text),
+            Ime::Enabled | Ime::Disabled => self.refresh_list(),
         }
         true
     }
@@ -168,6 +176,7 @@ impl App {
                 }
             }
             KeyCode::Enter | KeyCode::NumpadEnter => {
+                self.menus.menu_label_preedit = 0;
                 let slot = self.menus.menu_edit_label;
                 let text = self.menus.menu_edit.clone().unwrap_or_default();
                 self.end_label_edit();
@@ -238,5 +247,23 @@ mod tests {
         let items = super::object_items(&app, "Sceneryobjects\\Nowhere");
         assert_eq!(items[0].1, "dir Sceneryobjects");
         assert!(items.iter().any(|i| i.1 == "noop"));
+    }
+
+    #[test]
+    fn hangul_composed_in_a_label() {
+        use winit::event::Ime;
+        let args = <crate::cli::Args as clap::Parser>::parse_from(["openomsi", "--server", "test-server.cfg"]);
+        let mut app = crate::assemble_app(args, Default::default());
+        let pre = |s: &str| Ime::Preedit(s.into(), None);
+        // no label typed: the IME's text is not ours
+        assert!(!app.label_ime(&pre("ㄱ")));
+        app.menus.menu_edit = Some("A ".into());
+        app.menus.menu_edit_label = Some(Some(0));
+        for ime in [pre("ㅎ"), pre("하"), pre("한"), Ime::Commit("한".into()), pre("ㄱ"), pre("그"), pre("글")] {
+            assert!(app.label_ime(&ime));
+        }
+        assert_eq!(app.menus.menu_edit.as_deref(), Some("A 한글"));
+        assert!(app.label_ime(&Ime::Commit("글".into())));
+        assert_eq!(app.menus.menu_edit.as_deref(), Some("A 한글"));
     }
 }
