@@ -43,3 +43,4 @@ patch/pax-events
 patch/html-video
 patch/ticket-interior-light
 patch/html-page-font
+patch/editor-place-any
