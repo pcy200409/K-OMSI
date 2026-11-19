@@ -34,7 +34,7 @@ K-OMSI = 이 빌드(K-OMSI)에 들어 있음, openOMSI 공식 = 공식 openOMSI�
 | ReShade 호환 | ReShade를 넣으면 창이 뜨기 전에 꺼지던 문제 수정 | O | X |
 | HTML 한글 글꼴 지정 | `fonts/html_fallback.ttf`로 HTML 페이지 한글 글꼴 지정 | O | X |
 | 하이거 Auto 화면 (시험) | 하이거 1611P CCTV 화면의 안드로이드 오토 풍 차량 화면 ([설명](https://github.com/pcy200409/K-OMSI/blob/release/docs/android-auto.md)) | O | X |
-| 맵 규칙 존중 | AI 속도는 맵 제한속도까지, `trafficdensity 0` 보도는 보행자가 피함 | O | X |
+| 맵 규칙 존중 | `trafficdensity 0` 보도는 보행자가 피함 | O | X |
 | AI 버스 하차벨 (LAN) | 사람 승객이 AI 버스에서 하차 요청하면 그 차의 하차벨이 울림 | O | X |
 | 한국어 번역 보완 | 공식 번역에 없던 문구 977개 기계 번역 | O | X |
 | LAN 받은 모드 지우기 | `OMSI_CLEAR_LAN_STORE=1`이면 남의 세션에서 받은 모드를 지움 | O | X |
