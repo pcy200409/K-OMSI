@@ -495,16 +495,19 @@ pub fn tile_bytes(text: &str) -> Vec<u8> {
     encode(text, Encoding::Utf16Le)
 }
 
-/// The tile's `[version]` (0: none).
+/// The tile's `[version]`; a tile without one is read as the newest (as the game reads it).
 pub fn tile_version(text: &str) -> i32 {
     let mut lines = text.lines();
     while let Some(l) = lines.next() {
         if l.trim().eq_ignore_ascii_case("[version]") {
-            return lines.next().and_then(|v| v.trim().parse().ok()).unwrap_or(0);
+            return lines.next().and_then(|v| v.trim().parse().ok()).filter(|v| *v > 0).unwrap_or(NEWEST);
         }
     }
-    0
+    NEWEST
 }
+
+/// The version a tile without `[version]` is read as.
+const NEWEST: i32 = 14;
 
 /// The line ending the tile uses.
 fn eol(text: &str) -> &'static str {
@@ -855,6 +858,13 @@ mod tests {
         // the sign before it kept its labels
         assert_eq!(t.objects[0].extra, vec!["[A38]".to_string(), "Totnes".to_string()]);
         assert_eq!(record_ids(&text), vec![5, 6, 40]);
+    }
+
+    #[test]
+    fn a_tile_without_a_version_is_the_newest() {
+        let text = TILE14.replacen("[version]\r\n14\r\n", "", 1);
+        assert_eq!(tile_version(&text), NEWEST);
+        assert_eq!(record_labels(&text, 5).unwrap().len(), 2);
     }
 
     #[test]
