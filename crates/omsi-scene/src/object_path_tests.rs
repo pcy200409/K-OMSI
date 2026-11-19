@@ -172,3 +172,40 @@ fn descending_object_path_joins_do_not_lift_the_rear_axle() {
         }
     }
 }
+
+/// (K-OMSI) A terminal bay in one object: in forwards, `[path_reverse]` back out, forwards
+/// away. The backed lane joins both at a cusp, runs at a walking pace, and a vehicle on it
+/// takes its lead from the rear bumper.
+#[test]
+fn a_bay_backed_out_of_with_path_reverse_is_one_way_through() {
+    let o = DVec3::ZERO;
+    // in: north 12 m to (0,12); back: south 8 m to (0,4); away: north from (0,4), bending right
+    let text = format!(
+        "{}{}[path_reverse]
+
+{}",
+        path("path", o, 0.0, 0.0, 12.0, [0.0, 0.0], 0),
+        path("path", DVec3::new(0.0, 12.0, 0.0), 180.0, 0.0, 8.0, [0.0, 0.0], 0),
+        path("path", DVec3::new(0.0, 4.0, 0.0), 0.0, 6.0, 15.0, [0.0, 0.0], 0),
+    );
+    let ls = lanes(&text, DVec3::new(500.0, 300.0, 0.0), 30.0);
+    assert_eq!(ls.len(), 3);
+    assert_eq!(ls.iter().map(|l| l.reverse_drive).collect::<Vec<_>>(), [false, true, false]);
+    assert_eq!(ls[1].speed_limit_kmh, omsi_sim::traffic::BACKING_LIMIT_KMH);
+    assert_eq!(ls[0].speed_limit_kmh, 50.0);
+    let mut net = Network { lanes: ls, ..Default::default() };
+    net.link(1.5);
+    assert_eq!(net.lanes[0].next, vec![1], "into the bay, then backed out at a cusp");
+    assert_eq!(net.lanes[1].next, vec![2], "backed out, then forwards again at a cusp");
+    assert!(net.lanes[2].next.is_empty());
+    // the bumper that leads changes at both cusps
+    let mut car = AiState::new(0, 11.0, 7);
+    car.front = 3.0;
+    car.rear = 9.0;
+    car.lane = 1;
+    car.sync_reversing(&net);
+    assert!(car.reversing && car.front == 9.0);
+    car.lane = 2;
+    car.sync_reversing(&net);
+    assert!(!car.reversing && car.front == 3.0);
+}

@@ -141,6 +141,10 @@ pub struct SceneryObject {
     pub path_blocks: Vec<Vec<(i32, i32)>>,
     /// `[crossingproblem]` after a `[path]`: a vehicle on it keeps the junction clear.
     pub path_crossing_problem: Vec<bool>,
+    /// (K-OMSI) `[path_reverse]` after a `[path]`: the path runs the way the vehicle moves, but
+    /// it drives it backwards - its nose points the other way (a bus backing out of a
+    /// terminal bay). The object's own form of the map's `[rule] reverse`.
+    pub path_reverse: Vec<bool>,
     pub traffic_lights_group: Option<f32>,
     pub traffic_lights: Vec<TrafficLight>,
     pub approach_dist: Option<f32>,
@@ -344,6 +348,7 @@ impl SceneryObject {
                     o.path_switch_dir.push(None);
                     o.path_blocks.push(Vec::new());
                     o.path_crossing_problem.push(false);
+                    o.path_reverse.push(false);
                 }
                 "path_2" => {
                     let v = r.f32s::<14>();
@@ -352,6 +357,7 @@ impl SceneryObject {
                     o.path_switch_dir.push(None);
                     o.path_blocks.push(Vec::new());
                     o.path_crossing_problem.push(false);
+                    o.path_reverse.push(false);
                 }
                 "use_traffic_light" => {
                     let i = r.i32();
@@ -370,6 +376,11 @@ impl SceneryObject {
                 "crossingproblem" => {
                     o.crossing_problem = true;
                     if let Some(last) = o.path_crossing_problem.last_mut() {
+                        *last = true;
+                    }
+                }
+                "path_reverse" => {
+                    if let Some(last) = o.path_reverse.last_mut() {
                         *last = true;
                     }
                 }
@@ -607,5 +618,30 @@ mod tests {
         let o = SceneryObject::parse(&CfgFile::from_str("switch.sco", "-<DISABLED>-\n\t[surface]\n1\n-<ENABLED>-\n[mesh]\nswitch.o3d\n"));
         assert!(!o.surface_explicit && !o.surface);
         assert_eq!(o.model.meshes.len(), 1);
+    }
+
+    /// (K-OMSI) `[path_reverse]` marks the `[path]` before it as one driven backwards.
+    #[test]
+    fn path_reverse_marks_the_path_before_it() {
+        let path = "[path]
+0
+0
+0
+0
+0
+10
+0
+0
+0
+3
+0
+0
+";
+        let o = SceneryObject::parse(&CfgFile::from_str("bay.sco", &format!("{path}{path}[path_reverse]
+
+{path}")));
+        assert_eq!(o.paths.len(), 3);
+        assert_eq!(o.path_reverse, [false, true, false]);
+        assert!(o.unknown_keywords.is_empty(), "{:?}", o.unknown_keywords);
     }
 }
