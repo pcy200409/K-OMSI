@@ -34,8 +34,8 @@ pub use extend::LINK_TOLERANCE;
 #[cfg(test)]
 use lane::heading_dir;
 pub use lane::{
-    AIR_NO_LIMIT_KMH, DEFAULT_PRIORITY, Lane, LaneBuilder, LaneKey, LaneKind, arc_point,
-    pool_density, wrap_deg,
+    AIR_NO_LIMIT_KMH, BACKING_LIMIT_KMH, DEFAULT_PRIORITY, Lane, LaneBuilder, LaneKey, LaneKind,
+    arc_point, pool_density, wrap_deg,
 };
 pub use lights::{
     Aspect, DEFAULT_APPROACH, LightStop, PLAYER_SEARCH_RANGE, TrafficLightController,
