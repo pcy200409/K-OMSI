@@ -423,6 +423,15 @@ pub fn put_memory_file(path: PathBuf, bytes: Arc<[u8]>) {
     MEMORY.write().unwrap().get_or_insert_with(HashMap::new).insert(path, bytes);
 }
 
+/// Take the file at `path` out of memory (see [`MEMORY`]), if one is there.
+pub fn forget_memory_file(path: &Path) {
+    if memory_file(path).is_some() {
+        if let Some(m) = MEMORY.write().unwrap().as_mut() {
+            m.remove(path);
+        }
+    }
+}
+
 fn memory_file(path: &Path) -> Option<Arc<[u8]>> {
     MEMORY.read().unwrap().as_ref().and_then(|m| m.get(path).cloned())
 }
