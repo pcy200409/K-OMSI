@@ -515,7 +515,8 @@ impl TimetableData {
                 }
             }
         }
-        if let Ok(f) = CfgFile::read(dir.join("StnLinks.cfg")) {
+        // (a copy in a content folder first: the object editor's rebuilt links)
+        if let Ok(f) = CfgFile::read(omsi_cfg::resolve_path(dir, "StnLinks.cfg")) {
             let mut link_map: HashMap<(i64, i64), usize> =
                 d.stn_links.iter().enumerate().map(|(i, l)| ((l.from_id, l.to_id), i)).collect();
             for l in parse_stnlinks(&f) {

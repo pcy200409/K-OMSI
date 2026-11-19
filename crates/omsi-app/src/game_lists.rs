@@ -78,6 +78,10 @@ pub(crate) enum ListKind {
     /// the labels of the object picked (see `editor_lists`).
     EditorObjects(String),
     EditorLabels,
+    /// The spline types (`.sli`) in this folder, and the values of the spline picked (see
+    /// `editor_splines`).
+    EditorSplineTypes(String),
+    EditorSplineValues,
 }
 
 /// The lists with a search line on top: the vehicles to place, the depot files and the
@@ -94,6 +98,7 @@ pub(crate) fn searchable(kind: &ListKind) -> bool {
             | ListKind::PlaceHof(..)
             | ListKind::AdminPlayers
             | ListKind::EditorObjects(_)
+            | ListKind::EditorSplineTypes(_)
     )
 }
 
@@ -1176,6 +1181,8 @@ pub(crate) fn items(app: &App, kind: &ListKind) -> Vec<(String, String)> {
         })),
         ListKind::EditorObjects(dir) => out = crate::editor_lists::object_items(app, dir),
         ListKind::EditorLabels => out = crate::editor_lists::label_items(app),
+        ListKind::EditorSplineTypes(dir) => out = crate::editor_splines::type_items(app, dir),
+        ListKind::EditorSplineValues => out = crate::editor_splines::value_items(app),
     }
     if searchable(kind) {
         let query = search_query(app);
@@ -1461,6 +1468,16 @@ pub(crate) fn menu_extras(
             Some((title("Labels"), tr("Enter sets it, Esc cancels"))),
             None,
         ),
+        ListKind::EditorSplineTypes(dir) => (
+            MenuKind::List,
+            Some((title("Spline type"), dir.clone())),
+            None,
+        ),
+        ListKind::EditorSplineValues => (
+            MenuKind::List,
+            Some((title("Spline"), tr("Enter sets it, Esc cancels"))),
+            None,
+        ),
         ListKind::Spots => (MenuKind::List, head("Teleport to a start point..."), None),
         ListKind::PlaceMaker
         | ListKind::PlaceType(_)
@@ -1552,7 +1569,10 @@ pub(crate) fn run_move(app: &mut App, kind: &ListKind, action: &str, mv: Move) -
                 Some(ListKind::Options(*tab))
             }
             // (the object editor's lists: back to the editor)
-            ListKind::EditorObjects(_) | ListKind::EditorLabels => {
+            ListKind::EditorObjects(_)
+            | ListKind::EditorLabels
+            | ListKind::EditorSplineTypes(_)
+            | ListKind::EditorSplineValues => {
                 app.close_game_menu();
                 None
             }
@@ -1563,6 +1583,9 @@ pub(crate) fn run_move(app: &mut App, kind: &ListKind, action: &str, mv: Move) -
     match kind {
         ListKind::EditorObjects(_) | ListKind::EditorLabels => {
             crate::editor_lists::run(app, kind, verb, arg)
+        }
+        ListKind::EditorSplineTypes(_) | ListKind::EditorSplineValues => {
+            crate::editor_splines::run(app, kind, verb, arg)
         }
         ListKind::GraphicsConfirm(tab) => graphics_confirmation_action(app, *tab, action, mv),
         ListKind::ControllerDevices(_)
