@@ -226,6 +226,9 @@ impl ApplicationHandler for App {
                         self.number_edit_text(text);
                     }
                 }
+                if event.state == ElementState::Pressed && self.menus.menu_edit_label.is_some() {
+                    if let Some(text) = event.text.as_deref() { self.label_edit_text(text); }
+                }
                 if event.state == ElementState::Pressed && self.menus.menu_edit_ident {
                     if let Some(text) = event.text.as_deref() {
                         self.ident_edit_text(text);
