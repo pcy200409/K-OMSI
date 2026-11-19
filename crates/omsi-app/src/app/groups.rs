@@ -487,6 +487,9 @@ pub(crate) struct MenuState {
     pub(crate) menu_edit_ident: bool,
     /// `menu_edit` is the search of the open list being typed (see `game_lists::searchable`).
     pub(crate) menu_edit_search: bool,
+    /// `menu_edit` is a label of the object picked in the object editor being typed (its
+    /// line; `Some(None)`: a new last line), see `editor_lists`.
+    pub(crate) menu_edit_label: Option<Option<usize>>,
     pub(crate) streets_seen: usize,
     /// The search the open list is filtered by (empty: none).
     pub(crate) menu_search: String,
