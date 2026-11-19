@@ -63,6 +63,7 @@ use omsi_scene::wheel_surface;
 use omsi_vehicle::cam_approach;
 #[rustfmt::skip]
 mod duty_book;
+mod editor_lists;
 #[rustfmt::skip]
 mod first_graphics;
 #[rustfmt::skip]
@@ -850,6 +851,7 @@ fn assemble_app(args: Args, settings: settings::Settings) -> App {
             menu_edit_number: false,
             menu_edit_ident: false,
             menu_edit_search: false,
+            menu_edit_label: None,
             streets_seen: 0,
             menu_search: String::new(),
             swap_pending: false,
