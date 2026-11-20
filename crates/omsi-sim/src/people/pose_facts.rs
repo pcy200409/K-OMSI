@@ -23,6 +23,8 @@ pub struct PoseFacts {
     /// A seated person's anchor over the floor their feet are sought at: `[seatheight]`
     /// minus the seat's height (m); None: the feet are at the anchor.
     pub seated_level: Option<f64>,
+    /// K-OMSI: the reach is a card tagged on a reader (`PoseInput::reach_upright`).
+    pub reach_upright: bool,
 }
 
 /// Only riders standing still at their standing place are steadied against the sway: queued,
@@ -77,7 +79,8 @@ impl Person {
             State::Pax(x) if x.pax_state.round() >= 1.5 => Some((self.ty.def.seat_height - x.seat_h) as f64),
             _ => None,
         };
-        PoseFacts { activity, seat, reach, floor_lift, hold, seated_level }
+        let reach_upright = matches!(&self.state, State::Pax(x) if x.reach && x.ticket == crate::people::pax::TICKET_STAMP);
+        PoseFacts { activity, seat, reach, floor_lift, hold, seated_level, reach_upright }
     }
 }
 

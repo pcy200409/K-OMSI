@@ -290,6 +290,32 @@ fn paying_reaches_the_desk_and_looks() {
     assert!(p.head.x < -20.0, "head yaw {}", p.head.x);
 }
 
+/// K-OMSI: a card to a reader a step off is held out with the arm, the body upright; over a
+/// cash desk as far off the person bows from the hips.
+#[test]
+fn tagging_a_card_keeps_the_body_upright() {
+    let r = rig();
+    let neck_lean = |reader: Vec3, upright: bool| {
+        let mut p = Pose::new(9);
+        let input = PoseInput { activity: Activity::Pay, reach: Some(reader), reach_upright: upright, ..Default::default() };
+        for _ in 0..90 {
+            p.advance(&r, &input, 1.0 / 60.0);
+        }
+        let posed = p.bones(&r);
+        (posed.neck.y, posed.wrist[1])
+    };
+    // a reader a long step off
+    let far = Vec3::new(0.15, 0.75, 1.05);
+    let (bowed, _) = neck_lean(far, false);
+    let (upright, _) = neck_lean(far, true);
+    assert!(bowed > upright + 0.1, "the bow over the desk {bowed:.2} vs tagging {upright:.2}");
+    assert!(upright < r.neck.y + 0.12, "upright: the neck {upright:.2} over {:.2}", r.neck.y);
+    // stood where `tag_points::stand_off` puts them: the hand on it
+    let near = Vec3::new(0.15, crate::people::tag_points::stand_off(1.05), 1.05);
+    let (_, wrist) = neck_lean(near, true);
+    assert!((wrist - near).length() < 0.15, "the hand out to the reader: {wrist:?}");
+}
+
 #[test]
 fn jerky_crowd_motion_does_not_crouch() {
     // the crowd starts, stops, turns and shoves people about

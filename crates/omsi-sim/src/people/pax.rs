@@ -162,6 +162,11 @@ pub struct Pax {
     pub door: Option<usize>,
     /// The validator they stamp at (an index into the cabin's: a bus may have several).
     pub stamper: Option<usize>,
+    /// K-OMSI: the card reader they tag on at instead (bus frame), the path point next to
+    /// it, and how far they may still step up to it (`tag_points`).
+    pub tag_at: Option<Vec3>,
+    pub tag_pt: Option<usize>,
+    pub tag_walk: f32,
     /// `HeightOfSeat` (+0x648) and `PAX_State` (+0x64c: 0 stand, 1 walk, 2 sit).
     pub seat_h: f32,
     pub pax_state: f32,
@@ -252,6 +257,9 @@ impl Pax {
             ticket_hold: None,
             door: None,
             stamper: None,
+            tag_at: None,
+            tag_pt: None,
+            tag_walk: 0.0,
             seat_h: 0.0,
             pax_state: 0.0,
             timer: 0.0,

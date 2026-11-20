@@ -250,6 +250,10 @@ pub struct PeopleSim {
     /// Passenger cabins by vehicle files (the front vehicle and its coupled parts).
     pub cabins: HashMap<Vec<PathBuf>, Option<Arc<Cabin>>>,
     pub player_cabin: Option<Arc<Cabin>>,
+    /// K-OMSI: the card reader meshes of the player's bus (`tag_points::reader_meshes`) and
+    /// where those shown are this frame (bus frame).
+    pub player_reader_meshes: Vec<(usize, Vec3)>,
+    pub player_readers: Vec<Vec3>,
     pub player_next_stop: Option<RequestStop>,
     /// Which places of each bus are taken.
     pub seats: HashMap<BusId, Vec<bool>>,

@@ -212,6 +212,7 @@ impl PeopleSim {
             let (entry_open, exit_open) = (cv.entry_open.clone(), cv.exit_open.clone());
             let (half, centre) = bb_from(b.bounding_box);
             let trailers = cv.trailers.clone();
+            self.player_readers = cv.readers.clone();
             let terminus = match &b.terminus {
                 Some(shown) => shown.clone(),
                 // (a bus whose scripts keep no destination index: on a duty, its trip's

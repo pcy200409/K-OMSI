@@ -709,6 +709,16 @@ fn passengers_stamp_at_the_validator_nearest_their_door() {
     assert_eq!(cabin.stampers[1], (Some(2), Vec3::new(0.5, -3.0, 1.5)));
     assert_eq!(cabin.nearest_stamper(Vec3::new(0.0, 5.0, 0.5)), Some(0), "in by the front door");
     assert_eq!(cabin.nearest_stamper(Vec3::new(0.0, -4.0, 0.5)), Some(1), "in by the rear door");
+    // K-OMSI: a card reader by the front door (its mesh, not a `[stamper]`): the passenger
+    // in by the front door goes to the aisle's point next to it, and stands half a metre or
+    // less in front of it; the one in by the rear door has none at hand
+    let reader = Vec3::new(0.4, 5.3, 1.6);
+    let readers = [reader, Vec3::new(0.4, -4.4, 1.6)];
+    let front = Vec3::new(0.0, 5.0, 0.5);
+    assert_eq!(super::tag_points::pick_reader(&readers, front), Some(reader));
+    assert_eq!(super::tag_points::path_point_for(&cabin, reader, front), Some(0));
+    assert!(super::tag_points::stand_off(reader.z - 0.5) <= 0.45);
+    assert_eq!(super::tag_points::pick_reader(&readers[..1], Vec3::new(0.0, -4.0, 0.5)), None);
 }
 
 /// #719: a five-door bus with two paths a door has ten entries. Past Omsi.exe's eight,
