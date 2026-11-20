@@ -45,11 +45,19 @@ end
 local EMPTY = { routes = {}, trips = {} }
 local local_copy = nil         -- 플러그인 폴더의 obis_routes (있을 때만)
 
+local idx_rev = nil            -- 그 노선 목록의 omsi.obis.routes_rev
+
 local function load_index()
+  -- K-OMSI 가 노선을 다시 읽었으면(받아 온 노선 등) 새 목록으로: 다 읽기 전엔 옛 목록 그대로
+  local rev = omsi.obis and omsi.obis.routes_rev and omsi.obis.routes_rev()
+  if idx and local_copy == false and rev and rev ~= idx_rev then
+    local v = omsi.obis.routes()
+    if type(v) == "table" then idx, idx_rev, route_cache = v, rev, {} end
+  end
   if idx then return idx end
   -- OBIS Client 의 노선 (처음 한 번 K-OMSI 가 따로 읽음: 다 읽기 전엔 nil → 다음에 다시)
   local v = omsi.obis and omsi.obis.routes and omsi.obis.routes()
-  if type(v) == "table" then idx = v; local_copy = false; return idx end
+  if type(v) == "table" then idx = v; idx_rev = rev; local_copy = false; return idx end
   if local_copy == nil then
     local text = omsi.plugin.read("obis_routes/index.json")
     local_copy = text ~= nil
@@ -201,6 +209,19 @@ end
 
 -- ------------------------------------------------------------ 한 번의 snapshot
 -- game: { duty, stops, x, y, z, passengers, next_dist, has_bus }
+-- 이 PC 의 OBIS Client 노선 자료(data\routes)에 내 노선이 없으면(옛판·빈 폴더) K-OMSI 가 OBIS 에서 그 노선번호만
+-- 받아 옴 → 받으면 색인을 다시 읽음. 노선번호마다 한 번. (2026-10-30 제보: 노선 '-'·다음 정류장 ID 로 올라가던 버스)
+local fetched = {}
+local function fetch_missing(line)
+  line = tostring(line or ""):gsub("^%s+", ""):gsub("%s+$", "")
+  if line == "" or fetched[line] or cur_map == false then return end   -- (OBIS 에 없는 맵은 노선을 안 붙임)
+  if not (omsi.obis and omsi.obis.fetch_routes) then fetched[line] = true; return end
+  local n = omsi.obis.fetch_routes(line)
+  if n == nil then return end                    -- 받는 중
+  fetched[line] = true
+  if n > 0 then idx = nil end
+end
+
 function M.snapshot(g)
   local now = omsi.util.now()
   local duty = g.duty
@@ -212,6 +233,7 @@ function M.snapshot(g)
     local sid = math.floor(tonumber(ns.id) or 0)
     local sidx = math.max(0, (ns.number or 1) - 1)
     local key = key_for_trip(duty.trip_name, sid) or key_by_position(duty.line, sid, sidx)
+    if not key then fetch_missing(duty.line) end
     if key ~= st.key then st.key = key end
     r = route(key)
     -- 노선 화면 좌표: 이전·다음 정류장 사이를 남은 거리 비율만큼 (호환판 _route_frame_xy, 단 이 노선의 정류장 좌표로)
