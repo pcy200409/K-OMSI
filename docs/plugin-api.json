@@ -2255,7 +2255,7 @@
       "name": "map.objects_near",
       "group": "map",
       "since": "0.2.22",
-      "doc": "The map objects within `radius` m (default 50, at most 2000 of them, nearest first): `{id, x, y, z, heading, distance}`.",
+      "doc": "The map objects within `radius` m (default 50, at most 2000 of them, nearest first): `{id, x, y, z, heading, distance, type}`; K-OMSI: `type` is the object's file as the map names it (`Sceneryobjects\\...\\HiPass.sco`), where its tile is read.",
       "params": [
         {
           "name": "x",
