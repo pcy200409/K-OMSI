@@ -8761,3 +8761,29 @@ _version: 2
   en: "Folders of objects and splines that no other map uses go with it: {n}, {size}."
 "Folders of objects and splines that another map still uses stay: {n}.":
   en: "Folders of objects and splines that another map still uses stay: {n}."
+"Average":
+  en: "Average"
+"Advised":
+  en: "Advised"
+"Prepare to stop":
+  en: "Prepare to stop"
+"Red light ahead":
+  en: "Red light ahead"
+"Collision risk":
+  en: "Collision risk"
+"Car ahead":
+  en: "Car ahead"
+"Sharp curve":
+  en: "Sharp curve"
+"Limit ahead":
+  en: "Limit ahead"
+"Signal":
+  en: "Signal"
+"Section":
+  en: "Section"
+"Speeding":
+  en: "Speeding"
+"Signal and speed":
+  en: "Signal and speed"
+"Traffic info":
+  en: "Traffic info"
