@@ -3272,3 +3272,4 @@
 "At most 5": "最大5台"
 "Folders of objects and splines that no other map uses go with it: {n}, {size}.": "他のどのマップも使っていないオブジェクトとスプラインのフォルダも一緒に削除されます：{n} 個、{size}。"
 "Folders of objects and splines that another map still uses stay: {n}.": "他のマップがまだ使っているオブジェクトとスプラインのフォルダは残ります：{n} 個。"
+"Off takes four to eight times the video memory: only for a driver that draws them wrong. A card of 4 GB or less keeps them compressed.": "オフにするとビデオメモリを4〜8倍使います。テクスチャを正しく描けないドライバーのときだけ。4GB以下のカードでは圧縮のままです。"
