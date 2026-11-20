@@ -74,12 +74,20 @@ pub(crate) enum ListKind {
     PlaceHof(String, String),
     /// Where to save the situation: a new slot, or one of the map's slots to save over (#2556).
     SaveSlots,
+    /// The object editor's objects to place, in this folder (`Sceneryobjects\...`), and
+    /// the labels of the object picked (see `editor_lists`).
+    EditorObjects(String),
+    EditorLabels,
+    /// The spline types (`.sli`) in this folder, and the values of the spline picked (see
+    /// `editor_splines`).
+    EditorSplineTypes(String),
+    EditorSplineValues,
 }
 
 /// The lists with a search line on top: the vehicles to place, the depot files and the
 /// destinations.
 pub(crate) fn searchable(kind: &ListKind) -> bool {
-    matches!(kind, ListKind::Hofs | ListKind::Liveries | ListKind::Streets | ListKind::Destinations | ListKind::PlaceMaker | ListKind::PlaceType(_) | ListKind::PlaceHof(..) | ListKind::AdminPlayers)
+    matches!(kind, ListKind::Hofs | ListKind::Liveries | ListKind::Streets | ListKind::Destinations | ListKind::PlaceMaker | ListKind::PlaceType(_) | ListKind::PlaceHof(..) | ListKind::AdminPlayers | ListKind::EditorObjects(_) | ListKind::EditorSplineTypes(_))
 }
 
 /// The search typed (while it is) or set for the open list.
@@ -790,6 +798,10 @@ pub(crate) fn items(app: &App, kind: &ListKind) -> Vec<(String, String)> {
             }
         }
         ListKind::Liveries => out.extend(app.player.iter().flat_map(|p| liveries::items(p.vehicle.host.paint_scheme.flatten(), &p.vehicle.ty.paint_schemes))),
+        ListKind::EditorObjects(dir) => out = crate::editor_lists::object_items(app, dir),
+        ListKind::EditorLabels => out = crate::editor_lists::label_items(app),
+        ListKind::EditorSplineTypes(dir) => out = crate::editor_splines::type_items(app, dir),
+        ListKind::EditorSplineValues => out = crate::editor_splines::value_items(app),
     }
     if searchable(kind) {
         let query = search_query(app);
@@ -918,6 +930,10 @@ pub(crate) fn menu_extras(
         ListKind::RouteNumbers => (MenuKind::List, Some((tr("Route number"), String::new())), None),
         ListKind::Hofs => (MenuKind::List, head("Depot file (HOF)..."), None),
         ListKind::SaveSlots => (MenuKind::List, head("Save to a slot..."), None),
+        ListKind::EditorObjects(dir) => (MenuKind::List, Some((title("Place an object"), dir.clone())), None),
+        ListKind::EditorLabels => (MenuKind::List, Some((title("Labels"), tr("Enter sets it, Esc cancels"))), None),
+        ListKind::EditorSplineTypes(dir) => (MenuKind::List, Some((title("Spline type"), dir.clone())), None),
+        ListKind::EditorSplineValues => (MenuKind::List, Some((title("Spline"), tr("Enter sets it, Esc cancels"))), None),
         ListKind::Spots => (MenuKind::List, head("Teleport to a start point..."), None),
         ListKind::PlaceMaker | ListKind::PlaceType(_) | ListKind::PlaceLivery(_) | ListKind::PlaceHof(..) => (MenuKind::List, head("Place a vehicle..."), None),
         ListKind::Admin | ListKind::AdminPlayer(_) | ListKind::AdminConfirm(..) | ListKind::AdminClassic => (MenuKind::List, Some((tr("Administration"), String::new())), None),
@@ -975,11 +991,18 @@ pub(crate) fn run_move(app: &mut App, kind: &ListKind, action: &str, mv: Move) -
             ListKind::AdminPlayer(_) => Some(ListKind::AdminPlayers),
             ListKind::AdminConfirm(_, t) => Some(ListKind::AdminPlayer(*t)),
             ListKind::GraphicsConfirm(tab) => { cancel_graphics_changes(app); Some(ListKind::Options(*tab)) },
+            // (the object editor's lists: back to the editor)
+            ListKind::EditorObjects(_) | ListKind::EditorLabels | ListKind::EditorSplineTypes(_) | ListKind::EditorSplineValues => {
+                app.close_game_menu();
+                None
+            }
             _ => None,
         };
     }
     let (verb, arg) = action.split_once(' ').unwrap_or((action, ""));
     match kind {
+        ListKind::EditorObjects(_) | ListKind::EditorLabels => crate::editor_lists::run(app, kind, verb, arg),
+        ListKind::EditorSplineTypes(_) | ListKind::EditorSplineValues => crate::editor_splines::run(app, kind, verb, arg),
         ListKind::GraphicsConfirm(tab) => graphics_confirmation_action(app, *tab, action, mv),
         ListKind::ControllerDevices(_) | ListKind::Controller(..) | ListKind::ControllerAxis(..) | ListKind::ControllerButtons(_) | ListKind::ControllerButtonSettings(..) | ListKind::ControllerButton(..) | ListKind::ControllerCapture(_) => unreachable!("controller lists handled above"),
         ListKind::PlayerList | ListKind::PlayerPage(_) | ListKind::PlayerDo(..) | ListKind::BanList => crate::player_list::run(app, kind, action),

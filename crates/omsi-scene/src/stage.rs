@@ -538,6 +538,12 @@ impl World {
     pub(super) fn stage_tile(&self, tx: i32, ty: i32, path: &Path, index: &MapIndex) -> StagedTile {
         let origin2 = DVec2::new(tx as f64 * tile_size(), ty as f64 * tile_size());
         let origin = DVec3::new(origin2.x, origin2.y, 0.0);
+        // (a tile the object editor changed is read from its text in memory)
+        // (and one it did not, from its file: not from a text left by an earlier map)
+        match self.tile_texts.lock().get(&(tx, ty)) {
+            Some(text) => omsi_cfg::vfs::put_memory_file(path.to_path_buf(), crate::editor::tile_bytes(text).into()),
+            None => omsi_cfg::vfs::forget_memory_file(path),
+        }
         let tile = omsi_world::map_index::read_tile(path, &self.chrono_dirs());
         // (an active chrono patch may bring the tile's terrain: see `Tile::terrain_from`)
         let terrain_path = match &tile {

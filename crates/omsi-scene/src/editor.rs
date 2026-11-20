@@ -2,18 +2,23 @@
 //! scenery objects a tile places itself (its `[object]` records) can be picked, moved,
 //! turned and deleted where they stand, and the tiles changed are written as copies into
 //! the content folder - which the game reads before the installation - never into the
-//! original map. New objects are made as copies of one that is there (C), and a copy
-//! takes the shape of any other object of its folder (V): each is a new `[object]` record
-//! after its model's. The ground is shaped with a brush where the view points (raised,
-//! lowered, flattened); a tile's ground is written as its `.map.terrain` copy. Splines are
-//! not part of it (the timetable is the launcher's Timetable page).
+//! original map. New objects are new `[object]` records: any `.sco` chosen from the
+//! object list (P), or a copy of the object picked (C), whose type can then be stepped
+//! through the other objects of its folder (V). A record added (or an object's labels
+//! changed) goes into the tile's text kept in memory ([`World::tile_texts`]) and the tile
+//! is read again: the new object is then a map object as any other, drawn whole - its
+//! text textures, `[htmltexture]` pages and scripts included - and picked, moved and
+//! turned as the others. The ground is shaped with a brush where the view points
+//! (raised, lowered, flattened); a tile's ground is written as its `.map.terrain` copy.
+//! Splines are not part of it (the timetable is the launcher's Timetable page).
 //!
 //! Keys while it is on (Ctrl+Shift+E, or the game menu):
 //! Enter picks the object nearest the middle of the view, Tab the next nearest;
 //! I / K / J / L move it forward, back, left and right as the camera faces, U / O down and
 //! up, N / M turn it (half a metre and five degrees a press, a tenth with Shift);
 //! Delete takes it away (again: back), Backspace undoes all its edits, C copies it (the
-//! copy is then the one edited), V gives a copy the next object of its folder, Ctrl+S
+//! copy is then the one edited), V gives an object placed in this session the next
+//! object of its folder, P opens the object list, T the picked object's labels, Ctrl+S
 //! saves the changed tiles and Escape leaves the editor. Page Up / Page Down raise and
 //! lower the ground under the middle of the view (a quarter metre, a twentieth with
 //! Shift), F flattens it to the height at the middle, [ and ] make the brush smaller and
@@ -24,28 +29,23 @@ use glam::{DVec3, Vec3};
 use hashbrown::HashMap;
 use std::path::{Path, PathBuf};
 
-/// A new object: a copy of `template` (a map object), moved and turned from it, perhaps of
-/// another type of the template's folder.
-pub struct Added {
-    pub template: i64,
-    pub tile: (i32, i32),
+mod splines;
+pub use splines::NEW_LENGTH;
+
+/// An object put on the map in this session: a record of its own in its tile's text.
+#[derive(Clone, Debug)]
+pub struct Placed {
     pub id: i64,
-    /// Its `.sco` (the template's, or one of its folder: `V`).
-    pub sco: PathBuf,
-    pub base: DVec3,
-    pub base_heading: f64,
-    pub moved: DVec3,
-    pub turned: f64,
-    pub deleted: bool,
-    gpu: Option<crate::TileGpu>,
+    pub tile: (i32, i32),
+    /// Its `.sco` as the record names it (relative to the game's folder).
+    pub file: String,
 }
 
 #[derive(Default)]
 pub struct Editor {
     pub selected: Option<i64>,
-    /// The copies made in this session, and the one being edited (it takes the keys).
-    pub added: Vec<Added>,
-    pub editing_added: Option<usize>,
+    /// The objects placed in this session (new records), oldest first.
+    pub placed: Vec<Placed>,
     /// The tile of every object edited, by map id (its tile may be unloaded when saving).
     tiles: HashMap<i64, (i32, i32)>,
     /// The candidates of the last pick, nearest first (Tab walks them).
@@ -53,6 +53,12 @@ pub struct Editor {
     next: usize,
     /// The ground brush's radius (m; 0: the default).
     brush: f64,
+    /// The spline picked (Y), instead of an object: its id and its tile.
+    pub spline: Option<(i64, (i32, i32))>,
+    /// The spline type a new spline gets (the one last picked or chosen).
+    pub spline_type: Option<String>,
+    /// The tiles' texts before each spline change (`None`: the tile's file), newest last.
+    undo: Vec<Vec<((i32, i32), Option<String>)>>,
 }
 
 /// The ground brush's radius when none is set, and its limits (m).
@@ -75,12 +81,16 @@ pub enum Action {
     Flatten,
     /// Make the brush larger (or smaller) by this factor.
     Brush(f64),
+    /// The object list (a `.sco` to place).
+    Objects,
+    /// The picked object's labels.
+    Labels,
 }
 
 impl Editor {
     /// The objects in front of the camera, those nearest the middle of the view first.
     pub fn pick(&mut self, world: &World, eye: DVec3, forward: Vec3) -> Option<i64> {
-        self.editing_added = None;
+        self.spline = None;
         let f = forward.as_dvec3().normalize_or_zero();
         let objects = world.edit_objects.lock();
         let edits = world.object_edits.lock();
@@ -119,15 +129,9 @@ impl Editor {
         self.selected
     }
 
-    /// The object being edited (a map object or a copy) put where the mouse drags it: its
-    /// foot on the ground at `ground`, its turn kept.
+    /// The object picked put where the mouse drags it: its foot on the ground at `ground`,
+    /// its turn kept.
     pub fn drag_to(&mut self, world: &World, renderer: &omsi_render::Renderer, scene: &mut omsi_render::Scene, ground: DVec3) -> Option<String> {
-        if let Some(k) = self.editing_added {
-            let a = self.added.get_mut(k)?;
-            a.moved = ground - a.base;
-            self.place_added(k, world, renderer, scene);
-            return Some(self.describe(world));
-        }
         let id = self.selected?;
         let (tile, pos) = world.edit_objects.lock().get(&id).map(|o| (o.tile, o.pos))?;
         let mut e = world.object_edits.lock().get(&id).copied().unwrap_or_default();
@@ -139,56 +143,41 @@ impl Editor {
 
     /// What the other players' games need to show the object being edited as it is now
     /// (`all`: every object edited or added this session): LAN commands, see
-    /// `App::editor_broadcast`.
-    pub fn sync_lines(&self, world: &World, root: &Path, all: bool) -> Vec<String> {
+    /// `App::editor_broadcast`. An object placed in this session goes as `objadd` (the
+    /// others' games have no record of it), where it stands now.
+    pub fn sync_lines(&self, world: &World, _root: &Path, all: bool) -> Vec<String> {
         let mut out = Vec::new();
+        let placed_ids: Vec<i64> = self.placed.iter().map(|p| p.id).collect();
         let edits = world.object_edits.lock();
         let line = |id: i64, e: &ObjectEdit| format!("objedit {id} {:.3} {:.3} {:.3} {:.2} {}", e.moved.x, e.moved.y, e.moved.z, e.turned, e.deleted as u8);
         if all {
-            for (id, e) in edits.iter() {
+            for (id, e) in edits.iter().filter(|(id, _)| !placed_ids.contains(id)) {
                 out.push(line(*id, e));
             }
-        } else if let (None, Some(id)) = (self.editing_added, self.selected) {
+        } else if let Some(id) = self.selected.filter(|id| !placed_ids.contains(id)) {
             if let Some(e) = edits.get(&id) {
                 out.push(line(id, e));
             }
         }
-        let added_line = |a: &Added| {
-            let rel = a.sco.strip_prefix(root).unwrap_or(&a.sco).to_string_lossy().replace('\\', "/");
-            let p = a.base + a.moved;
-            format!("objadd {} {:.2} {:.2} {:.2} {:.1} {} {rel}", a.id, p.x, p.y, p.z, a.base_heading + a.turned, a.deleted as u8)
+        let objects = world.edit_objects.lock();
+        let added_line = |p: &Placed| {
+            let o = objects.get(&p.id)?;
+            let e = edits.get(&p.id).copied().unwrap_or_default();
+            let f = o.xf.transform_vector3(Vec3::Y);
+            let h = (f.x as f64).atan2(f.y as f64).to_degrees() + e.turned;
+            let at = o.pos + e.moved;
+            Some(format!("objadd {} {:.2} {:.2} {:.2} {:.1} {} {}", p.id, at.x, at.y, at.z, h, e.deleted as u8, p.file.replace('\\', "/")))
         };
         if all {
-            out.extend(self.added.iter().map(added_line));
-        } else if let Some(a) = self.editing_added.and_then(|k| self.added.get(k)) {
-            out.push(added_line(a));
+            out.extend(self.placed.iter().filter_map(added_line));
+        } else if let Some(p) = self.selected.and_then(|id| self.placed.iter().find(|p| p.id == id)) {
+            out.extend(added_line(p));
         }
         out
     }
 
-    /// Change the selected object; returns what to say.
+    /// Change the picked object; returns what to say.
     pub fn apply(&mut self, world: &World, renderer: &omsi_render::Renderer, scene: &mut omsi_render::Scene, action: &Action) -> Option<String> {
-        match action {
-            Action::Copy => return self.copy(world, renderer, scene),
-            Action::Variant => return self.variant(world, renderer, scene),
-            _ => {}
-        }
-        if let Some(k) = self.editing_added {
-            let a = self.added.get_mut(k)?;
-            match action {
-                Action::Move(d) => a.moved += *d,
-                Action::Turn(t) => a.turned += *t,
-                Action::Delete => a.deleted = !a.deleted,
-                Action::Undo => {
-                    a.moved = DVec3::ZERO;
-                    a.turned = 0.0;
-                    a.deleted = false;
-                }
-                _ => return None,
-            }
-            self.place_added(k, world, renderer, scene);
-            return Some(self.describe(world));
-        }
         let id = self.selected?;
         let tile = world.edit_objects.lock().get(&id).map(|o| o.tile)?;
         let mut e = world.object_edits.lock().get(&id).copied().unwrap_or_default();
@@ -204,71 +193,129 @@ impl Editor {
         Some(self.describe(world))
     }
 
-    /// A copy of the selected object beside it, which the keys then move.
-    fn copy(&mut self, world: &World, renderer: &omsi_render::Renderer, scene: &mut omsi_render::Scene) -> Option<String> {
-        // a copy of a copy is a copy of its template
-        let (template, sco, base, heading, tile) = match self.editing_added.and_then(|k| self.added.get(k)) {
-            Some(a) => (a.template, a.sco.clone(), a.base + a.moved, a.base_heading + a.turned, a.tile),
-            None => {
-                let id = self.selected?;
-                let objects = world.edit_objects.lock();
-                let o = objects.get(&id)?;
-                let e = world.object_edits.lock().get(&id).copied().unwrap_or_default();
-                let f = o.xf.transform_vector3(Vec3::Y);
-                let h = (f.x as f64).atan2(f.y as f64).to_degrees() + e.turned;
-                (id, o.sco.clone(), o.pos + e.moved, h, o.tile)
-            }
-        };
-        let max_id = world.edit_objects.lock().keys().copied().chain(self.added.iter().map(|a| a.id)).max().unwrap_or(0);
+    /// A new id: above every one the map has handed out (`[NextIDCode]` of global.cfg) and
+    /// every one loaded or placed now.
+    fn new_id(&self, world: &World) -> i64 {
+        let loaded = world.edit_objects.lock().keys().copied().max().unwrap_or(0);
+        let placed = self.placed.iter().map(|p| p.id).max().unwrap_or(0);
+        let texts = world.tile_texts.lock().values().flat_map(|t| record_ids(t)).max().unwrap_or(0);
+        world.global.next_id_code.max(loaded + 1).max(placed + 1).max(texts + 1)
+    }
+
+    /// Put `file` (a `.sco`, relative to the game's folder) on the map at `at` (its foot on
+    /// the ground there), turned to `heading` (degrees clockwise from north). Returns the
+    /// tile to read again.
+    pub fn place(&mut self, world: &World, file: &str, at: DVec3, heading: f64) -> Result<(i32, i32), String> {
+        let size = omsi_map::tile_size();
+        let tile = ((at.x / size).floor() as i32, (at.y / size).floor() as i32);
+        let mut text = tile_text(world, tile)?;
+        let version = tile_version(&text);
+        if version < 9 {
+            return Err(format!("tile ({}, {}) is of an old version ({version}): objects are not added to it", tile.0, tile.1));
+        }
+        let id = self.new_id(world);
+        let local = [at.x - tile.0 as f64 * size, at.y - tile.1 as f64 * size, 0.0];
+        let record = new_record(version, file, id, local, heading, &[], eol(&text));
+        if !text.ends_with('\n') && !text.is_empty() {
+            text.push_str(eol(&text));
+        }
+        text.push_str(&record);
+        world.tile_texts.lock().insert(tile, text);
+        self.placed.push(Placed { id, tile, file: file.to_string() });
+        self.tiles.insert(id, tile);
+        self.selected = Some(id);
+        Ok(tile)
+    }
+
+    /// A copy of the picked object two metres to its right (its labels, height over the
+    /// ground and tilt with it), which is then the one picked. Returns the tile to read
+    /// again.
+    pub fn copy(&mut self, world: &World) -> Result<(i32, i32), String> {
+        let id = self.selected.ok_or("Pick an object first (Enter)")?;
+        let (tile, xf) = world.edit_objects.lock().get(&id).map(|o| (o.tile, o.xf)).ok_or("The object is not loaded")?;
+        let e = world.object_edits.lock().get(&id).copied().unwrap_or_default();
+        let f = xf.transform_vector3(Vec3::Y);
+        let heading = (f.x as f64).atan2(f.y as f64).to_degrees() + e.turned;
         let right = DVec3::new(heading.to_radians().cos(), -heading.to_radians().sin(), 0.0);
-        self.added.push(Added { template, tile, id: max_id + 1, sco, base: base + right * 2.0, base_heading: heading, moved: DVec3::ZERO, turned: 0.0, deleted: false, gpu: None });
-        let k = self.added.len() - 1;
-        self.editing_added = Some(k);
-        self.tiles.insert(template, tile);
-        self.place_added(k, world, renderer, scene);
-        Some(self.describe(world))
+        let text = tile_text(world, tile)?;
+        let new_id = self.new_id(world);
+        let (text, file) = copy_record(&text, id, new_id, e.moved + right * 2.0, e.turned).ok_or_else(|| format!("object {id} was not found in its tile"))?;
+        world.tile_texts.lock().insert(tile, text);
+        self.placed.push(Placed { id: new_id, tile, file });
+        self.tiles.insert(new_id, tile);
+        self.selected = Some(new_id);
+        Ok(tile)
     }
 
-    /// The copy being edited takes the next object type of its folder.
-    fn variant(&mut self, world: &World, renderer: &omsi_render::Renderer, scene: &mut omsi_render::Scene) -> Option<String> {
-        let k = self.editing_added?;
-        let cur = self.added[k].sco.clone();
-        let dir = cur.parent()?;
-        let mut all: Vec<PathBuf> = omsi_cfg::vfs::list_dir(dir)?.into_iter().map(|(n, _)| dir.join(n)).filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("sco"))).collect();
-        all.sort();
-        let i = all.iter().position(|p| p == &cur).map(|i| (i + 1) % all.len()).unwrap_or(0);
-        self.added[k].sco = all.get(i)?.clone();
-        self.place_added(k, world, renderer, scene);
-        Some(self.describe(world))
-    }
-
-    /// Draw copy `k` where it is now.
-    fn place_added(&mut self, k: usize, world: &World, renderer: &omsi_render::Renderer, scene: &mut omsi_render::Scene) {
-        let a = &mut self.added[k];
-        if let Some(g) = a.gpu.take() {
-            world.remove_helper_object(renderer, scene, g);
+    /// The object picked, if placed in this session, takes the next object of its folder.
+    /// Returns the tile to read again.
+    pub fn variant(&mut self, world: &World, root: &Path) -> Result<(i32, i32), String> {
+        let id = self.selected.ok_or("Pick an object first (Enter)")?;
+        let k = self.placed.iter().position(|p| p.id == id).ok_or("V changes only an object placed in this session (P or C)")?;
+        let cur = self.placed[k].file.clone();
+        let (dir_rel, name) = match cur.rfind(['\\', '/']) {
+            Some(i) => (&cur[..i], &cur[i + 1..]),
+            None => ("", cur.as_str()),
+        };
+        let names = sco_names(root, dir_rel);
+        if names.is_empty() {
+            return Err(format!("no objects found in {dir_rel}"));
         }
-        if !a.deleted {
-            a.gpu = world.add_helper_object(renderer, scene, &a.sco.to_string_lossy(), a.base + a.moved, a.base_heading + a.turned, &[]);
-        }
+        let i = names.iter().position(|n| n.eq_ignore_ascii_case(name)).map(|i| (i + 1) % names.len()).unwrap_or(0);
+        let file = if dir_rel.is_empty() { names[i].clone() } else { format!("{dir_rel}\\{}", names[i]) };
+        let tile = self.placed[k].tile;
+        let text = tile_text(world, tile)?;
+        let text = set_record_file(&text, id, &file).ok_or_else(|| format!("object {id} was not found in its tile"))?;
+        world.tile_texts.lock().insert(tile, text);
+        self.placed[k].file = file;
+        Ok(tile)
     }
 
-    /// The selected object and what has been done to it.
+    /// The labels of the object picked, as its record has them now (its id and tile too).
+    pub fn labels(&self, world: &World) -> Option<(i64, (i32, i32), Vec<String>)> {
+        let id = self.selected?;
+        let tile = world.edit_objects.lock().get(&id).map(|o| o.tile).or_else(|| self.tiles.get(&id).copied())?;
+        let text = tile_text(world, tile).ok()?;
+        Some((id, tile, record_labels(&text, id)?))
+    }
+
+    /// Set label `k` of object `id` (lines up to it added empty); `None`: a new last line.
+    /// Returns the tile to read again.
+    pub fn set_label(&mut self, world: &World, id: i64, k: Option<usize>, value: &str) -> Result<(i32, i32), String> {
+        let tile = world.edit_objects.lock().get(&id).map(|o| o.tile).or_else(|| self.tiles.get(&id).copied()).ok_or("The object is not loaded")?;
+        let text = tile_text(world, tile)?;
+        let mut labels = record_labels(&text, id).ok_or_else(|| format!("object {id} was not found in its tile"))?;
+        let k = k.unwrap_or(labels.len());
+        if labels.len() <= k {
+            labels.resize(k + 1, String::new());
+        }
+        labels[k] = value.replace(['\r', '\n'], " ");
+        let text = set_record_labels(&text, id, &labels).ok_or_else(|| format!("object {id} was not found in its tile"))?;
+        world.tile_texts.lock().insert(tile, text);
+        self.tiles.insert(id, tile);
+        Ok(tile)
+    }
+
+    /// The object picked and what has been done to it.
     pub fn describe(&self, world: &World) -> String {
-        if let Some(a) = self.editing_added.and_then(|k| self.added.get(k)) {
-            let name = a.sco.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-            return if a.deleted { format!("New object {name}: taken away (Delete brings it back)") } else { format!("New object {} {name}: V for the next of its folder, C copies it again", a.id) };
-        }
         let Some(id) = self.selected else { return "Object editor: Enter picks the object in the middle of the view".into() };
         let name = world
             .edit_objects
             .lock()
             .get(&id)
-            .and_then(|o| o.sco.file_name().map(|n| n.to_string_lossy().to_string()))
-            .unwrap_or_default();
+            .and_then(|o| o.sco.file_name().map(|n| n.to_string_lossy().to_string()));
+        let Some(name) = name else {
+            return match self.placed.iter().find(|p| p.id == id) {
+                Some(p) => omsi_ui::tr("New object {id} {name}: loading...").replace("{id}", &id.to_string()).replace("{name}", p.file.rsplit(['\\', '/']).next().unwrap_or(&p.file)),
+                None => format!("Object {id}: not loaded"),
+            };
+        };
+        let new = self.placed.iter().any(|p| p.id == id);
         let e = world.object_edits.lock().get(&id).copied().unwrap_or_default();
         if e.deleted {
             format!("Object {id} {name}: deleted (Delete brings it back)")
+        } else if new && e == ObjectEdit::default() {
+            omsi_ui::tr("New object {id} {name}: V for the next of its folder, T labels, C copies it").replace("{id}", &id.to_string()).replace("{name}", &name)
         } else if e == ObjectEdit::default() {
             omsi_ui::i18n::said(omsi_ui::tr("Object {id} {name}").replace("{id}", &id.to_string()).replace("{name}", &name), format!("Object {id} {name}"))
         } else {
@@ -332,20 +379,18 @@ impl Editor {
     }
 
     /// Write every tile with edits as a copy under `content` (the map's own folder there),
-    /// from the file the game reads it from. Returns the files written.
+    /// from the file the game reads it from (or its text as edited in this session).
+    /// Returns the files written.
     pub fn save(&self, world: &World, map_rel: &str, content: &Path, original: &Path) -> Result<Vec<PathBuf>, String> {
         let edits = world.object_edits.lock().clone();
+        let texts = world.tile_texts.lock().clone();
         let mut by_tile: HashMap<(i32, i32), HashMap<i64, ObjectEdit>> = HashMap::new();
         for (id, e) in edits {
             let Some(tile) = self.tiles.get(&id) else { continue };
             by_tile.entry(*tile).or_default().insert(id, e);
         }
-        let mut copies_by_tile: HashMap<(i32, i32), Vec<NewRecord>> = HashMap::new();
-        for a in self.added.iter().filter(|a| !a.deleted) {
-            let file = a.sco.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-            let offset = a.base + a.moved - world.edit_objects.lock().get(&a.template).map(|o| o.pos).unwrap_or(a.base);
-            copies_by_tile.entry(a.tile).or_default().push(NewRecord { template: a.template, id: a.id, file, moved: offset, turned: a.base_heading + a.turned - template_heading(world, a.template).unwrap_or(a.base_heading) });
-            by_tile.entry(a.tile).or_default();
+        for tile in texts.keys() {
+            by_tile.entry(*tile).or_default();
         }
         let map_dir = Path::new(map_rel).parent().unwrap_or(Path::new(""));
         let mut written = Vec::new();
@@ -363,12 +408,18 @@ impl Editor {
                     return Err(omsi_ui::tr("{file} lies in the original installation: not written").replace("{file}", &out.display().to_string()));
                 }
             }
-            let bytes = omsi_cfg::vfs::read(&src).map_err(|e| format!("{}: {e}", src.display()))?;
-            let (text, enc) = decode(&bytes);
+            // a tile whose text was edited here (objects added, labels changed) is written
+            // as OMSI's editor writes tiles: UTF-16 (a label may hold any letter)
+            let edited = texts.get(&(tx, ty));
+            let (text, enc) = match edited {
+                Some(t) => (t.clone(), Encoding::Utf16Le),
+                None => {
+                    let bytes = omsi_cfg::vfs::read(&src).map_err(|e| format!("{}: {e}", src.display()))?;
+                    decode(&bytes)
+                }
+            };
             let (new_text, n) = rewrite_tile(&text, &edits);
-            let (new_text, c) = add_copies(&new_text, copies_by_tile.get(&(tx, ty)).map(|v| v.as_slice()).unwrap_or(&[]));
-            let n = n + c;
-            if n == 0 {
+            if n == 0 && edited.is_none() {
                 return Err(omsi_ui::tr("the objects edited were not found in {file}").replace("{file}", &src.display().to_string()));
             }
             std::fs::create_dir_all(out.parent().unwrap_or(Path::new("."))).map_err(|e| e.to_string())?;
@@ -401,6 +452,245 @@ impl Editor {
     }
 }
 
+/// The `.sco` files of folder `dir_rel` (relative to the game's folder, `\` or `/`), from
+/// the content folders and the game's folder, sorted, each name once.
+pub fn sco_names(root: &Path, dir_rel: &str) -> Vec<String> {
+    files_of(root, dir_rel, "sco")
+}
+
+/// The files of folder `dir_rel` with extension `ext` (as [`sco_names`]).
+pub fn files_of(root: &Path, dir_rel: &str, ext: &str) -> Vec<String> {
+    let suffix = format!(".{}", ext.to_ascii_lowercase());
+    let mut out: Vec<String> = Vec::new();
+    for base in omsi_cfg::content_roots().iter().chain(std::iter::once(&root.to_path_buf())) {
+        let dir = omsi_cfg::resolve_path(base, dir_rel);
+        for (n, is_dir) in omsi_cfg::vfs::list_dir(&dir).unwrap_or_default() {
+            let n = n.to_string_lossy().to_string();
+            if !is_dir && n.to_ascii_lowercase().ends_with(&suffix) && !out.iter().any(|o| o.eq_ignore_ascii_case(&n)) {
+                out.push(n);
+            }
+        }
+    }
+    out.sort_by_key(|n| n.to_lowercase());
+    out
+}
+
+/// The folders in folder `dir_rel` (as [`sco_names`]).
+pub fn sub_dirs(root: &Path, dir_rel: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for base in omsi_cfg::content_roots().iter().chain(std::iter::once(&root.to_path_buf())) {
+        let dir = omsi_cfg::resolve_path(base, dir_rel);
+        for (n, is_dir) in omsi_cfg::vfs::list_dir(&dir).unwrap_or_default() {
+            let n = n.to_string_lossy().to_string();
+            if is_dir && !out.iter().any(|o| o.eq_ignore_ascii_case(&n)) {
+                out.push(n);
+            }
+        }
+    }
+    out.sort_by_key(|n| n.to_lowercase());
+    out
+}
+
+/// The tile's text as the game reads it now: edited in this session, or its file.
+fn tile_text(world: &World, tile: (i32, i32)) -> Result<String, String> {
+    if let Some(t) = world.tile_texts.lock().get(&tile) {
+        return Ok(t.clone());
+    }
+    let src = world.tile_source(tile.0, tile.1).ok_or_else(|| format!("tile ({}, {}) is not in the map", tile.0, tile.1))?;
+    if omsi_cfg::vfs::is_sealed(&src) {
+        return Err(format!("{} is the LAN host's map: not edited", src.display()));
+    }
+    let bytes = omsi_cfg::vfs::read(&src).map_err(|e| format!("{}: {e}", src.display()))?;
+    // (as the game reads it: a tile without a byte order mark in the map's code page)
+    Ok(omsi_cfg::decode_text(&bytes))
+}
+
+/// The text of an edited tile as the game reads it in place of its file (UTF-16 with its
+/// byte order mark, as OMSI's editor writes tiles).
+pub fn tile_bytes(text: &str) -> Vec<u8> {
+    encode(text, Encoding::Utf16Le)
+}
+
+/// The tile's `[version]`; a tile without one is read as the newest (as the game reads it).
+pub fn tile_version(text: &str) -> i32 {
+    let mut lines = text.lines();
+    while let Some(l) = lines.next() {
+        if l.trim().eq_ignore_ascii_case("[version]") {
+            return lines.next().and_then(|v| v.trim().parse().ok()).filter(|v| *v > 0).unwrap_or(NEWEST);
+        }
+    }
+    NEWEST
+}
+
+/// The version a tile without `[version]` is read as.
+const NEWEST: i32 = 14;
+
+/// The line ending the tile uses.
+fn eol(text: &str) -> &'static str {
+    if text.contains("\r\n") || text.is_empty() { "\r\n" } else { "\n" }
+}
+
+/// Where the parts of an `[object]` record of a version-9-or-later tile stand, counted from
+/// its keyword line: the file, the id, x (then y, z), the heading and the label count.
+#[derive(Clone, Copy)]
+struct Layout {
+    file: usize,
+    id: usize,
+    x: usize,
+    heading: usize,
+    count: usize,
+}
+
+fn layout(version: i32) -> Layout {
+    Layout { file: 2, id: 3, x: 4, heading: 7, count: if version >= 12 { 10 } else { 8 } }
+}
+
+/// The `[object]` record of `id`: its first line and one past its last (its labels
+/// counted, not guessed: a label may look like a keyword).
+fn find_record(lines: &[&str], id: i64, version: i32) -> Option<(usize, usize)> {
+    let l = layout(version);
+    let body = |s: &str| s.trim_end_matches(['\r', '\n']).trim().to_string();
+    for i in 0..lines.len() {
+        if !body(lines[i]).eq_ignore_ascii_case("[object]") {
+            continue;
+        }
+        if lines.get(i + l.id).and_then(|s| body(s).parse::<i64>().ok()) != Some(id) {
+            continue;
+        }
+        let n = lines.get(i + l.count).and_then(|s| body(s).parse::<usize>().ok()).unwrap_or(0);
+        return Some((i, (i + l.count + 1 + n).min(lines.len())));
+    }
+    None
+}
+
+/// The ids of every `[object]` record (version 9 or later).
+fn record_ids(text: &str) -> Vec<i64> {
+    let lines: Vec<&str> = text.lines().collect();
+    let l = layout(tile_version(text));
+    (0..lines.len())
+        .filter(|i| lines[*i].trim().eq_ignore_ascii_case("[object]"))
+        .filter_map(|i| lines.get(i + l.id).and_then(|s| s.trim().parse().ok()))
+        .collect()
+}
+
+/// A new `[object]` record (version 9 or later): no tilt, its foot `pos[2]` over the ground.
+fn new_record(version: i32, file: &str, id: i64, pos: [f64; 3], heading: f64, labels: &[String], eol: &str) -> String {
+    let mut lines = vec!["[object]".to_string(), "0".into(), file.to_string(), id.to_string(), num(pos[0]), num(pos[1]), num(pos[2]), num(heading)];
+    if version >= 12 {
+        lines.push("0".into());
+        lines.push("0".into());
+    }
+    lines.push(labels.len().to_string());
+    lines.extend(labels.iter().cloned());
+    lines.push(String::new());
+    let mut s = lines.join(eol);
+    s.push_str(eol);
+    s
+}
+
+/// The tile with a copy of `template`'s record right after it: id `new_id`, moved by
+/// `moved` (x, y and the height over the ground) and turned by `turned`. Returns the text
+/// and the copy's file.
+pub fn copy_record(text: &str, template: i64, new_id: i64, moved: DVec3, turned: f64) -> Option<(String, String)> {
+    let version = tile_version(text);
+    let lines: Vec<&str> = text.split_inclusive('\n').collect();
+    let (start, end) = find_record(&lines, template, version)?;
+    let l = layout(version);
+    let body = |s: &str| s.trim_end_matches(['\r', '\n']).to_string();
+    let e = eol(text);
+    let mut copy = String::new();
+    let mut file = String::new();
+    for (k, line) in lines[start..end].iter().enumerate() {
+        let b = body(line);
+        let new = if k == l.id {
+            new_id.to_string()
+        } else if (l.x..l.x + 3).contains(&k) || k == l.heading {
+            let d = if k == l.heading { turned } else { [moved.x, moved.y, moved.z][k - l.x] };
+            match b.trim().parse::<f64>() {
+                Ok(v) => num(v + d),
+                Err(_) => b.clone(),
+            }
+        } else {
+            if k == l.file {
+                file = b.trim().to_string();
+            }
+            b.clone()
+        };
+        copy.push_str(&new);
+        copy.push_str(e);
+    }
+    copy.push_str(e);
+    let mut out = String::with_capacity(text.len() + copy.len());
+    for line in &lines[..end] {
+        out.push_str(line);
+    }
+    if !out.ends_with('\n') {
+        out.push_str(e);
+    }
+    out.push_str(e);
+    out.push_str(&copy);
+    for line in &lines[end..] {
+        out.push_str(line);
+    }
+    Some((out, file))
+}
+
+/// The tile with the file of `id`'s record changed.
+pub fn set_record_file(text: &str, id: i64, file: &str) -> Option<String> {
+    let version = tile_version(text);
+    let lines: Vec<&str> = text.split_inclusive('\n').collect();
+    let (start, _) = find_record(&lines, id, version)?;
+    let at = start + layout(version).file;
+    let line = lines.get(at)?;
+    let ending = &line[line.trim_end_matches(['\r', '\n']).len()..];
+    let mut out = String::with_capacity(text.len());
+    for (i, l) in lines.iter().enumerate() {
+        if i == at {
+            out.push_str(file);
+            out.push_str(ending);
+        } else {
+            out.push_str(l);
+        }
+    }
+    Some(out)
+}
+
+/// The labels of `id`'s record (all the lines its count says, empty ones too).
+pub fn record_labels(text: &str, id: i64) -> Option<Vec<String>> {
+    let version = tile_version(text);
+    let lines: Vec<&str> = text.split_inclusive('\n').collect();
+    let (start, end) = find_record(&lines, id, version)?;
+    let first = start + layout(version).count + 1;
+    Some(lines[first.min(end)..end].iter().map(|l| l.trim_end_matches(['\r', '\n']).to_string()).collect())
+}
+
+/// The tile with `id`'s labels replaced by `labels` (the count with them).
+pub fn set_record_labels(text: &str, id: i64, labels: &[String]) -> Option<String> {
+    let version = tile_version(text);
+    let lines: Vec<&str> = text.split_inclusive('\n').collect();
+    let (start, end) = find_record(&lines, id, version)?;
+    let count = start + layout(version).count;
+    if count >= lines.len() {
+        return None;
+    }
+    let e = eol(text);
+    let mut out = String::with_capacity(text.len() + 64);
+    for l in &lines[..count] {
+        out.push_str(l);
+    }
+    out.push_str(&labels.len().to_string());
+    out.push_str(e);
+    for l in labels {
+        out.push_str(l);
+        out.push_str(e);
+    }
+    // (a record that was the file's last line without an ending)
+    for l in &lines[end..] {
+        out.push_str(l);
+    }
+    Some(out)
+}
+
 /// Shape one tile's ground (its origin `o`) about `at` within `r`: raise by `Ground`'s
 /// metres, or bring toward `target` (`Flatten`), weighted smoothly to nothing at the rim.
 /// True when a point moved.
@@ -428,89 +718,6 @@ fn shape(t: &mut omsi_map::Terrain, o: (f64, f64), at: DVec3, r: f64, action: &A
         }
     }
     any
-}
-
-/// The heading of map object `id` as it stands now (its edits included).
-fn template_heading(world: &World, id: i64) -> Option<f64> {
-    let objects = world.edit_objects.lock();
-    let o = objects.get(&id)?;
-    let e = world.object_edits.lock().get(&id).copied().unwrap_or_default();
-    let f = o.xf.transform_vector3(Vec3::Y);
-    Some((f.x as f64).atan2(f.y as f64).to_degrees() + e.turned)
-}
-
-/// A new object for the tile file: a copy of `template`'s record with its own id, another
-/// file name of the same folder (or the same), moved and turned from the template.
-pub struct NewRecord {
-    pub template: i64,
-    pub id: i64,
-    pub file: String,
-    pub moved: DVec3,
-    pub turned: f64,
-}
-
-/// The tile file with `copies` added, each record after its template's. Returns the text
-/// and how many were added.
-pub fn add_copies(text: &str, copies: &[NewRecord]) -> (String, usize) {
-    if copies.is_empty() {
-        return (text.to_string(), 0);
-    }
-    let lines: Vec<&str> = text.split_inclusive('\n').collect();
-    let body = |l: &str| l.trim_end_matches(['\r', '\n']).to_string();
-    let ending = |l: &str| l[l.trim_end_matches(['\r', '\n']).len()..].to_string();
-    let mut out = String::with_capacity(text.len() + copies.len() * 200);
-    let mut added = 0;
-    let mut i = 0;
-    while i < lines.len() {
-        let is_object = body(lines[i]).trim().eq_ignore_ascii_case("[object]");
-        let id = lines.get(i + 3).and_then(|l| body(l).trim().parse::<i64>().ok());
-        let mine: Vec<&NewRecord> = if is_object { copies.iter().filter(|c| Some(c.template) == id).collect() } else { Vec::new() };
-        if mine.is_empty() {
-            out.push_str(lines[i]);
-            i += 1;
-            continue;
-        }
-        // the template's record, up to the next keyword
-        let start = i;
-        i += 1;
-        while i < lines.len() && !body(lines[i]).trim_start().starts_with('[') {
-            i += 1;
-        }
-        let record = &lines[start..i];
-        for l in record {
-            out.push_str(l);
-        }
-        let eol = ending(record[0]);
-        // (a blank line between records, as the editor writes them)
-        if !record.last().map(|l| body(l).trim().is_empty()).unwrap_or(false) {
-            out.push_str(&eol);
-        }
-        for c in mine {
-            for (k, l) in record.iter().enumerate() {
-                let b = body(l);
-                let new = match k {
-                    // the file: the copy's name in the template's folder
-                    2 => match b.rfind(['\\', '/']) {
-                        Some(p) => format!("{}{}", &b[..=p], c.file),
-                        None => c.file.clone(),
-                    },
-                    3 => c.id.to_string(),
-                    4..=7 => match b.trim().parse::<f64>() {
-                        Ok(v) => num(v + [c.moved.x, c.moved.y, c.moved.z, c.turned][k - 4]),
-                        Err(_) => b.clone(),
-                    },
-                    _ => b.clone(),
-                };
-                out.push_str(&new);
-                out.push_str(&ending(l));
-            }
-            if !record.last().map(|l| body(l).trim().is_empty()).unwrap_or(false) {
-                out.push_str(&eol);
-            }
-            added += 1;
-        }
-    }
-    (out, added)
 }
 
 /// How a tile file is written: OMSI's editor saves UTF-16 (little endian, with its byte
@@ -556,6 +763,7 @@ pub fn rewrite_tile(text: &str, edits: &HashMap<i64, ObjectEdit>) -> (String, us
     let lines: Vec<&str> = text.split_inclusive('\n').collect();
     let body = |l: &str| l.trim_end_matches(['\r', '\n']).to_string();
     let ending = |l: &str| l[l.trim_end_matches(['\r', '\n']).len()..].to_string();
+    let version = tile_version(text);
     let mut out = String::with_capacity(text.len());
     let mut changed = 0;
     let mut i = 0;
@@ -570,10 +778,17 @@ pub fn rewrite_tile(text: &str, edits: &HashMap<i64, ObjectEdit>) -> (String, us
         };
         changed += 1;
         if e.deleted {
-            // the record up to the next keyword
-            i += 1;
-            while i < lines.len() && !body(lines[i]).trim_start().starts_with('[') {
-                i += 1;
+            // the record: its labels counted where the version says where the count is
+            // (a label may look like a keyword), else up to the next keyword
+            let counted = (version >= 9).then(|| find_record(&lines[i..], id.unwrap_or(0), version)).flatten().map(|(_, end)| i + end);
+            match counted {
+                Some(end) => i = end,
+                None => {
+                    i += 1;
+                    while i < lines.len() && !body(lines[i]).trim_start().starts_with('[') {
+                        i += 1;
+                    }
+                }
             }
             continue;
         }
@@ -638,16 +853,70 @@ mod tests {
         let (text, enc) = decode(&bytes);
         assert_eq!((text.as_str(), enc), (TILE, Encoding::Utf16Le));
     }
-}
 
-#[cfg(test)]
-mod copy_tests {
+    /// A tile of version 14, as OMSI's editor writes them: a sign with labels that look
+    /// like keywords, and a post.
+    const TILE14: &str = "[version]\r\n14\r\n\r\n[object]\r\n0\r\nSceneryobjects\\A\\sign.sco\r\n5\r\n10\r\n20\r\n0.5\r\n90\r\n0\r\n0\r\n2\r\n[A38]\r\nTotnes\r\n\r\n[object]\r\n0\r\nSceneryobjects\\A\\post.sco\r\n6\r\n1\r\n2\r\n0\r\n0\r\n0\r\n0\r\n0\r\n\r\n";
+
+    fn parsed(text: &str) -> omsi_map::Tile {
+        omsi_map::Tile::parse(&omsi_cfg::CfgFile::from_str("tile_0_0.map", text))
+    }
+
     #[test]
-    fn a_copy_follows_its_template_with_its_own_id() {
-        let text = "[object]\r\n0\r\nSceneryobjects\\A\\post.sco\r\n17\r\n10\r\n20\r\n0\r\n90\r\n\r\n[object]\r\n0\r\nx.sco\r\n18\r\n1\r\n1\r\n0\r\n0\r\n";
-        let (out, n) = super::add_copies(text, &[super::NewRecord { template: 17, id: 99, file: "lamp.sco".into(), moved: glam::DVec3::new(2.0, 0.0, 0.0), turned: 10.0 }]);
+    fn a_new_record_reads_back_as_the_game_reads_it() {
+        let mut text = TILE14.to_string();
+        text.push_str(&new_record(14, "Sceneryobjects\\B\\bit.sco", 40, [12.5, 30.0, 0.0], 270.0, &["정류장".to_string()], "\r\n"));
+        let t = parsed(&text);
+        assert_eq!(t.objects.len(), 3);
+        let o = &t.objects[2];
+        assert_eq!((o.file.as_str(), o.id, o.pos, o.rot[0]), ("Sceneryobjects\\B\\bit.sco", 40, [12.5, 30.0, 0.0], 270.0));
+        assert_eq!(o.extra, vec!["정류장".to_string()]);
+        // the sign before it kept its labels
+        assert_eq!(t.objects[0].extra, vec!["[A38]".to_string(), "Totnes".to_string()]);
+        assert_eq!(record_ids(&text), vec![5, 6, 40]);
+    }
+
+    #[test]
+    fn a_tile_without_a_version_is_the_newest() {
+        let text = TILE14.replacen("[version]\r\n14\r\n", "", 1);
+        assert_eq!(tile_version(&text), NEWEST);
+        assert_eq!(record_labels(&text, 5).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn a_copy_follows_its_template_with_its_own_id_and_labels() {
+        let (out, file) = copy_record(TILE14, 5, 99, DVec3::new(2.0, 0.0, 0.0), 10.0).unwrap();
+        assert_eq!(file, "Sceneryobjects\\A\\sign.sco");
+        let t = parsed(&out);
+        let ids: Vec<i64> = t.objects.iter().map(|o| o.id).collect();
+        assert_eq!(ids, vec![5, 99, 6]);
+        assert_eq!((t.objects[1].pos, t.objects[1].rot[0]), ([12.0, 20.0, 0.5], 100.0));
+        assert_eq!(t.objects[1].extra, t.objects[0].extra);
+    }
+
+    #[test]
+    fn labels_and_files_change_in_their_record_only() {
+        assert_eq!(record_labels(TILE14, 5).unwrap(), vec!["[A38]".to_string(), "Totnes".to_string()]);
+        let out = set_record_labels(TILE14, 5, &["[A38]".into(), "논산터미널".into(), "x".into()]).unwrap();
+        let t = parsed(&out);
+        assert_eq!(t.objects[0].extra, vec!["[A38]".to_string(), "논산터미널".to_string(), "x".to_string()]);
+        assert_eq!(t.objects[1].id, 6);
+        // a post without labels gets its first
+        let out = set_record_labels(&out, 6, &["a".into()]).unwrap();
+        assert_eq!(parsed(&out).objects[1].extra, vec!["a".to_string()]);
+        let out = set_record_file(&out, 6, "Sceneryobjects\\A\\lamp.sco").unwrap();
+        assert_eq!(parsed(&out).objects[1].file, "Sceneryobjects\\A\\lamp.sco");
+        assert_eq!(parsed(&out).objects[0].file, "Sceneryobjects\\A\\sign.sco");
+    }
+
+    #[test]
+    fn a_deleted_sign_goes_with_labels_that_look_like_keywords() {
+        let mut edits = HashMap::new();
+        edits.insert(5, ObjectEdit { deleted: true, ..Default::default() });
+        let (out, n) = rewrite_tile(TILE14, &edits);
         assert_eq!(n, 1);
-        assert!(out.contains("Sceneryobjects\\A\\lamp.sco\r\n99\r\n12\r\n20\r\n0\r\n100\r\n"), "{out}");
-        assert!(out.contains("[object]\r\n0\r\nx.sco\r\n18"));
+        let t = parsed(&out);
+        assert_eq!(t.objects.iter().map(|o| o.id).collect::<Vec<_>>(), vec![6]);
+        assert!(!out.contains("Totnes"));
     }
 }

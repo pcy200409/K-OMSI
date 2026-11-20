@@ -7065,6 +7065,100 @@ _version: 2
   en: "refuelled: {now:.0} l in the tank"
 "click picks, drag moves, wheel turns (Shift: height), Delete, C copy, V variant, Backspace undo, PgUp/PgDn/F ground, [ ] brush, Ctrl+S save, Esc leave":
   en: "click picks, drag moves, wheel turns (Shift: height), Delete, C copy, V variant, Backspace undo, PgUp/PgDn/F ground, [ ] brush, Ctrl+S save, Esc leave"
+"click picks, drag moves, wheel turns (Shift: height), P place an object, T labels, Delete, C copy, V variant, Backspace undo, PgUp/PgDn/F ground, [ ] brush, Y spline, Shift+P spline type, E new spline, R station links, Ctrl+S save, Esc leave":
+  en: "click picks, drag moves, wheel turns (Shift: height), P place an object, T labels, Delete, C copy, V variant, Backspace undo, PgUp/PgDn/F ground, [ ] brush, Y spline, Shift+P spline type, E new spline, R station links, Ctrl+S save, Esc leave"
+"Spline: not found":
+  en: "Spline: not found"
+"Spline {id} {name}: {len} m, turn {turn}°, rises {h} m - I/K length, N/M curve, U/O height, E add, G join, T values, A ground, Delete":
+  en: "Spline {id} {name}: {len} m, turn {turn}°, rises {h} m - I/K length, N/M curve, U/O height, E add, G join, T values, A ground, Delete"
+"Heading (°)":
+  en: "Heading (°)"
+"Start height (m)":
+  en: "Start height (m)"
+"Length (m)":
+  en: "Length (m)"
+"Radius (m, 0 straight, - left)":
+  en: "Radius (m, 0 straight, - left)"
+"Gradient at the start (%)":
+  en: "Gradient at the start (%)"
+"Gradient at the end (%)":
+  en: "Gradient at the end (%)"
+"Height change (m, spline_h)":
+  en: "Height change (m, spline_h)"
+"Cant at the start (%)":
+  en: "Cant at the start (%)"
+"Cant at the end (%)":
+  en: "Cant at the end (%)"
+"Pick a spline first (Y)":
+  en: "Pick a spline first (Y)"
+"A spline is at least 0.1 m long":
+  en: "A spline is at least 0.1 m long"
+"The spline was not found in its tile":
+  en: "The spline was not found in its tile"
+"Choose a spline type first (Shift+P), or pick a spline (Y)":
+  en: "Choose a spline type first (Shift+P), or pick a spline (Y)"
+"The end cannot be reached with one curve from the spline's start":
+  en: "The end cannot be reached with one curve from the spline's start"
+"Type":
+  en: "Type"
+"The ground follows it":
+  en: "The ground follows it"
+"Add a spline at its end (E)":
+  en: "Add a spline at its end (E)"
+"Delete this spline":
+  en: "Delete this spline"
+"No splines in this folder":
+  en: "No splines in this folder"
+"No spline where the view points":
+  en: "No spline where the view points"
+"No open end of a road near the spline's end":
+  en: "No open end of a road near the spline's end"
+"Spline bent onto the road's end (it arrives {off}° off its direction) - Ctrl+S saves":
+  en: "Spline bent onto the road's end (it arrives {off}° off its direction) - Ctrl+S saves"
+"Spline change undone":
+  en: "Spline change undone"
+"Nothing to undo":
+  en: "Nothing to undo"
+"Spline deleted - Backspace brings it back":
+  en: "Spline deleted - Backspace brings it back"
+"{name}: E starts a spline of it at the open road end nearest the view":
+  en: "{name}: E starts a spline of it at the open road end nearest the view"
+"Not a number: {text}":
+  en: "Not a number: {text}"
+"Spline type":
+  en: "Spline type"
+"Spline":
+  en: "Spline"
+"No station link to change ({kept} over edited roads not loaded or not routed)":
+  en: "No station link to change ({kept} over edited roads not loaded or not routed)"
+"{n} station links routed anew ({kept} left), written to {file} - read when the map is loaded again":
+  en: "{n} station links routed anew ({kept} left), written to {file} - read when the map is loaded again"
+"Station links not rebuilt ({e})":
+  en: "Station links not rebuilt ({e})"
+"no road edited yet":
+  en: "no road edited yet"
+"Place an object":
+  en: "Place an object"
+"Labels":
+  en: "Labels"
+"No objects in this folder":
+  en: "No objects in this folder"
+"+ Add a label line":
+  en: "+ Add a label line"
+"{name} placed: drag it, wheel turns, T labels, Ctrl+S saves":
+  en: "{name} placed: drag it, wheel turns, T labels, Ctrl+S saves"
+"Not placed ({e})":
+  en: "Not placed ({e})"
+"Object {id}: label set - Ctrl+S saves":
+  en: "Object {id}: label set - Ctrl+S saves"
+"Label not set ({e})":
+  en: "Label not set ({e})"
+"New object {id} {name}: V for the next of its folder, T labels, C copies it":
+  en: "New object {id} {name}: V for the next of its folder, T labels, C copies it"
+"New object {id} {name}: loading...":
+  en: "New object {id} {name}: loading..."
+"V changes only an object placed in this session (P or C)":
+  en: "V changes only an object placed in this session (P or C)"
 "Not saved ({e})":
   en: "Not saved ({e})"
 "METAR source: {code}":
