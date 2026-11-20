@@ -93,6 +93,8 @@ fn text<'a>(s: &'a Value, key: &str, default: &'a str) -> &'a str {
 fn distance(s: &Value, key: &str, auto: f64) -> f64 {
     match s.get(key) {
         Some(Value::String(t)) if t.trim().eq_ignore_ascii_case("auto") => auto,
+        // (K-OMSI: `view_distance=map`, the whole map: farther than any other choice)
+        Some(Value::String(t)) if t.trim().eq_ignore_ascii_case("map") => 1.0e7,
         _ => num(s, key, auto),
     }
 }
