@@ -77,6 +77,8 @@ pub(crate) struct PeopleView {
     pub(crate) trace: Option<std::io::BufWriter<std::fs::File>>,
     /// The tear-off ticket blocks of the player's bus (`money::TicketBlocks`).
     pub(crate) ticket_blocks: Option<crate::money::TicketBlocks>,
+    /// K-OMSI: the paper tickets laid on the player's cash desk.
+    pub(crate) paper: crate::money::PaperTickets,
 }
 
 /// Local visual-only treatment for a compatible bus, separate from actual boarding.
@@ -152,6 +154,7 @@ impl PeopleView {
                 w
             }),
             ticket_blocks: None,
+            paper: Default::default(),
         }
     }
 
@@ -246,6 +249,11 @@ impl Humans {
                         crate::money::place(m, world, renderer, scene, &coins, point, var, change, parent.as_deref());
                     }
                 }
+                BodyOp::PaperTicket { person, point, var, parent, paper } => {
+                    let r = self.sim.money.as_mut().map(|m| [m.rand_f(), m.rand_f(), m.rand_f()]).unwrap_or([0.5, 0.5, 0.0]);
+                    view.paper.place(world, renderer, scene, person, paper.as_deref(), point, var, parent.as_deref(), r);
+                }
+                BodyOp::PaperGone { person } => view.paper.remove(person, renderer, scene),
             }
         }
     }
@@ -438,6 +446,7 @@ impl Humans {
             }
             b.sync(renderer, scene, bus);
         }
+        view.paper.sync(renderer, scene, bus);
     }
 
     /// Skin the people due for a new pose and push transforms to the renderer: the people

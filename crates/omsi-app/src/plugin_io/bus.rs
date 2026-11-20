@@ -4,7 +4,7 @@
 use crate::App;
 use omsi_plugin as op;
 use omsi_sim::VehicleInstance;
-use omsi_sim::people::pax::{Pax, TICKET_BUY, TICKET_NONE, TICKET_STAMP};
+use omsi_sim::people::pax::{Pax, TICKET_BUY, TICKET_HAND, TICKET_NONE, TICKET_STAMP};
 use omsi_sim::people::{BusId, PeopleSim, Place, State, pax::Task};
 
 pub(crate) fn veh(app: &App) -> Option<&VehicleInstance> {
@@ -442,6 +442,7 @@ fn pax_ticket(h: &PeopleSim, x: &Pax) -> op::PaxTicket {
     let kind = match x.ticket {
         TICKET_BUY => op::TicketKind::Buy,
         TICKET_STAMP => op::TicketKind::Stamp,
+        TICKET_HAND => op::TicketKind::Hand,
         _ => op::TicketKind::None,
     };
     // (what the desk asks for - for somebody with no ticket of the pack who does not buy,
@@ -453,7 +454,7 @@ fn pax_ticket(h: &PeopleSim, x: &Pax) -> op::PaxTicket {
     let open = (x.inside.is_none() && x.task == Task::WalkingToBus)
         || (x.inside.is_some()
             && x.task == Task::InBusToPlace
-            && x.ticket == TICKET_BUY
+            && matches!(x.ticket, TICKET_BUY | TICKET_HAND)
             && x.sub < 4);
     op::PaxTicket {
         kind,
@@ -478,6 +479,7 @@ pub(crate) fn set_ticket(
         op::TicketKind::None => TICKET_NONE,
         op::TicketKind::Stamp => TICKET_STAMP,
         op::TicketKind::Buy => TICKET_BUY,
+        op::TicketKind::Hand => TICKET_HAND,
     });
     let change = omsi_sim::people::TicketChange {
         kind,
@@ -487,6 +489,7 @@ pub(crate) fn set_ticket(
         voice: c.voice.clone(),
         tag: c.tag.clone(),
         payment: c.payment,
+        paper: c.paper.clone(),
     };
     h.set_ticket(id, &change, by).map_err(str::to_string)
 }
@@ -499,6 +502,7 @@ pub(crate) fn people_order(app: &mut App, id: u32, o: &op::PaxCommand) -> Result
         op::PaxCommand::Stay(on) => h.pax_stay(id, *on),
         op::PaxCommand::Leave { anywhere } => h.pax_leave(id, *anywhere),
         op::PaxCommand::Cancel => h.pax_cancel(id),
+        op::PaxCommand::TakeTicket => h.take_paper(id),
         op::PaxCommand::Runner => h.call_runner(),
         op::PaxCommand::Move(to) => match omsi_sim::people::PaxOrder::parse(to) {
             Some(to) => h.pax_move_to(id, to),
@@ -513,6 +517,7 @@ pub(crate) fn ticket_ask(a: omsi_sim::people::TicketAsk) -> op::TicketAsk {
     let kind = match a.kind {
         TICKET_BUY => op::TicketKind::Buy,
         TICKET_STAMP => op::TicketKind::Stamp,
+        TICKET_HAND => op::TicketKind::Hand,
         _ => op::TicketKind::None,
     };
     op::TicketAsk {

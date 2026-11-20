@@ -60,6 +60,9 @@ pub struct TicketChange {
     pub tag: Option<String>,
     /// The price the passenger pays at the desk (the plugin may change it, or leave it as is)
     pub payment: Option<f32>,
+    /// K-OMSI: the paper a handed-over ticket is printed on (`Texture/K-OMSI/paper_ticket/
+    /// <paper>.png`; empty: the default paper).
+    pub paper: Option<String>,
 }
 
 impl TicketChange {
@@ -81,10 +84,12 @@ pub struct PluginTicket {
     pub by: Option<String>,
     /// A text of the plugin's own, kept with the passenger (a new ticket keeps it).
     pub tag: Option<String>,
+    /// K-OMSI: the paper their handed-over ticket is printed on.
+    pub paper: Option<String>,
 }
 
 /// A passenger nobody changed.
-static NO_PLUGIN: PluginTicket = PluginTicket { name: None, voice: None, payment: None, by: None, tag: None };
+static NO_PLUGIN: PluginTicket = PluginTicket { name: None, voice: None, payment: None, by: None, tag: None, paper: None };
 
 impl Pax {
     /// What a plugin made of the ticket (nothing for most passengers).
@@ -228,17 +233,22 @@ impl PeopleSim {
         let Some(i) = self.people.iter().position(|p| p.id == person) else { return Err("no such person") };
         let pack_len = self.tickets.as_ref().map_or(0, |t| t.tickets.len());
         let (has_sale, has_stamper) = self.player_cabin.as_ref().map_or((false, false), |c| (c.sale.is_some(), !c.stampers.is_empty()));
+        // (a paper ticket is laid on the desk's money point)
+        let has_desk = self.player_cabin.as_ref().is_some_and(|c| c.sale.is_some() && c.money_var.is_some());
         let walk = self.boarding.eq_ignore_ascii_case("walk");
         let age = self.people[i].age;
         let Some(p) = self.pax(i) else { return Err("not a passenger") };
         if c.payment.is_some_and(|v| !v.is_finite() || v < 0.0) { return Err("invalid payment") }
+        if c.paper.as_deref().is_some_and(|s| s.contains(['/', '\\', ':']) || s.contains("..")) {
+            return Err("invalid paper: a file name without a folder");
+        }
         let mut ticket = c.ticket;
         let mut pick = false;
         let changes_ticket = c.changes_ticket();
         let changes_payment = c.payment.is_some();
         // (they decide on their way to the door: `new_ticket`)
         let outside = p.inside.is_none() && p.task == Task::WalkingToBus;
-        let at_desk_yet = p.inside.is_some() && p.task == Task::InBusToPlace && p.ticket == TICKET_BUY && p.sub < 4;
+        let at_desk_yet = p.inside.is_some() && p.task == Task::InBusToPlace && matches!(p.ticket, TICKET_BUY | TICKET_HAND) && p.sub < 4;
 
         // The ticket and payment can only be changed for the player's bus,
         // while the passenger is boarding or on the way to the cash desk.
@@ -263,7 +273,8 @@ impl PeopleSim {
                     match kind {
                         TICKET_BUY if !has_sale || walk => return Err("the bus sells no tickets"),
                         TICKET_STAMP if !has_stamper => return Err("the bus has no validator"),
-                        TICKET_NONE | TICKET_STAMP | TICKET_BUY => {}
+                        TICKET_HAND if !has_desk || walk => return Err("the bus has no cash desk"),
+                        TICKET_NONE | TICKET_STAMP | TICKET_BUY | TICKET_HAND => {}
                         _ => return Err("no such kind"),
                     }
                 }
@@ -317,6 +328,9 @@ impl PeopleSim {
         }
         if let Some(t) = &c.tag {
             p.plugin_mut().tag = text(t);
+        }
+        if let Some(t) = &c.paper {
+            p.plugin_mut().paper = text(t);
         }
         p.tidy_plugin();
         Ok(())

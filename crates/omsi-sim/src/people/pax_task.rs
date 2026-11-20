@@ -148,7 +148,7 @@ impl PeopleSim {
                             p.pt_target = Some(k);
                         }
                     }
-                    TICKET_BUY => p.pt_target = bn.cabin.in_group(vec![bn.cabin.sale.and_then(|s| s.0)], bn.cabin.group_at(p.pt))[0],
+                    TICKET_BUY | TICKET_HAND => p.pt_target = bn.cabin.in_group(vec![bn.cabin.sale.and_then(|s| s.0)], bn.cabin.group_at(p.pt))[0],
                     _ => self.route_to_place(i, bn),
                 }
                 let p = self.pax_mut(i).unwrap();
@@ -298,8 +298,9 @@ impl PeopleSim {
         // With every matching door still shut, omsi_nearest's rigid-bus fallback
         // returns the first slot, which might be None. Retry without the open mask
         // to keep ticket-sale restrictions and the nearest platform-facing target.
-        let pt = bn.cabin.omsi_nearest(here, &list, p.ticket == TICKET_BUY, false, Some(&flags), Some(&open))
-            .or_else(|| bn.cabin.omsi_nearest(here, &list, p.ticket == TICKET_BUY, false, Some(&flags), None));
+        let desk = matches!(p.ticket, TICKET_BUY | TICKET_HAND);
+        let pt = bn.cabin.omsi_nearest(here, &list, desk, false, Some(&flags), Some(&open))
+            .or_else(|| bn.cabin.omsi_nearest(here, &list, desk, false, Some(&flags), None));
         let p = self.pax_mut(i).unwrap();
         if let Some(q) = pt.and_then(|k| bn.cabin.graph.points.get(k)) {
             p.target = q.as_dvec3();
@@ -640,6 +641,7 @@ impl PeopleSim {
             if p.sub == 1 && p.timer < 0.5 {
                 // the validator stamps
                 self.stamped.push((bn.id, p.stamper));
+                self.note_stamped(i, bn.id);
                 let pp = self.pax_mut(i).unwrap();
                 pp.sub = 2;
                 pp.reach = false;
@@ -655,6 +657,8 @@ impl PeopleSim {
             }
         } else if p.ticket == TICKET_BUY {
             self.desk_sale(i, dt, bn, player_bus, taken_ticket);
+        } else if p.ticket == TICKET_HAND {
+            self.desk_hand(i, dt, bn);
         }
     }
 
