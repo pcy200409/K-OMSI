@@ -831,6 +831,17 @@ impl VehicleType {
         map
     }
 
+    /// The lower levels' meshes (indices into `lod_meshes`) an AI vehicle draws: those seen
+    /// from outside (`[viewpoint]` 0 or with bit 4), as the full model's (`view_events`).
+    /// The view's far instances are made in this order (`World::upload_far`) and the
+    /// snapshot's `[visible]` of them follows it (`FrameSnapshot::far_visible`).
+    pub fn far_meshes(&self) -> impl Iterator<Item = usize> + '_ {
+        self.lod_meshes.iter().enumerate().filter(|(_, vm)| {
+            let vp = self.model.meshes[vm.def_index].viewpoint;
+            vp == 0 || vp & 4 != 0
+        }).map(|(k, _)| k)
+    }
+
     /// The `[texchanges]` master for a mesh material's texture name, if there is one.
     pub fn texchange(&self, texture: &str) -> Option<&omsi_model::TexChangeMaster> {
         self.texchanges

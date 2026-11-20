@@ -61,6 +61,17 @@ pub(crate) fn lods_misfit(vt: &omsi_sim::VehicleType) -> Option<&'static str> {
     }
 }
 
+/// Whether an AI vehicle of `vt` draws its lower levels of detail. K-OMSI: always, whatever
+/// `lods_misfit` finds - a lower level is drawn plain (its texture in the paint scheme's
+/// pictures, the first `[texchanges]` entry, its own night map, its `[visible]` from the
+/// leading vehicle's variables; no lamp, display, switched material or animation), which
+/// nobody tells from the full model at the size OMSI hands over at, and a street of Korean
+/// buses (every one of them with lamps, displays and switched textures) was drawn at full
+/// detail down to a few pixels. `OMSI_STRICT_LOD=1` keeps the old rule.
+pub(crate) fn lods_used(vt: &omsi_sim::VehicleType) -> bool {
+    !omsi_cfg::flags::OMSI_STRICT_LOD.is_set() || lods_misfit(vt).is_none()
+}
+
 /// The levels with meshes: the full model's and those of `far`.
 pub(super) fn levels_present(far: &[FarMesh]) -> Vec<usize> {
     let mut levels: Vec<usize> = std::iter::once(0).chain(far.iter().map(|f| f.level)).collect();
@@ -88,18 +99,19 @@ impl World {
             return far;
         }
         if let Some(why) = lods_misfit(vt).filter(|_| !vt.lod_meshes.is_empty()) {
+            let used = lods_used(vt);
             if omsi_cfg::flags::OMSI_PROFILE.is_set() {
-                log::info!("  vehicle set {}: its lower levels of detail are not used ({why})", vt.def.path.file_name().unwrap_or_default().to_string_lossy());
+                log::info!("  vehicle set {}: its lower levels of detail are {} ({why})", vt.def.path.file_name().unwrap_or_default().to_string_lossy(), if used { "drawn plain" } else { "not used" });
             }
-            return far;
+            if !used {
+                return far;
+            }
         }
-        for (k, vm) in vt.lod_meshes.iter().enumerate() {
+        // (a mesh drawn only from some views: an AI car is seen from outside, as the full
+        // model's - `VehicleType::far_meshes`, whose order the snapshot's `[visible]` follows)
+        for k in vt.far_meshes() {
+            let vm = &vt.lod_meshes[k];
             let def = &vt.model.meshes[vm.def_index];
-            // (a mesh drawn only from some views: an AI car is seen from outside, as the full
-            // model's - `view_events`)
-            if def.viewpoint != 0 && def.viewpoint & 4 == 0 {
-                continue;
-            }
             let mats: Vec<MaterialId> = vm
                 .materials
                 .iter()
@@ -185,17 +197,42 @@ impl World {
         slot: usize,
         m: &omsi_o3d::Material,
     ) -> MaterialId {
-        let name = up
-            .subst
-            .get(&m.texture.to_ascii_lowercase())
-            .cloned()
-            .unwrap_or_else(|| m.texture.clone());
-        let tex = if is_null_texture(&m.texture) || name.trim().is_empty() || name.starts_with("\\S:") {
+        let vt = up.vt;
+        let subst = |up: &VehicleUpload, t: &str| up.subst.get(&t.to_ascii_lowercase()).cloned().unwrap_or_else(|| t.to_string());
+        let name = subst(up, &m.texture);
+        let def = &vt.model.meshes[vm.def_index];
+        let own: Vec<&omsi_model::MaterialDef> = def
+            .materials
+            .iter()
+            .filter(|o| !o.item && omsi_sim::vehicle::override_slot(&vm.materials, o) == Some(slot))
+            .collect();
+        // a display's slot ([useScriptTexture] / [useTextTexture]): its picture is the
+        // vehicle's own, the lower level's material is shared - a dark panel, as a sign
+        // nobody can read from here
+        let display = own.iter().any(|o| o.use_script_texture.is_some() || o.use_text_texture.is_some());
+        let mut color = [1.0; 4];
+        let tex = if display {
+            color = [0.06, 0.06, 0.06, 1.0];
+            None
+        } else if let Some(master) = vt.texchange(&m.texture) {
+            // [texchanges]: the name is only a key - the first entry, as the full model
+            // starts with (K-OMSI)
+            let mut edirs: Vec<&Path> = vec![master.dir.as_path()];
+            edirs.extend(up.dirs_ref.iter().copied());
+            let first = master.entries.first().map(|e| subst(up, e));
+            first.and_then(|e| self.vehicle_texture(renderer, scene, &mut up.tex_ids, &mut up.held, e.trim(), &edirs))
+        } else if is_null_texture(&m.texture) || name.trim().is_empty() || name.starts_with("\\S:") {
             None
         } else {
             self.vehicle_texture(renderer, scene, &mut up.tex_ids, &mut up.held, name.trim(), up.dirs_ref)
         };
-        let mat = renderer.add_material_night(scene, tex, material_alpha(&vm.materials, slot, &vm.overrides), [1.0; 4], false, None, None);
+        // its own [matl_nightmap] (lit windows of the lower level) glows at night
+        let night = own
+            .iter()
+            .find_map(|o| o.nightmap.as_deref())
+            .map(|n| subst(up, n))
+            .and_then(|n| self.vehicle_texture(renderer, scene, &mut up.tex_ids, &mut up.held, n.trim(), up.dirs_ref));
+        let mat = renderer.add_material_night(scene, tex, material_alpha(&vm.materials, slot, &vm.overrides), color, false, None, night);
         let mat = self.gpu.lock().material(renderer, scene, mat);
         up.materials.push(mat);
         mat

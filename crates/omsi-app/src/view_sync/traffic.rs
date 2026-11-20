@@ -636,9 +636,10 @@ fn pose_part(renderer: &Renderer, scene: &mut Scene, snap: &FrameSnapshot, part:
     let meshes = snap.meshes(part);
     // the lower levels of detail stand where the body does; the renderer draws them or the
     // full model by the vehicle's size on the screen
-    for inst in &r.far {
+    let far_visible = snap.far_visible(part);
+    for (k, inst) in r.far.iter().enumerate() {
         renderer.set_transform(scene, *inst, part.position, part.rotation);
-        renderer.set_params(scene, *inst, &[], true, &[]);
+        renderer.set_params(scene, *inst, &[], far_visible.get(k).copied().unwrap_or(true), &[]);
     }
     for (inst, m) in r.instances.iter().zip(meshes) {
         renderer.set_transform(scene, *inst, part.position, m.local);
