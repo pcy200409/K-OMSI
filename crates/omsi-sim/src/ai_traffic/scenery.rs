@@ -337,7 +337,10 @@ impl SceneryGuard {
         if before.is_some() {
             self.pick_horizon(body, way, state.speed);
         }
-        body.step(dt, state.speed, way, ground, contact);
+        // (K-OMSI) backing, and the way at a cusp before or behind it
+        body.reverse = state.reversing;
+        let cusp = state.cusp_way(net, way);
+        body.step(dt, state.speed, &cusp, ground, contact);
         match before {
             Some(b) => self.after_step(b, body, dt),
             None => self.rejected = false,

@@ -80,6 +80,11 @@ pub(super) fn spline_lanes(
         let no_cars = s.rules.iter().any(|r| {
             r.path_index == pi as i32 && r.kind.eq_ignore_ascii_case("no_cars") && !r.kill
         });
+        // (K-OMSI) `[rule] reverse`: driven backwards, see `Lane::reverse_drive`
+        let reverse_drive = s.rules.iter().any(|r| {
+            r.path_index == pi as i32 && r.kind.eq_ignore_ascii_case("reverse") && !r.kill
+        });
+        let limit = limit.or(reverse_drive.then_some(omsi_sim::traffic::BACKING_LIMIT_KMH));
         // (`bus` and `trucks` are switches that open the path to those AI vehicles, see
         // `Lane::allows`; `bus` does not close it to cars)
         let rule_bus = rule_of("bus").is_some();
@@ -97,6 +102,7 @@ pub(super) fn spline_lanes(
             l.density = density;
             l.group_density = group_density.clone();
             l.no_cars = no_cars;
+            l.reverse_drive = reverse_drive;
             l.rule_bus = rule_bus;
             l.rule_trucks = rule_trucks;
             l.no_overtaking = no_overtaking;
@@ -211,6 +217,9 @@ pub(super) fn object_lanes(
                 && r.kind.eq_ignore_ascii_case("no_cars")
                 && !r.kill
         });
+        // (K-OMSI) backed along: the map's `[rule] reverse` or the object's own `[path_reverse]`
+        let reverse_drive = rule_of("reverse").is_some() || sco.path_reverse.get(pi).copied().unwrap_or(false);
+        let limit = limit.or(reverse_drive.then_some(omsi_sim::traffic::BACKING_LIMIT_KMH));
         let rule_bus = rule_of("bus").is_some();
         let rule_trucks = rule_of("trucks").is_some();
         let no_overtaking = rule_of("overtaking_prohib").is_some();
@@ -228,6 +237,7 @@ pub(super) fn object_lanes(
             l.density = density;
             l.group_density = group_density.clone();
             l.no_cars = no_cars;
+            l.reverse_drive = reverse_drive;
             l.rule_bus = rule_bus;
             l.rule_trucks = rule_trucks;
             l.no_overtaking = no_overtaking;
