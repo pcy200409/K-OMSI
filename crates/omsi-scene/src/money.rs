@@ -341,18 +341,47 @@ impl TicketBlocks {
 /// the paper the plugin chose (`Texture/K-OMSI/paper_ticket/<paper>.png` of the game
 /// folder) or the default one (`paper_ticket.png` there, or in `Texture/K-OMSI`), plain
 /// white without any, so no bus or ticket pack has to bring a model.
+///
+/// A ticket with texts (`people.set_ticket{print = {...}}`) is drawn by a page: `<paper>.html`
+/// there, else `ticket.html`, gets the texts as its string variables and draws them on a
+/// transparent landscape page (as a ticket is read: the paper pictures are landscape tickets
+/// stood upright, turned a quarter to the left); that page, turned the same way, goes over the
+/// paper. Each such ticket has a texture of its own, used again once it is off the desk.
 #[derive(Default)]
 pub struct PaperTickets {
     made: Option<(MeshId, omsi_geometry::MeshData)>,
     /// The material of each paper ("" the default), made the first time it is laid down.
     papers: std::collections::HashMap<String, Vec<MaterialId>>,
-    /// (whose, instance, place on the point, the mesh it lies on)
-    desk: Vec<(u32, usize, Mat4, Option<String>)>,
+    /// (whose, instance, place on the point, the mesh it lies on, its own printed texture)
+    desk: Vec<(u32, usize, Mat4, Option<String>, Option<Printed>)>,
+    /// Printed tickets whose page has not drawn yet.
+    printing: Vec<Printing>,
+    /// The textures of printed tickets taken off the desk, to print the next ones on.
+    spare: Vec<Printed>,
+}
+
+/// A printed ticket's own texture and material.
+#[derive(Clone, Copy)]
+struct Printed {
+    texture: omsi_render::TextureId,
+    material: MaterialId,
+    size: (u32, u32),
+}
+
+/// A printed ticket waiting for its page's picture.
+struct Printing {
+    person: u32,
+    page: omsi_sim::htmltex::HtmlTexture,
+    texture: omsi_render::TextureId,
+    /// The paper under the print (upright, as the paper pictures are).
+    base: omsi_texture::Image,
 }
 
 /// The paper ticket's size (m): a Korean bus ticket.
 const PAPER_W: f32 = 0.075;
 const PAPER_L: f32 = 0.13;
+/// A ticket without a paper picture is printed on plain white of this size (7.5 x 13 cm).
+const PLAIN: (u32, u32) = (512, 888);
 
 impl PaperTickets {
     fn mesh(&mut self, renderer: &Renderer, scene: &mut Scene) -> MeshId {
@@ -371,6 +400,15 @@ impl PaperTickets {
         let id = renderer.add_mesh(scene, &data);
         self.made = Some((id, data));
         id
+    }
+
+    /// The picture file of `paper` (none or unknown: the default paper; nothing: plain).
+    fn paper_file(world: &World, paper: Option<&str>) -> Option<PathBuf> {
+        let key = paper.map(str::trim).unwrap_or("");
+        let own = omsi_cfg::resolve_path(&world.root, "Texture/K-OMSI/paper_ticket");
+        let komsi = omsi_cfg::resolve_path(&world.root, "Texture/K-OMSI");
+        let mine = (!key.is_empty()).then(|| omsi_texture::find_texture(&format!("{key}.png"), &[own.as_path()])).flatten();
+        mine.or_else(|| omsi_texture::find_texture("paper_ticket.png", &[own.as_path(), komsi.as_path()]))
     }
 
     /// The material of `paper` (none or unknown: the default paper).
@@ -405,44 +443,118 @@ impl PaperTickets {
         mats
     }
 
-    /// `person`'s ticket, on `paper`, laid on the money point (`r`: the coins' random place
-    /// on it).
+    /// `person`'s ticket on `paper` with `print` on it: its page set going (the paper alone
+    /// shows until the page has drawn). None when there is no page for it.
+    fn printed(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, person: u32, paper: Option<&str>, print: &[(String, String)]) -> Option<Printed> {
+        let own = omsi_cfg::resolve_path(&world.root, "Texture/K-OMSI/paper_ticket");
+        let key = paper.map(str::trim).unwrap_or("");
+        let names = [(!key.is_empty()).then(|| format!("{key}.html")), Some("ticket.html".to_string())];
+        let Some(path) = names.into_iter().flatten().map(|n| own.join(n)).find(|p| p.is_file()) else {
+            log::warn!("paper tickets: no Texture/K-OMSI/paper_ticket/ticket.html, the ticket's texts are not printed");
+            return None;
+        };
+        let html = match std::fs::read(&path) {
+            Ok(b) => String::from_utf8_lossy(&b).into_owned(),
+            Err(e) => {
+                log::warn!("paper tickets: {}: {e}", path.display());
+                return None;
+            }
+        };
+        let base = Self::paper_file(world, paper)
+            .and_then(|p| omsi_texture::decode_file(&p).map_err(|e| log::warn!("paper tickets: {}: {e}", p.display())).ok())
+            .filter(|img| img.width > 0 && img.height > 0 && img.rgba.len() >= (img.width * img.height * 4) as usize)
+            .unwrap_or_else(|| omsi_texture::Image { width: PLAIN.0, height: PLAIN.1, rgba: vec![255; (PLAIN.0 * PLAIN.1 * 4) as usize], has_alpha: false });
+        let size = (base.width, base.height);
+        // (the page is the ticket as it is read: lying, as wide as the paper is long)
+        let mut page = omsi_sim::htmltex::HtmlTexture::with_api(0, size.1 as i32, size.0 as i32, &html, omsi_sim::htmltex::PageApi::Scenery).with_asset_dirs(vec![own.clone()]);
+        page.set_texts(print, &omsi_sim::vehicle_api::ApiValue::Null);
+        let data = omsi_texture::TextureData::from_image(base.clone());
+        let p = match self.spare.iter().position(|s| s.size == size) {
+            Some(k) => {
+                let s = self.spare.remove(k);
+                if renderer.update_texture_mips(scene, s.texture, &base) {
+                    renderer.rebind_textures(scene, &[s.texture]);
+                }
+                s
+            }
+            None => {
+                let texture = renderer.add_texture_data(scene, &data);
+                let material = renderer.add_material(scene, Some(texture), AlphaMode::Opaque, [1.0; 4], false);
+                Printed { texture, material, size }
+            }
+        };
+        self.printing.retain(|w| w.person != person);
+        self.printing.push(Printing { person, page, texture: p.texture, base });
+        Some(p)
+    }
+
+    /// The pages that drew: their print over the paper, onto the ticket.
+    fn print_frames(&mut self, renderer: &Renderer, scene: &mut Scene) {
+        let mut k = 0;
+        while k < self.printing.len() {
+            let w = &mut self.printing[k];
+            let Some(rgba) = w.page.poll() else {
+                k += 1;
+                continue;
+            };
+            let img = print_over(&w.base, &rgba, w.page.width, w.page.height);
+            if renderer.update_texture_mips(scene, w.texture, &img) {
+                renderer.rebind_textures(scene, &[w.texture]);
+            }
+            self.printing.remove(k);
+        }
+    }
+
+    /// `person`'s ticket, on `paper` (with the texts `print`, see [`PaperTickets`]), laid on
+    /// the money point (`r`: the coins' random place on it).
     #[allow(clippy::too_many_arguments)]
-    pub fn place(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, person: u32, paper: Option<&str>, point: Vec3, var: [f32; 2], parent: Option<&str>, r: [f32; 3]) {
+    pub fn place(&mut self, world: &World, renderer: &Renderer, scene: &mut Scene, person: u32, paper: Option<&str>, print: &[(String, String)], point: Vec3, var: [f32; 2], parent: Option<&str>, r: [f32; 3]) {
         self.remove(person, renderer, scene);
         let id = self.mesh(renderer, scene);
-        let mats = self.paper(world, renderer, scene, paper);
+        let printed = if print.is_empty() { None } else { self.printed(world, renderer, scene, person, paper, print) };
+        let mats = match printed {
+            Some(p) => vec![p.material],
+            None => self.paper(world, renderer, scene, paper),
+        };
         // (a little above the coins, one over the other: no flicker between them)
         let local = Money::coin_place(point + Vec3::new(0.0, 0.0, 0.002 + self.desk.len() as f32 * 0.001), var, r);
         let inst = renderer.add_instance(scene, id, DVec3::ZERO, Mat4::IDENTITY, mats);
-        self.desk.push((person, inst, local, parent.map(str::to_string)));
+        self.desk.push((person, inst, local, parent.map(str::to_string), printed));
     }
 
     /// `person`'s ticket off the desk (the driver took it).
     pub fn remove(&mut self, person: u32, renderer: &Renderer, scene: &mut Scene) {
-        self.desk.retain(|(p, inst, ..)| {
+        let spare = &mut self.spare;
+        self.desk.retain(|(p, inst, _, _, printed)| {
             if *p == person {
                 renderer.remove_instance(scene, *inst);
+                spare.extend(*printed);
             }
             *p != person
         });
+        self.printing.retain(|w| w.person != person);
     }
 
     /// Every ticket out of the picture (the bus is gone or another is driven).
     pub fn clear(&mut self, renderer: &Renderer, scene: &mut Scene) {
-        for (_, inst, ..) in self.desk.drain(..) {
+        for (_, inst, _, _, printed) in self.desk.drain(..) {
             renderer.remove_instance(scene, inst);
+            self.spare.extend(printed);
         }
+        self.printing.clear();
     }
 
     pub fn instances(&self) -> impl Iterator<Item = usize> + '_ {
         self.desk.iter().map(|t| t.1)
     }
 
-    /// The tickets where the bus is now.
-    pub fn sync(&self, renderer: &Renderer, scene: &mut Scene, bus: &VehicleInstance) {
+    /// The tickets where the bus is now (and the printed ones whose page drew, printed).
+    pub fn sync(&mut self, renderer: &Renderer, scene: &mut Scene, bus: &VehicleInstance) {
+        if !self.printing.is_empty() {
+            self.print_frames(renderer, scene);
+        }
         let rot = bus.body_rotation();
-        for (_, inst, local, parent) in &self.desk {
+        for (_, inst, local, parent, _) in &self.desk {
             let on = parent.as_deref().map(|n| mesh_of(bus, n)).unwrap_or(Mat4::IDENTITY);
             renderer.set_transform(scene, *inst, bus.position, rot * on * *local);
         }
@@ -455,13 +567,41 @@ impl PaperTickets {
         let rot = bus.body_rotation();
         self.desk
             .iter()
-            .filter_map(|(p, _, local, parent)| {
+            .filter_map(|(p, _, local, parent, _)| {
                 let on = parent.as_deref().map(|n| mesh_of(bus, n)).unwrap_or(Mat4::IDENTITY);
                 omsi_geometry::ray_mesh(o, dir, data, &(rot * on * *local)).map(|t| (t, *p))
             })
             .min_by(|a, b| a.0.total_cmp(&b.0))
             .map(|h| h.1)
     }
+}
+
+/// The page's picture (`pw` x `ph`, the ticket lying) turned a quarter to the left - as the
+/// paper pictures are stood upright - over `base` (`ph` x `pw`).
+pub fn print_over(base: &omsi_texture::Image, page: &[u8], pw: u32, ph: u32) -> omsi_texture::Image {
+    let (w, h) = (base.width, base.height);
+    let mut out = base.rgba.clone();
+    if (w, h) != (ph, pw) || page.len() < (pw * ph * 4) as usize {
+        log::warn!("paper tickets: a page of {pw}x{ph} for a paper of {w}x{h}, not printed");
+        return base.clone();
+    }
+    for y in 0..h {
+        for x in 0..w {
+            // (turned left: the page's top right corner comes to the top left)
+            let (px, py) = (pw - 1 - y, x);
+            let s = ((py * pw + px) * 4) as usize;
+            let a = page[s + 3] as u32;
+            if a == 0 {
+                continue;
+            }
+            let d = ((y * w + x) * 4) as usize;
+            for c in 0..3 {
+                out[d + c] = ((page[s + c] as u32 * a + out[d + c] as u32 * (255 - a)) / 255) as u8;
+            }
+            out[d + 3] = 255;
+        }
+    }
+    omsi_texture::Image { width: w, height: h, rgba: out, has_alpha: false }
 }
 
 fn take_of_type(desk: &mut Vec<DeskTicket>, ticket_type: usize) -> Option<usize> {

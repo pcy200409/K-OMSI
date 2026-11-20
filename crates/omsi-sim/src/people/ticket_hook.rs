@@ -63,6 +63,8 @@ pub struct TicketChange {
     /// K-OMSI: the paper a handed-over ticket is printed on (`Texture/K-OMSI/paper_ticket/
     /// <paper>.png`; empty: the default paper).
     pub paper: Option<String>,
+    /// K-OMSI: texts printed on the handed-over ticket (name, text; see `PaperTickets`).
+    pub print: Option<Vec<(String, String)>>,
 }
 
 impl TicketChange {
@@ -86,10 +88,12 @@ pub struct PluginTicket {
     pub tag: Option<String>,
     /// K-OMSI: the paper their handed-over ticket is printed on.
     pub paper: Option<String>,
+    /// K-OMSI: the texts printed on it.
+    pub print: Vec<(String, String)>,
 }
 
 /// A passenger nobody changed.
-static NO_PLUGIN: PluginTicket = PluginTicket { name: None, voice: None, payment: None, by: None, tag: None, paper: None };
+static NO_PLUGIN: PluginTicket = PluginTicket { name: None, voice: None, payment: None, by: None, tag: None, paper: None, print: Vec::new() };
 
 impl Pax {
     /// What a plugin made of the ticket (nothing for most passengers).
@@ -331,6 +335,9 @@ impl PeopleSim {
         }
         if let Some(t) = &c.paper {
             p.plugin_mut().paper = text(t);
+        }
+        if let Some(t) = &c.print {
+            p.plugin_mut().print = t.clone();
         }
         p.tidy_plugin();
         Ok(())
