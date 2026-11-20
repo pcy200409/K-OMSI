@@ -67,7 +67,32 @@ fn deps_stamp(deps: &[PathBuf]) -> u64 {
     let mut h = hasher();
     for d in deps {
         d.hash(&mut h);
-        mtime_ns(d).hash(&mut h);
+        dep_stamp(d).hash(&mut h);
+    }
+    h.finish()
+}
+
+/// Stamp of a dependency folder (a bus's paint folder): its own time and the name, time and
+/// size of each `.cti` in it. A `.cti` written over in place - a repaint pack that brings
+/// the same file again with other `[item]`s - leaves the folder's time as it was, and the
+/// list kept offering the old paint names until something else touched the folder; the
+/// game, which reads the `.cti` anew, found no such paint and drove the standard look.
+/// (Only the `.cti`s: a paint folder can hold hundreds of textures, and the page polls this.)
+fn dep_stamp(d: &Path) -> u64 {
+    let mut h = hasher();
+    mtime_ns(d).hash(&mut h);
+    if let Ok(rd) = std::fs::read_dir(d) {
+        let mut items: Vec<(String, u64, u64)> = rd
+            .flatten()
+            .filter(|e| Path::new(&e.file_name()).extension().is_some_and(|x| x.eq_ignore_ascii_case("cti")))
+            .map(|e| {
+                let md = e.metadata().ok();
+                let t = md.as_ref().and_then(|m| m.modified().ok()).and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_nanos() as u64).unwrap_or(0);
+                (e.file_name().to_string_lossy().to_string(), t, md.map(|m| m.len()).unwrap_or(0))
+            })
+            .collect();
+        items.sort();
+        items.hash(&mut h);
     }
     h.finish()
 }
@@ -203,10 +228,35 @@ pub fn content_stamp(bases: &[PathBuf], inbox: Option<&Path>) -> String {
     deps.sort();
     deps.dedup();
     for d in &deps {
-        mtime_ns(d).hash(&mut h);
+        dep_stamp(d).hash(&mut h);
     }
     if let Some(i) = inbox {
         folder_stamp(&[i.to_path_buf(), i.join(crate::install::WAITING)]).hash(&mut h);
     }
     format!("{:016x}", h.finish())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A `.cti` written over in place (same name, the folder's time unchanged) changes the
+    /// stamp of the paint folder it lies in; a texture beside it does not.
+    #[test]
+    fn a_cti_written_over_changes_its_folders_stamp() {
+        let dir = std::env::temp_dir().join(format!("komsi-dep-stamp-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let cti = dir.join("Repaint.cti");
+        std::fs::write(&cti, "[item]\nOld\nBody\nOld/body.png\n").unwrap();
+        std::fs::write(dir.join("body.png"), b"x").unwrap();
+        let before = dep_stamp(&dir);
+        let dir_time = std::fs::metadata(&dir).unwrap().modified().unwrap();
+        std::fs::write(dir.join("body.png"), b"xyz").unwrap();
+        assert_eq!(dep_stamp(&dir), before, "textures are not looked at");
+        std::fs::write(&cti, "[item]\nRenamed paint\nBody\nNew/body.png\n").unwrap();
+        assert_eq!(std::fs::metadata(&dir).unwrap().modified().unwrap(), dir_time, "the folder's own time stays");
+        assert_ne!(dep_stamp(&dir), before);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
