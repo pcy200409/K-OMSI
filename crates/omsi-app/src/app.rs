@@ -257,6 +257,10 @@ impl App {
             let args = self.args.clone();
             std::thread::Builder::new().name("map opening".into()).spawn(move || open_world(&args)).ok()
         }).flatten();
+        // (and its bus read meanwhile, see `spawn::read_player_early`)
+        if world.is_some() {
+            crate::spawn::read_player_early(&self.args);
+        }
         self.window = Some(window);
         self.gfx.starting = Some(WindowStart { start, world, show: show_later, shown: None, tries: 0, had_surface });
         self.drive_window_start(event_loop);
@@ -454,6 +458,8 @@ impl App {
                         700.0,
                         crate::release_free_memory,
                     ));
+                    // (the bus read early goes on to the GPU while the first tiles load)
+                    crate::spawn::prefetch_player_early(&w, &renderer);
                     self.world = Some(w);
                     self.cam.starting = Some(cam);
                 }
