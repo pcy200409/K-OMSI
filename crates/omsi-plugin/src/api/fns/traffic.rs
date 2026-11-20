@@ -163,6 +163,13 @@ fn ticket_change(t: &Value) -> Result<TicketChange, ApiError> {
             })
             .transpose()?,
         paper: text("paper")?,
+        print: field("print")
+            .map(|v| match v {
+                Value::Map(m) => m.iter().map(|(k, x)| x.to_text().map(|s| (k.clone(), s)).ok_or_else(|| bad("print", "a table of texts"))).collect::<Result<Vec<_>, _>>(),
+                Value::List(l) if l.is_empty() => Ok(Vec::new()),
+                _ => Err(bad("print", "a table of texts (name = text)")),
+            })
+            .transpose()?,
     })
 }
 
@@ -420,7 +427,7 @@ pub static FNS: &[ApiFn] = &[
         "people",
         [p("id", "integer"), p("ticket", "table")],
         "true, or false and the reason",
-        "Changes the ticket of a passenger boarding the player's bus (the `passenger_ticket` event names them): `{kind, ticket, name, price, payment, voice, tag}`, each optional. `kind` (`\"none\"`: a pass, `\"stamp\"`, `\"buy\"`, K-OMSI `\"hand\"`: a paper ticket handed to the driver, printed on `paper`: `Texture/K-OMSI/paper_ticket/<paper>.png`) can only be changed until they are in the bus; `ticket` selects another ticket from the pack (starting at 1, with its name and price; a buyer must have a ticket: 0 is refused, and a buyer created without `ticket` gets the pack's ticket for their age). `name` and `price` set the ticket name and ticket price, respectively, until the passenger has asked at the cash desk. `payment` specifies the amount of money handed over for a ticket purchase; it does not change the ticket price and is raised to at least the ticket price. It must be set before the passenger reaches the cash desk. If the currency's denominations cannot represent the requested amount exactly, the amount handed over may be higher. `voice` selects a line from the passenger's voice folder to use instead of `Ticket_<n>_<k>` (`\"Zone_4\"` selects `Zone_4.wav`; if the file is missing, the usual line is used; `\"\"` also falls back to the usual line), until the passenger has asked at the cash desk. `tag` is plugin-defined text kept with the person (`people.get`), and can be set at any time. Returns `false` and the reason when nothing changed.",
+        "Changes the ticket of a passenger boarding the player's bus (the `passenger_ticket` event names them): `{kind, ticket, name, price, payment, voice, tag}`, each optional. `kind` (`\"none\"`: a pass, `\"stamp\"`, `\"buy\"`, K-OMSI `\"hand\"`: a paper ticket handed to the driver, printed on `paper`: `Texture/K-OMSI/paper_ticket/<paper>.png`, with the texts of `print` (`{from = \"...\", fare = \"...\"}`) drawn on it by the page `<paper>.html` there, else `ticket.html`: the page reads them as string variables, `omsi.getVar(\"from\")`) can only be changed until they are in the bus; `ticket` selects another ticket from the pack (starting at 1, with its name and price; a buyer must have a ticket: 0 is refused, and a buyer created without `ticket` gets the pack's ticket for their age). `name` and `price` set the ticket name and ticket price, respectively, until the passenger has asked at the cash desk. `payment` specifies the amount of money handed over for a ticket purchase; it does not change the ticket price and is raised to at least the ticket price. It must be set before the passenger reaches the cash desk. If the currency's denominations cannot represent the requested amount exactly, the amount handed over may be higher. `voice` selects a line from the passenger's voice folder to use instead of `Ticket_<n>_<k>` (`\"Zone_4\"` selects `Zone_4.wav`; if the file is missing, the usual line is used; `\"\"` also falls back to the usual line), until the passenger has asked at the cash desk. `tag` is plugin-defined text kept with the person (`people.get`), and can be set at any time. Returns `false` and the reason when nothing changed.",
         TICKETS,
         TrafficWrite,
         true,

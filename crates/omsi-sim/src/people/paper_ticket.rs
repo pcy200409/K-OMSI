@@ -132,7 +132,8 @@ impl PeopleSim {
             }
             if let Some((pos, var, parent)) = bn.cabin.money_var.clone() {
                 let paper = p.plugin().paper.clone();
-                self.bodies.ops.push(BodyOp::PaperTicket { person: id, point: pos, var, parent, paper });
+                let print = p.plugin().print.clone();
+                self.bodies.ops.push(BodyOp::PaperTicket { person: id, point: pos, var, parent, paper, print });
             }
             self.paper.on_desk.retain(|q| *q != id);
             self.paper.on_desk.push(id);

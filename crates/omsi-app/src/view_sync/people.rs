@@ -249,9 +249,9 @@ impl Humans {
                         crate::money::place(m, world, renderer, scene, &coins, point, var, change, parent.as_deref());
                     }
                 }
-                BodyOp::PaperTicket { person, point, var, parent, paper } => {
+                BodyOp::PaperTicket { person, point, var, parent, paper, print } => {
                     let r = self.sim.money.as_mut().map(|m| [m.rand_f(), m.rand_f(), m.rand_f()]).unwrap_or([0.5, 0.5, 0.0]);
-                    view.paper.place(world, renderer, scene, person, paper.as_deref(), point, var, parent.as_deref(), r);
+                    view.paper.place(world, renderer, scene, person, paper.as_deref(), &print, point, var, parent.as_deref(), r);
                 }
                 BodyOp::PaperGone { person } => view.paper.remove(person, renderer, scene),
             }
