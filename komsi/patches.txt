@@ -46,3 +46,5 @@ patch/html-page-font
 patch/pax-paper-ticket
 patch/map-object-type
 patch/editor-place-any
+patch/paper-ticket-print
+patch/ai-lod-always
