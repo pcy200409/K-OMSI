@@ -304,7 +304,20 @@ impl<'a> Ctx<'a> {
     pub fn invoke(&mut self, cb: u64, args: Vec<Value>) -> Result<Value, CallError> {
         // SAFETY: as `io`; the binding builds the nested calls' contexts from the same
         // pointers, while nothing of this one is borrowed
-        unsafe { (*self.binding).invoke(cb, args) }
+        let r = unsafe { (*self.binding).invoke(cb, args) };
+        self.timed(cb, r)
+    }
+
+    /// A call ended: the binding says whether it ran long (only the outermost call is
+    /// timed), the plugin's state counts it.
+    fn timed<T>(&mut self, key: u64, r: Result<T, CallError>) -> Result<T, CallError> {
+        // SAFETY: as `invoke`
+        let slow = unsafe { (*self.binding).took_long() };
+        if r.is_err() {
+            return r;
+        }
+        self.state().timed(key, slow)?;
+        r
     }
 
     /// The plugin keeps a callback (a handler, a timer): it must not be forgotten.
@@ -319,7 +332,10 @@ impl<'a> Ctx<'a> {
 
     /// The language's own handler of an event (Lua's `on_<event>`).
     pub fn global(&mut self, event: &str, args: &[Value]) -> Result<bool, CallError> {
-        unsafe { (*self.binding).global_handler(event, args) }
+        let r = unsafe { (*self.binding).global_handler(event, args) };
+        // (the language's own handlers by their event: keys apart from the callbacks' ids)
+        let key = u64::MAX - event.bytes().fold(0u64, |h, b| h.wrapping_mul(31).wrapping_add(b as u64)) % (1 << 32);
+        self.timed(key, r)
     }
 
     pub fn has_global(&mut self, event: &str) -> bool {

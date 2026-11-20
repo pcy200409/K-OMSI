@@ -339,6 +339,27 @@ impl LuaPlugin {
         self.disabled = self.state.disabled;
     }
 
+    /// A plugin switched off (too slow, too many errors) is loaded again from its files, as
+    /// when they change; false when it was not off or does not start.
+    pub fn turn_on(&mut self, io: &mut dyn PluginIo) -> bool {
+        if !self.disabled {
+            return false;
+        }
+        log::info!("{} turned on again", self.state.tag);
+        self.stop(io);
+        self.reset_state();
+        match self.start(io) {
+            Ok(()) => {
+                io.message(&format!("Lua plugin {} turned on again", self.name), 3.0);
+                !self.disabled
+            }
+            Err(e) => {
+                log::warn!("{} {e}", self.state.tag);
+                false
+            }
+        }
+    }
+
     /// A fresh state for a plugin loaded again (its owner mark stays).
     fn reset_state(&mut self) {
         let old = &self.state;
@@ -384,6 +405,8 @@ pub struct LuaBinding {
     depth: Cell<u32>,
     deadline: Rc<Cell<Option<Instant>>>,
     overran: Rc<Cell<bool>>,
+    /// The last outermost call's milliseconds when past `CALL_BUDGET_MS` (`took_long`).
+    slow_ms: Cell<Option<u64>>,
     globals: Table,
     process_enabled: bool,
 }
@@ -405,12 +428,12 @@ impl LuaBinding {
             lua.set_hook(HookTriggers::new().every_nth_instruction(10_000), move |_, _| match deadline.get() {
                 Some(d) if Instant::now() > d => {
                     overran.set(true);
-                    Err(mlua::Error::runtime(format!("the plugin ran longer than {} ms and was stopped", runtime::CALL_BUDGET_MS)))
+                    Err(mlua::Error::runtime(format!("the plugin ran longer than {} ms and was stopped", runtime::HARD_BUDGET_MS)))
                 }
                 _ => Ok(VmState::Continue),
             });
         }
-        let b = LuaBinding { by_id: lua.create_table()?, by_fn: lua.create_table()?, counts: RefCell::new(HashMap::new()), fresh: RefCell::new(Vec::new()), next: Cell::new(1), depth: Cell::new(0), deadline, overran, globals: g.clone(), process_enabled: p.state.allows(api::Perm::Process), lua };
+        let b = LuaBinding { by_id: lua.create_table()?, by_fn: lua.create_table()?, counts: RefCell::new(HashMap::new()), fresh: RefCell::new(Vec::new()), next: Cell::new(1), depth: Cell::new(0), deadline, overran, slow_ms: Cell::new(None), globals: g.clone(), process_enabled: p.state.allows(api::Perm::Process), lua };
         b.bind(p)?;
         Ok(b)
     }
@@ -554,18 +577,25 @@ impl LuaBinding {
         CallError { msg: e.to_string(), fatal: self.overran.get() }
     }
 
-    /// Run `f` as a call into the plugin: the outermost one gets the time budget.
+    /// Run `f` as a call into the plugin: the outermost one is timed, stopped past
+    /// `HARD_BUDGET_MS` and noted past `CALL_BUDGET_MS` (the runtime counts those).
     fn guarded<R>(&self, f: impl FnOnce() -> mlua::Result<R>) -> Result<R, CallError> {
         let outer = self.depth.get() == 0;
+        let t0 = Instant::now();
         if outer {
             self.overran.set(false);
-            self.deadline.set(Some(Instant::now() + Duration::from_millis(runtime::CALL_BUDGET_MS)));
+            self.slow_ms.set(None);
+            self.deadline.set(Some(t0 + Duration::from_millis(runtime::HARD_BUDGET_MS)));
         }
         self.depth.set(self.depth.get() + 1);
         let r = f();
         self.depth.set(self.depth.get() - 1);
         if outer {
             self.deadline.set(None);
+            let ms = t0.elapsed().as_millis() as u64;
+            if ms > runtime::CALL_BUDGET_MS {
+                self.slow_ms.set(Some(ms));
+            }
         }
         r.map_err(|e| self.error(e))
     }
@@ -642,6 +672,10 @@ impl Binding for LuaBinding {
         let args = args.iter().cloned().map(|v| self.to_lua(lua, v)).collect::<mlua::Result<MultiValue>>().map_err(|e| self.error(e))?;
         self.managed_call(f, args)?;
         Ok(true)
+    }
+
+    fn took_long(&self) -> Option<u64> {
+        self.slow_ms.take()
     }
 
     fn has_global_handler(&self, event: &str) -> bool {
@@ -802,7 +836,7 @@ fn arm_budget(thread: &mlua::Thread, deadline: Rc<Cell<Option<Instant>>>, overra
     thread.set_hook(HookTriggers::new().every_nth_instruction(10_000), move |_, _| {
         if deadline.get().is_some_and(|d| Instant::now() > d) {
             overran.set(true);
-            Err(mlua::Error::runtime(format!("the plugin ran longer than {} ms and was stopped", runtime::CALL_BUDGET_MS)))
+            Err(mlua::Error::runtime(format!("the plugin ran longer than {} ms and was stopped", runtime::HARD_BUDGET_MS)))
         } else { Ok(VmState::Continue) }
     });
 }

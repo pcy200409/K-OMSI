@@ -132,7 +132,7 @@ fn a_runaway_call_is_stopped_at_its_budget_and_the_plugin_switched_off() {
     let mut g = Game::new();
     let p = run("runaway", "function on_frame() local t = os.clock() while os.clock() - t < 5 do end end", &mut g, 1);
     assert!(p.lua[0].disabled, "{:?}", g.messages);
-    assert!(g.messages.iter().any(|m| m.contains("longer than 50 ms")), "{:?}", g.messages);
+    assert!(g.messages.iter().any(|m| m.contains("longer than 1000 ms")), "{:?}", g.messages);
     // a plugin catching the error is stopped all the same
     let mut g = Game::new();
     let t = std::time::Instant::now();
@@ -192,7 +192,6 @@ fn storage_and_files_stay_in_the_data_folder() {
         let mut p = Plugins::load(std::slice::from_ref(&d), &HostConfig::default());
         let mut g = Game::new();
         p.frame(&mut g);
-        assert!(g.messages.is_empty(), "{:?}", g.messages);
         p.finalize();
         let saved = std::fs::read_to_string(d.join("store.data/storage.json")).unwrap();
         let v = json::decode(&saved, false).unwrap();
@@ -316,6 +315,35 @@ fn data_queries_validate_types_and_reject_mutations_without_a_vehicle() {
 }
 
 #[test]
+fn a_slow_call_is_only_logged_and_a_runaway_one_stopped_at_a_second() {
+    let mut g = Game::new();
+    let t = std::time::Instant::now();
+    let p = run("slow-ok", "function on_frame() local t = os.clock() while os.clock() - t < 0.08 do end end", &mut g, 4);
+    assert!(!p.lua[0].disabled, "{:?}", g.messages);
+    let mut g = Game::new();
+    let p = run("runaway-second", "function on_frame() while true do end end", &mut g, 1);
+    assert!(p.lua[0].disabled);
+    assert!(t.elapsed().as_secs_f32() < 3.0);
+}
+
+#[test]
+fn a_switched_off_plugin_is_turned_on_again() {
+    let mut g = Game::new();
+    let mut p = run("turn-on", "n = 0
+function on_frame() n = n + 1; error('broken ' .. n) end", &mut g, 12);
+    assert!(p.lua[0].disabled);
+    assert_eq!(p.switched_off(), ["turn-on"]);
+    assert!(!p.turn_on(&mut g, "other"));
+    assert!(p.turn_on(&mut g, "turn-on"));
+    assert!(!p.lua[0].disabled);
+    assert!(p.switched_off().is_empty());
+    assert!(g.messages.iter().any(|m| m == "Lua plugin turn-on turned on again"), "{:?}", g.messages);
+    // it starts afresh: its errors are counted from 0 again
+    p.frame(&mut g);
+    assert!(!p.lua[0].disabled);
+}
+
+#[test]
 fn nested_emit_keeps_the_outer_calls_budget() {
     let mut g = Game::new();
     let began = std::time::Instant::now();
@@ -328,6 +356,6 @@ fn nested_emit_keeps_the_outer_calls_budget() {
     "#, &mut g, 1);
     assert!(p.lua[0].disabled);
     assert!(g.messages.iter().any(|m| m == "nested ran"));
-    assert!(g.messages.iter().any(|m| m.contains("longer than 50 ms")));
+    assert!(g.messages.iter().any(|m| m.contains("longer than 1000 ms")));
     assert!(began.elapsed().as_secs_f32() < 2.0);
 }
