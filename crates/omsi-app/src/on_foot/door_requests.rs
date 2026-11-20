@@ -2,6 +2,13 @@ use super::*;
 use omsi_sim::people::DoorRequest;
 
 const REACH: f64 = 3.2;
+/// K-OMSI: inside a bus the request is the stop button - from a seat or anywhere in the
+/// saloon, not only standing at an exit (an articulated bus is under 25 m).
+const REACH_ABOARD: f64 = 30.0;
+
+fn reach(inside: Option<BusId>) -> f64 {
+    if inside.is_some() { REACH_ABOARD } else { REACH }
+}
 const SEND_EVERY: f32 = 0.2;
 const LEASE: f32 = 1.0;
 
@@ -36,7 +43,7 @@ impl App {
                     return None;
                 }
                 let (at, inside) = location(f, h);
-                h.nearest_door_request(at, inside, REACH)
+                h.nearest_door_request(at, inside, reach(inside))
             });
         let Some(target) = target else {
             self.service_msg = Some((
@@ -66,7 +73,7 @@ impl App {
                 let request = f.door_request?;
                 let (at, inside) = location(f, h);
                 (f.transit.is_none()
-                    && h.door_request_near(request, at, inside, REACH)
+                    && h.door_request_near(request, at, inside, reach(inside))
                     && !h.requested_door_open(request))
                 .then_some(request)
             });
@@ -157,7 +164,7 @@ impl App {
             None
         };
         // Allow one metre for the delay between the remote avatar and bus snapshots.
-        if h.door_request_near(request, at, inside, REACH + 1.0) && !h.requested_door_open(request)
+        if h.door_request_near(request, at, inside, reach(inside) + 1.0) && !h.requested_door_open(request)
         {
             h.set_manual_door_request(from, request, LEASE);
         }
@@ -188,6 +195,13 @@ fn parse_request(text: &str, host: bool) -> Option<DoorRequest> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn aboard_the_request_reaches_the_whole_saloon() {
+        assert_eq!(reach(None), REACH);
+        assert!(reach(Some(BusId::Player)) >= 25.0);
+        assert!(reach(Some(BusId::Ai(4))) >= 25.0);
+    }
+
     #[test]
     fn commands_only_target_an_owners_player_bus_or_the_hosts_ai() {
         assert_eq!(
