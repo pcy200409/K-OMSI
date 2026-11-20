@@ -929,6 +929,10 @@ pub struct TicketChange {
     pub payment: Option<f32>,
     /// K-OMSI: the paper a handed-over ticket is printed on (`Texture/K-OMSI/paper_ticket/<paper>.png`).
     pub paper: Option<String>,
+    /// K-OMSI: texts printed on a handed-over paper ticket (name, text), given to the ticket's
+    /// page `Texture/K-OMSI/paper_ticket/<paper>.html` (else `ticket.html` there) as its string
+    /// variables; `Some(empty)`: nothing printed.
+    pub print: Option<Vec<(String, String)>>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
