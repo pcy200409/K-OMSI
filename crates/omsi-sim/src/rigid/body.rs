@@ -56,7 +56,7 @@ impl RigidBody {
         let inv_min_turn_radius = if def.inv_min_turn_radius > 0.0 { def.inv_min_turn_radius } else { max_steer_deg.to_radians().tan() / s };
         let springs: f32 = def.axles.iter().map(|a| 2.0 * if a.spring > 0.0 { a.spring } else { 150.0 }).sum();
         let body_freq = (springs / (mass / 1000.0)).max(0.0).sqrt();
-        RigidBody { mass, inertia, cog, position: DVec3::ZERO, orientation: Quat::IDENTITY, velocity: Vec3::ZERO, omega: Vec3::ZERO, wheels, wheel_axle, steer_deg: 0.0, kappa: 0.0, max_steer_deg, rot_pnt_long: def.rot_pnt_long, inv_min_turn_radius, body_freq, holding: true, rolling_resistance: if def.rolling_resistance > 0.0 { def.rolling_resistance } else { 0.008 * mass * 9.81 }, accel_body: Vec3::ZERO, friction: 0.85, wheel_impacts: Vec::new(), coupled: Vec::new(), spawned_inside: None, wheel_walls: true, aero: realism::Aero::of(def.bounding_box.map(|b| [b[0], b[1], b[2]]), mass), air_density: realism::air_density(20.0, 0.0), wind: Vec3::ZERO, wetness: 0.0, water_depth: 0.0, road_s: 0.0, realistic: realistic_default() }
+        RigidBody { mass, inertia, cog, position: DVec3::ZERO, orientation: Quat::IDENTITY, velocity: Vec3::ZERO, omega: Vec3::ZERO, wheels, wheel_axle, steer_deg: 0.0, kappa: 0.0, max_steer_deg, rot_pnt_long: def.rot_pnt_long, inv_min_turn_radius, body_freq, holding: true, rolling_resistance: if def.rolling_resistance > 0.0 { def.rolling_resistance } else { 0.008 * mass * 9.81 }, accel_body: Vec3::ZERO, friction: 0.85, wheel_impacts: Vec::new(), coupled: Vec::new(), spawned_inside: None, wheel_walls: true, aero: realism::Aero::of(def.bounding_box.map(|b| [b[0], b[1], b[2]]), mass), air_density: realism::air_density(20.0, 0.0), wind: Vec3::ZERO, wetness: 0.0, water_depth: 0.0, ice: 0.0, road_s: 0.0, realistic: realistic_default() }
     }
 
     /// Place the body at rest with its wheels on the ground plane at `origin.z`: heading
@@ -550,16 +550,25 @@ impl RigidBody {
             if w.surface != w.surface_now {
                 (w.surface_was, w.surface_now, w.surface_mix) = (w.surface_now, w.surface, 0.0);
             }
+            // (black ice takes the grip of either road model)
+            let ice = 1.0 - crate::road_ice::GRIP_LOSS * self.ice.clamp(0.0, 1.0);
             if !self.realistic {
-                (w.mu_scale, w.rough) = (1.0, 0.0);
+                (w.mu_scale, w.rough) = (ice, 0.0);
                 continue;
             }
-            w.mu_scale = realism::grip_scale(w.surface_now, self.wetness);
+            w.mu_scale = realism::grip_scale(w.surface_now, self.wetness) * ice;
             // the road under each tyre, eased from the old surface's over a metre
             let side = (w.attach.x > 0.0) as u8;
             let at = self.road_s + w.attach.y as f64;
             let now = realism::roughness(w.surface_now, at, side);
             w.rough = if w.surface_mix < 1.0 { realism::roughness(w.surface_was, at, side) * (1.0 - w.surface_mix) + now * w.surface_mix } else { now };
+        }
+        // K-OMSI: a pothole under a tyre (either road model): the road drops by its depth there
+        if let Some(holes) = crate::potholes::current() {
+            for w in self.wheels.iter_mut() {
+                let p = self.position + rot.mul_vec3(w.attach).as_dvec3();
+                w.rough -= holes.depth_at(p.x, p.y);
+            }
         }
         (force, torque)
     }
