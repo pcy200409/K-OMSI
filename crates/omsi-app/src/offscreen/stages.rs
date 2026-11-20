@@ -72,6 +72,9 @@ impl frame_stages::Host<OffscreenStage> for Step<'_, '_> {
                 if run.server && !run.server_step(i) {
                     return Ok(Flow::Stop);
                 }
+                if run.server {
+                    run.server_streaming_step();
+                }
             }
             Clock => run.clock_step(t_s),
             Traffic => run.traffic_step(i, t_s)?,
