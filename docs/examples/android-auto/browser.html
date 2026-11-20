@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>K-OMSI Auto</title>
+<style>
+:root { color-scheme:dark; --bg:#08090a; --surface:#242628; --raised:#383c40; --text:#f1f3f4; --muted:#b3b9bf; --accent:#b8d8ff; --ink:#12283c; --gap:8px; --rail:64px; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font:16px 'Segoe UI','Malgun Gothic',sans-serif; overflow:hidden; }
+button { border:0; color:inherit; font:inherit; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+button:focus-visible,input:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+button:active { filter:brightness(.8); }
+svg { width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; flex-shrink:0; }
+.symbols { position:absolute; width:0; height:0; overflow:hidden; }
+#rail { position:absolute; inset:0 auto 0 0; width:var(--rail); display:flex; flex-direction:column; align-items:center; padding:12px 6px; gap:14px; }
+#clock { font-size:15px; font-variant-numeric:tabular-nums; margin:1px 0 10px; }
+.railBtn { display:grid; place-items:center; width:44px; height:44px; flex-shrink:0; border-radius:50%; background:transparent; color:#dce2e8; }
+.railBtn.active { background:var(--accent); color:var(--ink); }
+#camera { margin-top:auto; background:var(--raised); }
+main { position:absolute; inset:8px 8px 8px var(--rail); }
+#workspace { width:100%; height:100%; display:grid; gap:var(--gap); grid-template-columns:minmax(0,1.75fr) minmax(230px,1fr); }
+#mapPanel,#pageStack { min-width:0; min-height:0; border-radius:16px; overflow:hidden; position:relative; }
+#mapPanel { background:#192633; }
+#pageStack { background:var(--surface); }
+canvas { width:100%; height:100%; display:block; }
+.page { width:100%; height:100%; display:none; }
+.page.active { display:flex; flex-direction:column; }
+#workspace[data-page="nav"] { grid-template-columns:minmax(0,1fr); }
+#workspace[data-page="nav"] #pageStack { display:none; }
+#workspace[data-page="apps"],#workspace[data-page="settings"],#workspace[data-page="youtube"] { grid-template-columns:minmax(0,1fr); }
+#workspace[data-page="apps"] #mapPanel,#workspace[data-page="settings"] #mapPanel,#workspace[data-page="youtube"] #mapPanel { display:none; }
+.pageHeader { height:56px; flex-shrink:0; display:flex; align-items:center; padding:8px 18px; gap:12px; }
+.pageHeader h1 { font-size:21px; font-weight:500; margin:0; flex:1; }
+.iconButton { border-radius:50%; width:38px; height:38px; display:grid; place-items:center; background:transparent; }
+.closeButton { border:1px solid #88939f; background:transparent; padding:5px 12px; border-radius:20px; font-size:13px; }
+.primary,.secondary { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:10px 18px; border-radius:30px; font-size:15px; background:var(--accent); color:var(--ink); }
+.secondary { background:var(--raised); color:var(--text); }
+.sub { color:var(--muted); font-size:13px; line-height:1.55; }
+#home { background:var(--bg); gap:var(--gap); }
+.homeCard { border-radius:16px; background:var(--surface); padding:18px; min-height:0; }
+#tripCard { flex:1; display:flex; flex-direction:column; justify-content:space-between; gap:10px; }
+.eyebrow { font-size:12px; color:var(--accent); font-weight:600; }
+#next { font-size:24px; line-height:1.35; margin:8px 0; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.tripMeta { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+#route { color:var(--accent); font-size:18px; }
+.speedChip { background:var(--raised); border-radius:28px; padding:5px 11px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.speedChip small { font-size:10px; color:var(--muted); }
+#mediaCard { flex:.8; display:flex; flex-direction:column; align-items:flex-start; justify-content:space-between; gap:14px; background:#253d48; }
+.mediaHeading { display:flex; align-items:center; gap:12px; font-size:20px; }
+.mediaHeading .videoLogo { width:42px; height:32px; background:#d74444; border-radius:9px; display:grid; place-items:center; }
+.mediaHeading .videoLogo svg { width:20px; height:20px; fill:white; stroke:none; }
+.homeActions { display:flex; align-items:center; gap:8px; width:100%; }
+.homeActions .primary { flex:1; }
+.gallery { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); align-content:start; gap:18px 10px; padding:24px 22px; overflow:auto; }
+.app { background:transparent; border-radius:12px; padding:16px 6px; display:flex; flex-direction:column; align-items:center; gap:12px; min-height:126px; font-size:16px; }
+.app:hover { background:#333639; }
+.icon { width:60px; height:60px; border-radius:50%; display:grid; place-items:center; background:#e8eff6; color:#4285c6; }
+.icon svg { width:34px; height:34px; stroke-width:1.7; }
+.icon.yt { background:#f4f4f4; color:#e33c3c; }
+.icon.yt svg { fill:currentColor; stroke:none; }
+.icon.cam { background:#bfd4ed; color:#355578; }
+.icon.gear { background:#e4e9ee; color:#4d5e6f; }
+#turn { position:absolute; left:12px; top:12px; width:min(290px,68%); background:#126857; padding:15px 17px; border-radius:12px; display:flex; align-items:flex-start; gap:12px; box-shadow:0 2px 8px #0002; }
+#turnArrow { width:34px; height:34px; stroke-width:2.6; margin-top:2px; }
+#turnDistance { font-size:27px; font-weight:600; line-height:1.1; }
+#street { font-size:14px; line-height:1.4; margin-top:6px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+#routeCard { position:absolute; bottom:12px; left:12px; width:230px; background:#242628f5; border-radius:12px; padding:14px 16px; }
+#arrival { font-size:22px; color:#b9e1bb; font-variant-numeric:tabular-nums; }
+#routeInfo { font-size:13px; color:#d0d5da; line-height:1.5; margin-top:4px; }
+#stopPanel { display:none; position:absolute; right:12px; bottom:12px; width:min(240px,38%); max-height:48%; overflow:auto; padding:12px; border-radius:12px; background:#242628f5; }
+#workspace[data-page="nav"] #stopPanel { display:block; }
+#stopGuide { color:var(--accent); font-size:14px; font-weight:600; margin-bottom:8px; }
+.stopRow { display:flex; gap:8px; padding:6px 0; border-top:1px solid #ffffff18; font-size:13px; }
+.stopRow span { flex:1; min-width:0; overflow-wrap:anywhere; }
+.stopRow time { color:var(--muted); font-variant-numeric:tabular-nums; }
+.stopRow:first-child { color:var(--accent); }
+.mapActions { display:flex; gap:12px; margin-top:12px; }
+.mapActions button { background:var(--raised); width:34px; height:28px; border-radius:18px; display:grid; place-items:center; }
+.mapActions svg { width:18px; height:18px; }
+#mapControls { position:absolute; right:12px; top:12px; display:flex; flex-direction:column; gap:8px; }
+#mapControls button { border-radius:50%; background:#333b44; width:38px; height:38px; display:grid; place-items:center; }
+#mapControls button[aria-pressed="true"] { background:var(--accent); color:var(--ink); }
+#mapCredit { position:absolute; right:10px; bottom:4px; max-width:60%; font-size:9px; color:#aab6c2; background:#182633bb; padding:2px 5px; border-radius:4px; }
+#mapStatus { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); color:#d0dce6; background:#242628ed; padding:14px; border-radius:12px; max-width:85%; font-size:14px; text-align:center; }
+#workspace[data-page="home"] #turn { padding:12px; width:min(230px,72%); }
+#workspace[data-page="home"] #turnDistance { font-size:23px; }
+#workspace[data-page="home"] #routeCard { width:205px; padding:12px; }
+#workspace[data-page="home"] .mapActions { display:none; }
+#youtube { background:#17191b; }
+#videoControls { display:flex; align-items:center; gap:12px; padding:0 18px 12px; }
+#videoStatus { font-size:12px; color:var(--muted); min-width:0; }
+#player { flex:1; min-height:200px; position:relative; margin:0 12px 12px; border-radius:12px; background:#08090a; overflow:hidden; }
+iframe { border:0; width:100%; height:100%; display:block; }
+#videoEmpty { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; padding:16px; }
+#videoEmpty svg { width:64px; height:64px; color:#eb4b4b; fill:currentColor; stroke:none; }
+#videoEmpty h2 { margin:0; font-size:24px; font-weight:500; }
+.settingsContent { padding:0 22px 18px; overflow:auto; }
+.sectionTitle { color:var(--accent); font-size:13px; margin:14px 0 4px; }
+.settingRow { display:flex; align-items:center; justify-content:space-between; gap:24px; min-height:62px; border-bottom:1px solid #3b3e41; }
+.settingRow .sub { margin-top:3px; }
+input[type="range"] { width:35%; accent-color:var(--accent); }
+.switch { appearance:none; width:42px; height:24px; flex-shrink:0; background:#53575a; border-radius:16px; position:relative; cursor:pointer; transition:background .12s; }
+.switch::after { content:''; width:16px; height:16px; position:absolute; left:4px; top:4px; border-radius:50%; background:#c3c7cb; transition:transform .12s; }
+.switch:checked { background:var(--accent); }
+.switch:checked::after { transform:translateX(18px); background:#20344c; }
+#error { color:#ffc8b8; }
+@media (min-width:1280px) and (min-aspect-ratio:13/10) {
+ #workspace[data-page="apps"],#workspace[data-page="settings"] { grid-template-columns:minmax(0,2fr) minmax(280px,1fr); }
+ #workspace[data-page="apps"] #mapPanel,#workspace[data-page="settings"] #mapPanel { display:block; grid-column:2; grid-row:1; }
+ #workspace[data-page="apps"] #pageStack,#workspace[data-page="settings"] #pageStack { grid-column:1; grid-row:1; }
+ #workspace[data-page="apps"] #turn,#workspace[data-page="settings"] #turn { padding:10px; width:calc(100% - 24px); }
+ #workspace[data-page="apps"] #turnDistance,#workspace[data-page="settings"] #turnDistance { font-size:21px; }
+ #workspace[data-page="apps"] #routeCard,#workspace[data-page="settings"] #routeCard { width:calc(100% - 24px); }
+ #workspace[data-page="apps"] #mapControls,#workspace[data-page="settings"] #mapControls,
+ #workspace[data-page="apps"] .mapActions,#workspace[data-page="settings"] .mapActions { display:none; }
+}
+@media (max-width:879px), (max-aspect-ratio:13/10) {
+ #rail { inset:auto 0 0 0; width:100%; height:58px; flex-direction:row; padding:5px 12px; gap:14px; }
+ #clock { order:10; margin:0 0 0 auto; font-size:14px; }
+ .railBtn { width:42px; height:42px; }
+ #camera { margin:0; }
+ main { inset:8px 8px 62px; }
+ #workspace { grid-template-columns:minmax(0,1.8fr) minmax(225px,1fr); }
+ .homeCard { padding:15px; }
+ #next { font-size:22px; }
+}
+@media (max-aspect-ratio:13/10) {
+ #workspace[data-page="home"] { grid-template-columns:1fr; grid-template-rows:minmax(0,1fr) 206px; }
+ #home.active { flex-direction:row; }
+ #tripCard,#mediaCard { flex:1; }
+ #workspace[data-page="home"] #mapControls { flex-direction:column; }
+ .gallery { grid-template-columns:repeat(4,minmax(0,1fr)); gap:20px 8px; }
+}
+@media (min-width:1600px) {
+ :root { --rail:76px; --gap:12px; }
+ #rail { gap:20px; }
+ .gallery { gap:24px; padding:36px; }
+ .app { font-size:20px; }
+ .icon { width:72px; height:72px; }
+}
+</style>
+</head>
+<body>
+<svg class="symbols" aria-hidden="true"><defs>
+ <symbol id="i-home" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M14 4v16M14 12h7"/></symbol>
+ <symbol id="i-apps" viewBox="0 0 24 24"><rect x="4" y="4" width="5" height="5" rx="1"/><rect x="15" y="4" width="5" height="5" rx="1"/><rect x="4" y="15" width="5" height="5" rx="1"/><rect x="15" y="15" width="5" height="5" rx="1"/></symbol>
+ <symbol id="i-nav" viewBox="0 0 24 24"><path d="m12 3 8 18-8-5-8 5Z"/></symbol>
+ <symbol id="i-video" viewBox="0 0 24 24"><path d="M9 6.5v11l9-5.5Z"/></symbol>
+ <symbol id="i-camera" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="13" rx="2"/><circle cx="12" cy="11.5" r="3"/><path d="M8 21h8m-4-3v3"/></symbol>
+ <symbol id="i-settings" viewBox="0 0 24 24"><path d="m10 3-.6 2.1-2 .8-1.9-1L3 9l1.7 1.4v2.2L3 14l2.5 4.1 1.9-1 2 .8.6 2.1h4l.6-2.1 2-.8 1.9 1L21 14l-1.7-1.4v-2.2L21 9l-2.5-4.1-1.9 1-2-.8L14 3Z"/><circle cx="12" cy="11.5" r="3"/></symbol>
+ <symbol id="i-back" viewBox="0 0 24 24"><path d="m10 5-7 7 7 7M3 12h18"/></symbol>
+ <symbol id="i-turn" viewBox="0 0 24 24"><path d="M5 21V10h15m-6-6 6 6-6 6"/></symbol>
+ <symbol id="i-straight" viewBox="0 0 24 24"><path d="M12 21V3m-6 6 6-6 6 6"/></symbol>
+ <symbol id="i-uturn" viewBox="0 0 24 24"><path d="M18 21V8a6 6 0 0 0-12 0v7m-4-4 4 4 4-4"/></symbol>
+ <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+ <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+ <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+</defs></svg>
+<aside id="rail" aria-label="앱 전환">
+ <div id="clock">--:--</div>
+ <button id="railHome" class="railBtn active" aria-label="대시보드" title="대시보드" onclick="show('home')"><svg><use href="#i-home"/></svg></button>
+ <button id="railApps" class="railBtn" aria-label="앱 목록" title="앱 목록" onclick="show('apps')"><svg><use href="#i-apps"/></svg></button>
+ <button id="railNav" class="railBtn" aria-label="내비게이션" title="내비게이션" onclick="show('nav')"><svg><use href="#i-nav"/></svg></button>
+ <button id="railYoutube" class="railBtn" aria-label="유튜브" title="유튜브" onclick="show('youtube')"><svg><use href="#i-video"/></svg></button>
+ <button id="railSettings" class="railBtn" aria-label="설정" title="설정" onclick="show('settings')"><svg><use href="#i-settings"/></svg></button>
+ <button id="camera" class="railBtn" aria-label="CCTV 복귀" title="CCTV 복귀" onclick="camera()"><svg><use href="#i-camera"/></svg></button>
+</aside>
+<main><div id="workspace" data-page="home">
+ <section id="mapPanel" aria-label="운행 지도">
+  <canvas id="map"></canvas><div id="mapCredit"></div>
+  <div id="turn"><svg id="turnArrow"><use href="#i-straight"/></svg><div><div id="turnDistance">운행 안내</div><div id="street">도로 데이터 대기</div></div></div>
+  <div id="routeCard"><div id="arrival">예정 시각 --:--</div><div id="routeInfo">운행 정보 대기</div><div class="mapActions"><button aria-label="앱 목록" onclick="show('apps')"><svg><use href="#i-apps"/></svg></button><button aria-label="설정" onclick="show('settings')"><svg><use href="#i-settings"/></svg></button><button aria-label="CCTV 복귀" onclick="camera()"><svg><use href="#i-camera"/></svg></button></div></div>
+  <div id="mapControls"><button aria-label="확대" onclick="zoom=Math.max(80,zoom/1.3);drawMap()"><svg><use href="#i-plus"/></svg></button><button aria-label="축소" onclick="zoom=Math.min(1000,zoom*1.3);drawMap()"><svg><use href="#i-minus"/></svg></button><button id="headingButton" aria-label="차량 방향 고정" aria-pressed="true" onclick="setHeading(!followHeading)"><svg><use href="#i-nav"/></svg></button></div>
+  <div id="mapStatus">게임 도로망을 불러오는 중입니다</div>
+  <aside id="stopPanel" aria-label="남은 정류장"><div id="stopGuide">운행 정보 대기</div><div id="stopList"></div></aside>
+ </section>
+ <div id="pageStack">
+  <section id="home" class="page active">
+   <div id="tripCard" class="homeCard"><div><div class="eyebrow">다음 정류장</div><div id="next">운행 정보 대기</div><div id="destination" class="sub">--</div></div><div class="tripMeta"><span id="route">--</span><span class="speedChip"><span id="speed">0</span> <small>km/h</small></span></div><div id="doors" class="sub">문 닫힘</div></div>
+   <div id="mediaCard" class="homeCard"><div class="mediaHeading"><span class="videoLogo"><svg><use href="#i-video"/></svg></span>YouTube</div><div class="sub">보고 싶은 영상의 링크를 복사해서 열어보세요.</div><div class="homeActions"><button class="primary" onclick="show('youtube')"><svg><use href="#i-video"/></svg>열기</button><button class="secondary" aria-label="앱 목록" onclick="show('apps')"><svg><use href="#i-apps"/></svg></button></div></div>
+  </section>
+  <section id="apps" class="page"><header class="pageHeader"><button class="iconButton" aria-label="대시보드로" onclick="show('home')"><svg><use href="#i-back"/></svg></button><h1>앱</h1><button class="closeButton" onclick="show('home')">닫기</button></header><div class="gallery">
+   <button class="app" onclick="show('nav')"><span class="icon"><svg><use href="#i-nav"/></svg></span>내비게이션</button><button class="app" onclick="show('youtube')"><span class="icon yt"><svg><use href="#i-video"/></svg></span>YouTube</button><button class="app" onclick="camera()"><span class="icon cam"><svg><use href="#i-camera"/></svg></span>CCTV</button><button class="app" onclick="show('settings')"><span class="icon gear"><svg><use href="#i-settings"/></svg></span>설정</button>
+  </div></section>
+  <section id="youtube" class="page"><header class="pageHeader"><button class="iconButton" aria-label="대시보드로" onclick="show('home')"><svg><use href="#i-back"/></svg></button><h1>YouTube</h1><button class="closeButton" onclick="show('home')">닫기</button></header><div id="videoControls"><button id="paste" class="primary" onclick="events.push(['k_omsi_youtube_paste',0])">복사한 링크 열기</button><span id="videoStatus">영상 링크를 복사한 뒤 열어주세요</span></div><div id="player"><div id="videoEmpty"><svg><use href="#i-video"/></svg><h2>YouTube</h2><div class="sub">영상 링크를 열고 플레이어의 재생 버튼을 눌러주세요.</div></div></div></section>
+  <section id="settings" class="page"><header class="pageHeader"><button class="iconButton" aria-label="대시보드로" onclick="show('home')"><svg><use href="#i-back"/></svg></button><h1>설정</h1><button class="closeButton" onclick="show('home')">닫기</button></header><div class="settingsContent"><div class="sectionTitle">화면</div><label class="settingRow"><span>밝기<div class="sub">차량 화면의 표시 밝기</div></span><input aria-label="화면 밝기" type="range" min="0.4" max="1" step="0.05" value="1" oninput="document.body.style.filter='brightness('+this.value+')'"></label><div class="sectionTitle">내비게이션</div><label class="settingRow"><span>차량 방향 고정<div class="sub">끄면 북쪽이 위로 표시됩니다</div></span><input id="headingToggle" class="switch" type="checkbox" checked onchange="setHeading(this.checked)"></label><label class="settingRow"><span>어두운 지도<div class="sub">도로와 운행 경로를 선명하게 표시</div></span><input id="themeToggle" class="switch" type="checkbox" checked onchange="darkMap=this.checked;drawMap()"></label><div class="sectionTitle">동영상</div><div class="settingRow"><span class="sub">다른 화면이나 CCTV로 전환하면 영상 재생이 종료됩니다.</span></div><div id="error" class="sub"></div></div></section>
+ </div>
+</div></main>
+<script>
+let events=[],last={},navigation=null,zoom=250,followHeading=true,darkMap=true,selected='home';
+const $=id=>document.getElementById(id);
+function show(page) {
+ selected=page;
+ $('workspace').dataset.page=page;
+ document.querySelectorAll('.page').forEach(e=>e.classList.toggle('active',e.id===page));
+ ['home','apps','nav','youtube','settings'].forEach(p=>{
+  const button=$('rail'+p[0].toUpperCase()+p.slice(1));
+  button.classList.toggle('active',p===page);
+  button.setAttribute('aria-current',p===page?'page':'false');
+ });
+ if(page!=='youtube')stopVideo();
+ requestAnimationFrame(drawMap);
+}
+function camera(){events.push(['k_omsi_android_auto',0])}
+function setHeading(on){followHeading=on;$('headingToggle').checked=on;$('headingButton').setAttribute('aria-pressed',String(on));drawMap()}
+let youtubePlayer=null,youtubeApiRequested=false;
+function stopVideo(){if(youtubePlayer){youtubePlayer.destroy();youtubePlayer=null}const frame=$('video');if(frame)frame.remove();$('videoEmpty').style.display='flex';$('videoStatus').textContent='영상 링크를 복사한 뒤 열어주세요'}
+function youtubeError(code){
+ const reasons={2:'영상 링크 정보를 확인해 주세요',5:'브라우저에서 이 영상을 재생할 수 없습니다',100:'삭제되었거나 비공개인 영상입니다',101:'YouTube가 이 영상의 외부 재생을 허용하지 않습니다',150:'YouTube가 이 영상의 외부 재생을 허용하지 않습니다',153:'플레이어 식별 정보 오류입니다'};
+ $('videoStatus').textContent=(reasons[code]||'YouTube 재생 오류')+' ('+code+')';
+}
+function bindYouTubePlayer(){
+ const frame=$('video');if(!frame||youtubePlayer||!window.YT?.Player)return;
+ youtubePlayer=new YT.Player(frame,{events:{onError:e=>{if($('video')===frame)youtubeError(e.data)},onStateChange:e=>{if($('video')===frame&&e.data===1)$('videoStatus').textContent='재생 중'}}});
+}
+window.onYouTubeIframeAPIReady=bindYouTubePlayer;
+function loadYouTube(link) {
+ let id=null,list=null,index=null;
+ try {
+  const u=new URL(link.trim());
+  if(!['https:','http:'].includes(u.protocol)||!['youtu.be','youtube.com','www.youtube.com','m.youtube.com'].includes(u.hostname))throw Error();
+  id=u.hostname==='youtu.be'?u.pathname.slice(1):u.searchParams.get('v')||u.pathname.match(/^\/(?:shorts|embed|live)\/([-\w]{11})\/?$/)?.[1];
+  list=u.searchParams.get('list');index=u.searchParams.get('index');
+  if(id&&!/^[-\w]{11}$/.test(id))throw Error();
+  if(list&&!/^[-\w]{2,128}$/.test(list))throw Error();
+  if(!id&&!list)throw Error();
+ } catch {$('videoStatus').textContent='유효한 YouTube 영상 또는 재생목록 링크가 아닙니다';return false}
+ stopVideo();show('youtube');
+ const f=document.createElement('iframe');f.id='video';f.title='YouTube 영상 플레이어';
+ const src=new URL('https://www.youtube-nocookie.com/embed/'+(id||'videoseries'));
+ src.searchParams.set('playsinline','1');src.searchParams.set('origin',location.origin);
+ src.searchParams.set('enablejsapi','1');
+ if(list){src.searchParams.set('listType','playlist');src.searchParams.set('list',list);if(index&&/^[1-9]\d{0,5}$/.test(index))src.searchParams.set('index',index)}
+ f.src=src.href;
+ f.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';f.referrerPolicy='strict-origin-when-cross-origin';f.allowFullscreen=true;f.sandbox='allow-scripts allow-same-origin allow-presentation';
+ $('player').appendChild(f);$('videoEmpty').style.display='none';$('videoStatus').textContent='플레이어의 재생 버튼을 눌러주세요';
+ if(window.YT?.Player)bindYouTubePlayer();else if(!youtubeApiRequested){youtubeApiRequested=true;const script=document.createElement('script');script.src='https://www.youtube.com/iframe_api';script.onerror=()=>{youtubeApiRequested=false};document.head.appendChild(script)}
+ return true;
+}
+window.loadYouTube=loadYouTube;window.kOmsiDrain=()=>events.splice(0,32);
+window.kOmsiUpdate=function(data) {
+ last=data;if(Object.prototype.hasOwnProperty.call(data,'navigation'))navigation=data.navigation;
+ const v=data.vehicle||{},m=v.motion||{},r=v.route||{},i=v.info||{};
+ $('speed').textContent=Math.round(Math.abs(m.speedKmh||0));$('route').textContent=r.line||i.route||'자유 주행';$('next').textContent=r.current?.name||i.nextStop||'운행 정보 대기';$('destination').textContent=r.destination||'행선지 정보 없음';$('doors').textContent=v.doors?.anyOpen?'문 열림':'문 닫힘';$('clock').textContent=data.env?.time?.asString?.slice(0,5)||'--:--';
+ updateStops(v,navigation);drawMap();
+};
+function updateStops(v,n) {
+ const route=v.route||{},stops=route.stops||[];
+ let next=Number.isInteger(route.nextIndex)?route.nextIndex:-1;
+ if(next<0&&route.current?.name)next=stops.findIndex(s=>s.name===route.current.name);
+ const upcoming=next>=0?stops.slice(next):[];
+ const distance=n?.nextDistance;
+ const hasCurrent=!!route.current?.name;
+ const near=hasCurrent&&Number.isFinite(distance)&&distance>=0&&distance<=30;
+ const stopped=Math.abs(v.motion?.speedKmh??Infinity)<3;
+ $('stopGuide').textContent=!hasCurrent?'운행 정보 대기':near&&stopped&&v.doors?.anyOpen?'정류장 부근 · 문 열림':near?'정류장 부근':Number.isFinite(distance)&&distance<=150?'다음 정류장 접근 중':'다음 정류장';
+ const list=$('stopList');list.replaceChildren();
+ for(const stop of upcoming.slice(0,3)) {
+  const row=document.createElement('div');row.className='stopRow';
+  const name=document.createElement('span');name.textContent=stop.name||'이름 없는 정류장';row.appendChild(name);
+  if(stop.arrival){const time=document.createElement('time');time.textContent=stop.arrival;row.appendChild(time)}
+  list.appendChild(row);
+ }
+ if(!upcoming.length){const row=document.createElement('div');row.className='stopRow';row.textContent=route.current?.name||'활성 운행표가 없습니다';list.appendChild(row)}
+}
+const mapCamera={x:0,y:0,heading:0,zoom:250,time:0,ready:false};
+let mapAnimation=0;
+function drawMap() {
+ if(mapAnimation){cancelAnimationFrame(mapAnimation);mapAnimation=0}
+ const canvas=$('map'),rect=canvas.getBoundingClientRect();if(!rect.width||!rect.height)return;
+ const width=Math.round(rect.width),height=Math.round(rect.height);
+ if(canvas.width!==width)canvas.width=width;if(canvas.height!==height)canvas.height=height;
+ const ctx=canvas.getContext('2d'),n=navigation;
+ const palette=darkMap?{land:'#192733',built:'#25333d',farm:'#2b392e',grass:'#233c33',green:'#284b3b',forest:'#203c30',sport:'#2d4c3d',water:'#123b50',rail:'#a3a9b1',border:'#8c759f',case:'#101d29',road:'#3d5367',main:'#607083',routeCase:'#21558c',route:'#71bcff',text:'#c3ced9',halo:'#192733'}:{land:'#e7e9e3',built:'#d9ddda',farm:'#e5e5cc',grass:'#d5e3c8',green:'#bcd6ba',forest:'#aec9af',sport:'#c5dabb',water:'#a6cddd',rail:'#818a93',border:'#9c88a7',case:'#bdc9d1',road:'#ffffff',main:'#f2dda2',routeCase:'#e5f2ff',route:'#438ee0',text:'#445565',halo:'#edf1ed'};
+ ctx.fillStyle=palette.land;ctx.fillRect(0,0,width,height);
+ $('mapStatus').style.display=n&&n.roads?.length?'none':'block';
+ $('mapCredit').textContent=n?.surface?.credit||'';if(!n)return;
+ const motion=last.vehicle?.motion||{},now=performance.now();
+ const target={x:motion.x??n.origin[0],y:motion.y??n.origin[1],heading:followHeading?(motion.heading||0):0,zoom};
+ if(!mapCamera.ready||Math.hypot(target.x-mapCamera.x,target.y-mapCamera.y)>300){Object.assign(mapCamera,target);mapCamera.ready=true}
+ const dt=Math.min(.1,(now-mapCamera.time)/1000||.016),ease=1-Math.exp(-dt/.18);mapCamera.time=now;
+ const headingDelta=Math.atan2(Math.sin((target.heading-mapCamera.heading)*Math.PI/180),Math.cos((target.heading-mapCamera.heading)*Math.PI/180))*180/Math.PI;
+ mapCamera.x+=(target.x-mapCamera.x)*ease;mapCamera.y+=(target.y-mapCamera.y)*ease;mapCamera.heading=((mapCamera.heading+headingDelta*ease)%360+360)%360;mapCamera.zoom+=(target.zoom-mapCamera.zoom)*ease;
+ const rad=mapCamera.heading*Math.PI/180,scale=Math.min(width,height)/mapCamera.zoom;
+ const project=p=>{const x=p[0]-mapCamera.x,y=p[1]-mapCamera.y;return[width*.56+(x*Math.cos(rad)-y*Math.sin(rad))*scale,height*.64-(x*Math.sin(rad)+y*Math.cos(rad))*scale]};
+ function line(points,color,stroke){if(points.length<2)return;ctx.beginPath();points.forEach((p,i)=>{const q=project(p);i?ctx.lineTo(...q):ctx.moveTo(...q)});ctx.strokeStyle=color;ctx.lineWidth=stroke;ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke()}
+ // Base land classes are supplied only by a map-author surface package.
+ const fillColors=[palette.water,palette.green,palette.built,palette.grass,palette.forest,palette.sport,palette.farm];
+ for(const cls of [2,6,3,1,4,5,0])for(const layer of n.surface?.fills||[]){if(layer.class!==cls)continue;ctx.fillStyle=fillColors[cls];ctx.beginPath();for(const triangle of layer.triangles){triangle.forEach((p,i)=>{const q=project(p);i?ctx.lineTo(...q):ctx.moveTo(...q)});ctx.closePath()}ctx.fill()}
+ for(const feature of n.surface?.lines||[]){line(feature.points,[palette.water,palette.rail,palette.border][feature.class]||palette.border,feature.class===0?Math.max(2,feature.width*scale):1.2)}
+ // Keep major/minor roads separate. Within a height band, casing precedes all
+ // surfaces so connected junctions join cleanly; higher bands cover lower roads.
+ const bands=new Map();for(const road of n.roads||[]){const key=Math.floor((road.elevation||0)/4);if(!bands.has(key))bands.set(key,[]);bands.get(key).push(road)}
+ for(const key of [...bands.keys()].sort((a,b)=>a-b)){
+  const roads=bands.get(key).sort((a,b)=>Number(!!a.main)-Number(!!b.main));
+  const roadWidth=r=>Math.max(r.main?3.6:1.8,Math.min(r.main?23:16,r.width*scale));
+  for(const road of roads)line(road.points,palette.case,roadWidth(road)+2.4);
+  for(const road of roads)line(road.points,road.main?palette.main:palette.road,roadWidth(road));
+ }
+ for(const points of n.route||[]){line(points,palette.routeCase,10);line(points,palette.route,5.5)}
+ // Reserved HUD rectangles participate in collision detection too.
+ const occupied=[];for(const id of ['turn','routeCard','stopPanel','mapControls','mapStatus','mapCredit']){const box=$(id).getBoundingClientRect();if(box.width&&box.height)occupied.push({x:box.x-rect.x-5,y:box.y-rect.y-5,w:box.width+10,h:box.height+10})}
+ const overlap=(a,b)=>a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
+ const usedNames=new Set();let labelCount=0;
+ function label(text,point,angle=0,stop=false){
+  if(!text||usedNames.has(text)||labelCount>=70)return;
+  const p=project(point);if(p[0]<0||p[1]<0||p[0]>width||p[1]>height)return;
+  ctx.font=(stop?'600 12px':'12px')+' "Segoe UI","Malgun Gothic",sans-serif';const length=ctx.measureText(text).width;
+  if(length>width*.6)return;
+  let a=stop?0:-(angle+rad);while(a>Math.PI/2)a-=Math.PI;while(a< -Math.PI/2)a+=Math.PI;
+  const offsets=stop?[[10,-10],[10,15],[-length-10,-10]]:[[0,0]];
+  for(const offset of offsets){
+   const x=p[0]+offset[0],y=p[1]+offset[1];
+   const w=Math.abs(length*Math.cos(a))+Math.abs(15*Math.sin(a)),h=Math.abs(length*Math.sin(a))+Math.abs(15*Math.cos(a));
+   const box={x:x-(stop?0:w/2)-3,y:y-h/2-3,w:w+6,h:h+6};
+   if(box.x<8||box.y<8||box.x+box.w>width-8||box.y+box.h>height-8||occupied.some(b=>overlap(box,b)))continue;
+   ctx.save();ctx.translate(x,y);ctx.rotate(stop?0:a);ctx.textAlign=stop?'left':'center';ctx.textBaseline='middle';ctx.strokeStyle=palette.halo;ctx.lineWidth=3.5;ctx.lineJoin='round';ctx.strokeText(text,0,0);ctx.fillStyle=stop?palette.route:palette.text;ctx.fillText(text,0,0);ctx.restore();
+   occupied.push(box);usedNames.add(text);labelCount++;break;
+  }
+ }
+ for(const stop of n.stops||[]){const p=project(stop.position);ctx.fillStyle=palette.route;ctx.strokeStyle=palette.halo;ctx.lineWidth=2;ctx.beginPath();ctx.arc(...p,4,0,Math.PI*2);ctx.fill();ctx.stroke();if(mapCamera.zoom<500)label(stop.name,stop.position,0,true)}
+ if(mapCamera.zoom<700)for(const feature of n.labels||[])label(feature.text,feature.position,feature.angle||0);
+ ctx.save();ctx.translate(width*.56,height*.64);ctx.rotate(((motion.heading||0)-mapCamera.heading)*Math.PI/180);ctx.beginPath();ctx.moveTo(0,-12);ctx.lineTo(9,11);ctx.lineTo(0,6);ctx.lineTo(-9,11);ctx.closePath();ctx.fillStyle=palette.route;ctx.strokeStyle='#eef7ff';ctx.lineWidth=2;ctx.fill();ctx.stroke();ctx.restore();
+ const turn=n.turn,route=last.vehicle?.route||{},distance=turn?.distance??n.nextDistance;
+ $('turnDistance').textContent=distance!=null?(distance>=1000?(distance/1000).toFixed(1)+' km':Math.round(distance)+' m'):'운행 안내';
+ $('street').textContent=turn?.street||route.current?.name||n.street||'운행 경로 대기';
+ const arrow=$('turnArrow');arrow.querySelector('use').setAttribute('href',turn?.direction===2?'#i-uturn':turn?'#i-turn':'#i-straight');arrow.style.transform=turn?.direction===-1?'scaleX(-1)':'';
+ $('arrival').textContent=route.current?.arrival?'예정 '+route.current.arrival:'예정 시각 --:--';
+ $('routeInfo').textContent=(n.nextDistance!=null?Math.round(n.nextDistance)+' m · ':'')+(route.line||'자유 주행')+(n.rerouting?' · 경로 재탐색':'');
+ window.kOmsiMapMetrics={roads:n.roads?.length||0,labels:labelCount,surface:!!n.surface};
+ if(Math.abs(target.x-mapCamera.x)+Math.abs(target.y-mapCamera.y)+Math.abs(headingDelta)+Math.abs(target.zoom-mapCamera.zoom)>.05)mapAnimation=requestAnimationFrame(drawMap);
+}
+window.addEventListener('resize',drawMap);
+// Mouse/texture-pointer scrolling, including inertia. Sliders and buttons retain
+// their normal interaction; dragging a row does not accidentally toggle its switch.
+document.querySelectorAll('.settingsContent,.gallery').forEach(scroller=>{
+ let drag=null,suppressClick=false,momentum=0;
+ scroller.addEventListener('pointerdown',e=>{
+  cancelAnimationFrame(momentum);
+  if(e.target.closest('button,input')||scroller.scrollHeight<=scroller.clientHeight)return;
+  drag={start:e.clientY,y:e.clientY,time:performance.now(),velocity:0,moved:false};
+  scroller.setPointerCapture(e.pointerId);
+ });
+ scroller.addEventListener('pointermove',e=>{
+  if(!drag)return;
+  const now=performance.now(),delta=drag.y-e.clientY;
+  if(Math.abs(e.clientY-drag.start)>6)drag.moved=true;
+  if(drag.moved){scroller.scrollTop+=delta;drag.velocity=delta/Math.max(16,now-drag.time);e.preventDefault()}
+  drag.y=e.clientY;drag.time=now;
+ });
+ function release(){
+  if(!drag)return;
+  suppressClick=drag.moved;
+  let velocity=drag.velocity*16;
+  const moved=drag.moved;drag=null;
+  if(!moved)return;
+  function coast(){const before=scroller.scrollTop;scroller.scrollTop+=velocity;velocity*=.88;if(Math.abs(velocity)>.3&&before!==scroller.scrollTop)momentum=requestAnimationFrame(coast)}
+  momentum=requestAnimationFrame(coast);
+ }
+ scroller.addEventListener('pointerup',release);
+ scroller.addEventListener('pointercancel',()=>{drag=null;suppressClick=false});
+ scroller.addEventListener('click',e=>{if(suppressClick){e.preventDefault();e.stopPropagation();suppressClick=false}},true);
+});
+show('home');
+</script>
+</body>
+</html>
