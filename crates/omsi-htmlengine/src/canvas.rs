@@ -221,7 +221,7 @@ fn corner_cov(r: [f32; 4], rad: f32, x: i32, y: i32) -> f32 {
 
 /// Draw `img` inside `clip` (rounded by `radius`), its top-left corner at (`ox`, `oy`),
 /// tiled along the axes that repeat. Only the pixels of the clip are visited.
-fn draw_tiles(cv: &mut Canvas, img: &Img, clip: [f32; 4], radius: f32, ox: i32, oy: i32, rep: (bool, bool)) {
+pub(crate) fn draw_tiles(cv: &mut Canvas, img: &Img, clip: [f32; 4], radius: f32, ox: i32, oy: i32, rep: (bool, bool)) {
     if !clip.iter().all(|v| v.is_finite()) || !radius.is_finite() {
         return;
     }
@@ -328,6 +328,7 @@ pub(crate) fn paint(cv: &mut Canvas, lay: &Layouter, b: &LBox) {
             paint_bg(cv, lay.imgs, b.rect, b.st.radius, &b.st);
         }
         paint_img(cv, lay, b);
+        paint_video(cv, lay, b);
     }
     for it in &b.items {
         match it {
