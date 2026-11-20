@@ -24,6 +24,9 @@ pub struct Passing {
     /// Started from a standstill close behind the obstacle: the car edges out
     /// (`PULL_OUT_ACCEL`) until its front is past the obstacle's corner.
     pub creep: bool,
+    /// K-OMSI: going round the player's bus (`u32::MAX`) or a LAN player's (its id): it may
+    /// pull away while the car is out (`TrafficSim::guard_pass_player`).
+    pub round_player: Option<u32>,
 }
 
 impl Passing {
