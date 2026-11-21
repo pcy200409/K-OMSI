@@ -22,8 +22,14 @@ impl Renderer {
         // adaptation to it is the light model's already: lifted by the meter on top, a
         // lamp-lit street came out most of a stop brighter than any eye sees it)
         let mut m = meter_tuning();
+        // (the settings' auto exposure scales the metering's gain and how far it may darken
+        // and brighten: 0 leaves the light model's exposure alone, with no pumping when a
+        // lamp or a screen comes into view at night)
+        let auto = auto_exposure_scale(lighting.auto_exposure);
+        scale_metering(&mut m, auto);
         let after_sunset = self.sky.sky_state.as_ref().map_or(0.0, |st| ((0.052 - st.input.sun_dir.normalize_or_zero().z) / 0.157).clamp(0.0, 1.0));
         let (brighten, shortfall_gain) = shortfall_adaptation(self.tone.exposure.unwrap_or(0.0) / std::f32::consts::LN_2, m[3], m[0]);
+        let shortfall_gain = shortfall_gain * auto;
         m[3] = brighten;
         let pu = PostUniform {
             // the metering may take a little off a bright picture and add a little to a
