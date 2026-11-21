@@ -52,6 +52,20 @@ pub(crate) fn meter_tuning() -> [f32; 6] {
     })
 }
 
+/// The settings' auto exposure (0 off .. 1 full) as the share of the metering applied: a
+/// value out of range or not a number counts as the full one.
+pub(crate) fn auto_exposure_scale(setting: f32) -> f32 {
+    if setting.is_finite() { setting.clamp(0.0, 1.0) } else { 1.0 }
+}
+
+/// The metering (`meter_tuning`) with only `share` of it: its gain and how far it may
+/// darken and brighten are scaled; its target, bias and night vision stay.
+pub(crate) fn scale_metering(m: &mut [f32; 6], share: f32) {
+    m[0] *= share;
+    m[2] *= share;
+    m[3] *= share;
+}
+
 /// The street's scale of the ambient light: how far the sky's occlusion by the houses,
 /// trees and hills reaches (m), how much of the occluded sky it takes away, the bounced
 /// light's gain and the brightest radiance it is taken from (1 = 10 000 cd/m²: the sun on

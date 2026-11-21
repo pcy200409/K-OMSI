@@ -209,6 +209,10 @@ pub struct Lighting {
     pub low_clouds: bool,
     /// How much brighter the night is shown, in exposure steps after sunset (the settings' 0 .. 3).
     pub night_brightness: f32,
+    /// Enhanced: how much of the auto exposure (the metering that darkens a bright picture
+    /// and lifts a dark one) is applied, 0 (off: the light model's exposure alone) .. 1
+    /// (the settings' `auto_exposure`, the default).
+    pub auto_exposure: f32,
     pub reflection_strength: f32,
     /// Enhanced: direct road and ground sunlight glare, 1 = original appearance.
     pub road_glare: f32,
@@ -320,6 +324,7 @@ impl Default for Lighting {
             fog_base: None,
             envir_tint: [Vec3::ONE; 3],
             night_brightness: 0.0,
+            auto_exposure: 1.0,
             reflection_strength: 1.0,
             road_glare: 1.0,
             puddles: 2,
