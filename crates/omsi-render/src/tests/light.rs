@@ -100,3 +100,20 @@ fn the_auto_exposure_setting_scales_the_metering_and_off_holds_it() {
     // out of range or not a number: clamped, or the full metering
     assert_eq!((auto_exposure_scale(-1.0), auto_exposure_scale(2.0), auto_exposure_scale(f32::NAN)), (0.0, 1.0, 1.0));
 }
+
+#[test]
+fn turned_off_the_night_exposure_keeps_to_the_district_not_the_lamps_in_view() {
+    let near = |a: f32, b: f32| (a - b).abs() < 1e-5;
+    let (rest, artificial, district) = (0.5_f32, 0.3_f32, 0.2_f32);
+    let base = rest - artificial;
+    // full: the lamps and headlights in view decide (never below the district)
+    assert!(near(night_adaptation_light(rest, artificial, 2.0, district, 1.0), base + 2.0));
+    assert!(near(night_adaptation_light(rest, artificial, 0.05, district, 1.0), base + district));
+    // off: the district's level alone, whatever is in view - no pumping
+    for view in [0.05, 2.0, 50.0] {
+        assert!(near(night_adaptation_light(rest, artificial, view, district, 0.0), base + district), "{view}");
+    }
+    // half: half of the way
+    let half = night_adaptation_light(rest, artificial, 2.0, district, 0.5);
+    assert!(near(half, base + district + (2.0 - district) * 0.5), "{half}");
+}
