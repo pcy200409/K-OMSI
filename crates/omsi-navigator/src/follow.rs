@@ -61,13 +61,17 @@ impl Navigator {
             .map(|(k, _)| k);
         // the nearest route lane near the bus that runs its way, a little back to a lot ahead
         // (before the bus first reached the route: only the stretch up to the next stop)
+        // (the trip's first stop left early or without calling there - out of the depot
+        // before the departure: the bus already on the route beyond it has joined it, and is
+        // not sent round the block back to it; Dasan's 83 out of Yonggok garage)
+        let past = if f.stops.first().is_some_and(|s| s.start) { 60 } else { 2 };
         let (from, to) = match (r.joined, stop_at) {
             (false, Some(k)) if r.approach => {
-                (r.progress.saturating_sub(3), (k + 2).min(r.lanes.len()))
+                (r.progress.saturating_sub(3), (k + past).min(r.lanes.len()))
             }
             (false, Some(k)) => (
                 k.saturating_sub(40).max(r.progress),
-                (k + 2).min(r.lanes.len()),
+                (k + past).min(r.lanes.len()),
             ),
             (true, Some(k)) => (
                 r.progress.saturating_sub(3),
