@@ -141,6 +141,10 @@ pub(crate) struct Style {
     pub(crate) vars: Arc<std::collections::HashMap<String, String>>,
     /// `vertical-align: middle` on an inline block / image: 0 baseline, 1 middle.
     pub(crate) valign: u8,
+    /// `transform: rotate(..)` in degrees, clockwise (other transform functions are ignored).
+    pub(crate) rotate: f32,
+    /// `transform-origin` (x, y) inside the border box; the centre by default.
+    pub(crate) t_origin: [Len; 2],
 }
 
 impl Default for Style {
@@ -205,6 +209,8 @@ impl Default for Style {
             shadow: None,
             vars: Arc::default(),
             valign: 0,
+            rotate: 0.0,
+            t_origin: [Len::Pct(50.0), Len::Pct(50.0)],
         }
     }
 }
@@ -390,6 +396,64 @@ pub(crate) struct Units {
     pub(crate) font: f32,
     pub(crate) vw: f32,
     pub(crate) vh: f32,
+}
+
+/// The sum of the `rotate(..)` functions of a `transform` value in degrees (deg, rad, turn, grad).
+pub(crate) fn parse_rotate(val: &str) -> f32 {
+    let v = val.trim().to_ascii_lowercase();
+    let mut sum = 0.0;
+    let mut rest = v.as_str();
+    while let Some(at) = rest.find("rotate") {
+        let after = &rest[at + 6..];
+        // rotate( / rotatez( - not rotatex / rotatey (3D, ignored)
+        let after = after.strip_prefix('z').unwrap_or(after);
+        let Some(open) = after.strip_prefix('(') else {
+            rest = after;
+            continue;
+        };
+        let Some(close) = open.find(')') else { break };
+        let a = open[..close].trim();
+        let num = |s: &str| s.trim().parse::<f32>().ok();
+        let d = if let Some(x) = a.strip_suffix("deg") {
+            num(x)
+        } else if let Some(x) = a.strip_suffix("grad") {
+            num(x).map(|g| g * 0.9)
+        } else if let Some(x) = a.strip_suffix("rad") {
+            num(x).map(f32::to_degrees)
+        } else if let Some(x) = a.strip_suffix("turn") {
+            num(x).map(|t| t * 360.0)
+        } else if a == "0" {
+            Some(0.0)
+        } else {
+            None
+        };
+        sum += d.filter(|d| d.is_finite()).unwrap_or(0.0);
+        rest = &open[close + 1..];
+    }
+    sum
+}
+
+/// `transform-origin`: one or two keywords / lengths (x first unless a keyword says otherwise).
+pub(crate) fn parse_origin(val: &str, u: &Units) -> Option<[Len; 2]> {
+    let kw = |t: &str| match t {
+        "left" | "top" => Some(Len::Pct(0.0)),
+        "center" => Some(Len::Pct(50.0)),
+        "right" | "bottom" => Some(Len::Pct(100.0)),
+        _ => None,
+    };
+    let toks: Vec<&str> = val.split_whitespace().take(2).collect();
+    let one = |t: &str| kw(t).or_else(|| parse_len(t, u));
+    match toks.as_slice() {
+        [a] => {
+            let l = one(a)?;
+            Some(if matches!(*a, "top" | "bottom") { [Len::Pct(50.0), l] } else { [l, Len::Pct(50.0)] })
+        }
+        [a, b] => {
+            let (la, lb) = (one(a)?, one(b)?);
+            Some(if matches!(*a, "top" | "bottom") || matches!(*b, "left" | "right") { [lb, la] } else { [la, lb] })
+        }
+        _ => None,
+    }
 }
 
 pub(crate) fn parse_len(v: &str, u: &Units) -> Option<Len> {
@@ -1138,6 +1202,8 @@ impl Style {
                     _ => self.inset,
                 };
             }
+            "transform" => self.rotate = parse_rotate(val),
+            "transform-origin" => self.t_origin = parse_origin(val, own).unwrap_or([Len::Pct(50.0), Len::Pct(50.0)]),
             "z-index" => self.z = val.parse().unwrap_or(0),
             "overflow" | "overflow-x" | "overflow-y" => {
                 self.overflow_hidden = val
