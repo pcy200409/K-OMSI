@@ -16,6 +16,7 @@ K-OMSI = 이 빌드(K-OMSI)에 들어 있음, openOMSI 공식 = 공식 openOMSI�
 
 | 기능 | 내용 | K-OMSI | openOMSI 공식 |
 | --- | --- | :-: | :-: |
+| HTML 판 글자 회전 | HTML 판(modern 엔진)에서 `transform: rotate()`·`transform-origin`으로 글자·상자를 돌려 그림 (노선 띠의 기울어진 정류장 이름 등) | O | X |
 | 게임 안 오브젝트·스플라인 편집 | 오브젝트 에디터(Ctrl+Shift+E)에서 P로 아무 오브젝트(.sco)나 놓고 T로 라벨(정류장명 등)을 한글로 고침, 놓자마자 HTML 판까지 보임. Y로 스플라인을 골라 길이·곡선·높이·경사·기울기·종류를 바꾸고, E로 끝에 이어 붙이기(타일 경계 넘어도 됨)·교차로 열린 끝에서 시작, G로 교차로에 붙이기, A로 지형 맞춤, Delete로 지우기. R로 고친 도로를 지나는 정류장 연결(StnLinks)을 다시 계산. Ctrl+S는 콘텐츠 폴더 사본에 저장 | O | X |
 | 승차권 인쇄 | 종이승차권에 요금·정류장·날짜·좌석을 찍어 보여 줌 (`people.set_ticket`의 `print`, 양식은 `Texture/K-OMSI/paper_ticket` HTML) | O | X |
 | AI 차량 LOD | AI 차량이 전조등·행선판·바뀌는 텍스처가 있어도 멀리서는 낮은 LOD로 그려짐 (`OMSI_STRICT_LOD=1`이면 예전 규칙) | O | X |

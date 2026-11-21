@@ -47,3 +47,4 @@ patch/map-object-type
 patch/editor-place-any
 patch/paper-ticket-print
 patch/ai-lod-always
+patch/html-rotate
