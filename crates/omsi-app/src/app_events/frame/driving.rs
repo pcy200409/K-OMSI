@@ -315,8 +315,12 @@ pub(super) fn audio(cx: AudioCx, dt: f32) {
                 p.vehicle.radio_text = cx.sound.radio.display_text();
                 p.vehicle.radio_frequency = cx.sound.radio.frequency(p.vehicle.position.x, p.vehicle.position.y);
                 (p.vehicle.host.radio_name, p.vehicle.host.radio_song) = cx.sound.radio.now_playing();
+                cx.sound.page_sounds.update(a, &p.vehicle, inside, *cx.clock.paused);
             }
-            None => cx.sound.radio.stop(a),
+            None => {
+                cx.sound.radio.stop(a);
+                cx.sound.page_sounds.stop(a);
+            }
         }
     }
 }
