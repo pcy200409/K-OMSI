@@ -2,7 +2,7 @@
 
 <p align="center"><b>Thank you Developer</b><br>5879, Aviatree</p>
 
-**K-OMSI 0.4** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.54 이후 개발판(main `d38d74a9`, 2026-11-21)을 바탕으로 K-OMSI 수정을 얹은 빌드입니다. 이번부터 K-OMSI 버전은 0.4.x로 따로 매깁니다.
+**K-OMSI 0.4** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.55(main `d38d74a9`, 2026-11-21)을 바탕으로 K-OMSI 수정을 얹은 빌드입니다. 이번부터 K-OMSI 버전은 0.4.x로 따로 매깁니다.
 
 > **비공식 포크입니다.** K-OMSI는 공식 openOMSI(openOMSI.org)와 관계없는 독립 프로젝트이며, openOMSI의 이름·로고는 원작자의 것입니다([TRADEMARKS.md](https://github.com/pcy200409/K-OMSI/blob/release/TRADEMARKS.md)). 문제는 공식 저장소가 아니라 [K-OMSI 이슈](https://github.com/pcy200409/K-OMSI/issues)로 알려 주세요.
 >
@@ -16,6 +16,8 @@ K-OMSI = 이 빌드(K-OMSI)에 들어 있음, openOMSI 공식 = 공식 openOMSI�
 
 | 기능 | 내용 | K-OMSI | openOMSI 공식 |
 | --- | --- | :-: | :-: |
+| 계기판 겹친 표시 밤에 검게 **(새)** | 같은 자리에 겹친 계기판 아이콘(일렉시티 기어 N 등)이 밤에 꺼진 사본 뒤로 묻혀 검게 나오던 문제 수정 (공식 #3923 뒤에 생긴 문제) | O | X |
+| 자동 노출 세기 **(새)** | 향상 그래픽의 자동 노출 세기를 0~100%로 조절 (게임 그래픽 메뉴·런처 그래픽 설정, 0이면 자동 노출 끔): 밤에 전조등·화면이 시야에 들어올 때 화면이 밝아졌다 어두워졌다 하던 것 줄이기 | O | X |
 | HTML 판 글자 회전 | HTML 판(modern 엔진)에서 `transform: rotate()`·`transform-origin`으로 글자·상자를 돌려 그림 (노선 띠의 기울어진 정류장 이름 등) | O | X |
 | 게임 안 오브젝트·스플라인 편집 | 오브젝트 에디터(Ctrl+Shift+E)에서 P로 아무 오브젝트(.sco)나 놓고 T로 라벨(정류장명 등)을 한글로 고침, 놓자마자 HTML 판까지 보임. Y로 스플라인을 골라 길이·곡선·높이·경사·기울기·종류를 바꾸고, E로 끝에 이어 붙이기(타일 경계 넘어도 됨)·교차로 열린 끝에서 시작, G로 교차로에 붙이기, A로 지형 맞춤, Delete로 지우기. R로 고친 도로를 지나는 정류장 연결(StnLinks)을 다시 계산. Ctrl+S는 콘텐츠 폴더 사본에 저장 | O | X |
 | 승차권 인쇄 | 종이승차권에 요금·정류장·날짜·좌석을 찍어 보여 줌 (`people.set_ticket`의 `print`, 양식은 `Texture/K-OMSI/paper_ticket` HTML) | O | X |
