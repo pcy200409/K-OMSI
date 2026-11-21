@@ -3031,3 +3031,5 @@
 "Save under a name...": "이름을 지정해 저장..."
 "No saved situation of this map yet": "이 맵의 저장된 상황이 아직 없습니다"
 "Saved as \"{}\"": "\"{}\"(으)로 저장됨"
+"Auto exposure": "자동 노출"
+"Enhanced graphics: how strongly the picture's brightness follows what is in view (lamps, headlights, screens); lower it if the night pumps brighter and darker. Off keeps the brightness the time of day gives": "향상 그래픽: 화면 밝기가 시야에 들어온 것(가로등·전조등·화면)을 얼마나 따라갈지. 밤에 밝기가 출렁이면 낮추세요. 끄면 시간대에 따른 밝기만 씁니다"
