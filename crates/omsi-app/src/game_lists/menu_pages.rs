@@ -76,6 +76,7 @@ pub(super) fn options_pages(app: &App) -> Vec<Page> {
         pick("shadow_casters", "Shadows cast by", later).filter(|_| shown("shadow_casters")),
         switch_row(app, "detail_textures", "Detail texturing up close", "The ground and large walls get fine grain when close").filter(|_| shown("detail_textures")),
         slider_row(app, "night_brightness", "Night brightness", "Enhanced graphics: how much brighter the night is shown", &|v| if v < 0.01 { "Off".to_string() } else { format!("+{v:.2}") }).filter(|_| shown("night_brightness")),
+        slider_row(app, "auto_exposure", "Auto exposure", "Enhanced graphics: how strongly the picture's brightness follows what is in view (lamps, headlights, screens); lower it if the night pumps brighter and darker. Off keeps the brightness the time of day gives", &|v| if v < 0.005 { "Off".to_string() } else { format!("{:.0}%", v * 100.0) }).filter(|_| shown("auto_exposure")),
         slider_row(app, "led_glow", "LED glow", "How strongly the dots of LED destination displays glow", &|v| format!("{}/15", v as i64)).filter(|_| shown("led_glow")),
         slider_row(app, "led_mips", "LED mip strength", "Lower: sharper LED dots that shimmer from a distance; higher: calmer, softer dots", &|v| format!("{v:.2}")).filter(|_| shown("led_mips")),
         slider_row(app, "reflections", "Reflective objects reflect", "Changes show at once; turned up from Off, they come back when the game starts the next time", &|v| if v < 0.005 { "Off".to_string() } else { format!("{:.0}%", v * 100.0) }).filter(|_| shown("reflections")),
@@ -1050,6 +1051,8 @@ fn shown_in_mode(mode: &str, key: &str) -> bool {
         | "procedural_dirt" => {
             matches!(mode, "enhanced" | "enhanced_plus")
         }
+        // (the metering is the enhanced post pass's)
+        "auto_exposure" => matches!(mode, "enhanced" | "enhanced_plus"),
         // (the ray-traced picture has its own occlusion)
         "street_light" | "road_glare" => matches!(mode, "enhanced" | "enhanced_plus"),
         // (the traced global illumination needs the ray tracing on)

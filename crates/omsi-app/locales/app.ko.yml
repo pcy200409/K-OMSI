@@ -3108,3 +3108,5 @@
 "Only for due trips": "예정된 운행만"
 "Passengers wait for open doors": "승객이 문이 열릴 때까지 기다림"
 "IBIS stop follows the duty": "IBIS 정류장이 근무를 따름"
+"Auto exposure": "자동 노출"
+"Enhanced graphics: how strongly the picture's brightness follows what is in view (lamps, headlights, screens); lower it if the night pumps brighter and darker. Off keeps the brightness the time of day gives": "향상 그래픽: 화면 밝기가 시야에 들어온 것(가로등·전조등·화면)을 얼마나 따라갈지. 밤에 밝기가 출렁이면 낮추세요. 끄면 시간대에 따른 밝기만 씁니다"

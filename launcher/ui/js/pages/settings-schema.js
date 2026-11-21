@@ -109,6 +109,7 @@ const graphics = {
         { type: 'select', key: 'shadow_casters', label: 'Shadows cast by', options: [['all', 'Every solid mesh'], ['omsi', '[shadow] meshes, as OMSI']], when: (s) => !classic(s) },
         { type: 'toggle', key: 'detail_textures', label: 'Detail texturing up close', when: (s) => !classic(s) },
         { type: 'slider', key: 'night_brightness', label: 'Night brightness', min: 0, max: 3, step: 0.25, def: 0, format: (v) => (v < 0.01 ? t('Off') : `+${v.toFixed(2)}`), store: snap(0.25), when: enhanced },
+        { type: 'slider', key: 'auto_exposure', label: 'Auto exposure', help: "Enhanced graphics: how strongly the picture's brightness follows what is in view (lamps, headlights, screens); lower it if the night pumps brighter and darker. Off keeps the brightness the time of day gives", min: 0, max: 1, step: 0.25, def: 1, format: (v) => (v < 0.005 ? t('Off') : pct(v)), store: snap(0.25), when: enhanced },
         { type: 'slider', key: 'led_glow', label: 'LED glow', min: 0, max: 15, step: 1, def: 6, format: (v) => (v < 0.5 ? t('Off') : String(Math.trunc(v))), store: round, when: enhanced },
         { type: 'slider', key: 'led_mips', label: 'LED mip strength', min: 0, max: 4, step: 0.05, def: 1.3, format: (v) => (v < 0.005 ? t('Off') : v.toFixed(2)), store: snap(0.05), when: enhanced },
         // (the `[isshadow]` blob under a vehicle is drawn in every mode, the vanilla one included)
