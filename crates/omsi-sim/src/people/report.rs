@@ -211,6 +211,11 @@ impl PeopleSim {
         if !self.boarding.eq_ignore_ascii_case("pay") {
             return None;
         }
+        // K-OMSI: a paper ticket on the desk, waiting for the driver to take it
+        if let Some((_, name)) = self.paper_waiting() {
+            let name = if name.trim().is_empty() { "ticket".to_string() } else { name.trim().to_string() };
+            return Some(format!("Passenger handed over a paper ticket: {name} - click it on the desk to take it"));
+        }
         self.people.iter().find(|p| matches!(&p.state, State::Pax(x) if x.inside == Some(BusId::Player) && x.ticket == TICKET_BUY && x.sub == 5))?;
         let (name, value) = self.request.clone()?;
         Some(format!("Passenger waiting for a ticket: {name} {value:.2} - press {}", self.ticket_key))
