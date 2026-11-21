@@ -15,6 +15,8 @@ pub(super) fn lighting(cx: LightingCx, dt: f32, daylight: omsi_sim::Daylight) ->
     }
     cx.weather.flood.tick(cx.common.settings.flood, cx.world.world.as_deref(), cx.weather.weather.as_ref(), dt);
     cx.weather.flood.affect_player(cx.player.player.as_mut().map(|p| &mut p.vehicle));
+    cx.weather.potholes.tick(cx.common.settings.potholes || omsi_cfg::flags::OMSI_POTHOLES.is_set(), cx.world.world.as_deref(), cx.weather.weather.as_ref(), dt);
+    cx.weather.ice.tick(cx.common.settings.black_ice || omsi_cfg::flags::OMSI_BLACK_ICE.is_set(), cx.world.world.as_deref(), cx.weather.weather.as_ref(), *cx.weather.wetness, cx.player.player.as_mut().map(|p| &mut p.vehicle), dt);
     let inside = match cx.net.inside_remote.and_then(|id| cx.net.remotes.remotes.get(&id)) {
         // (in another player's bus: its box is the one the camera is in)
         Some(rv) => Some(rv.vehicle()),
