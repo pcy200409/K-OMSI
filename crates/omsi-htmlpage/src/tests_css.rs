@@ -51,6 +51,32 @@ fn query_selector_uses_the_same_selectors() {
     assert_eq!(r.text_of("o").as_deref(), Some("second"));
 }
 
+// ─────────────── transform: rotate ───────────────
+
+#[test]
+fn rotate_turns_a_box_about_its_origin() {
+    // a 20x4 red bar centred at (20, 20): turned 90 degrees it stands 4 wide, 20 high
+    let html = "<style>body{margin:0}#a{position:absolute;left:10px;top:18px;width:20px;height:4px;background:#f00;transform:rotate(90deg)}</style><div id=a></div>";
+    let f = frame(40, 40, html);
+    assert_eq!(px(&f, 40, 20, 12), RED, "above the centre after turning");
+    assert_eq!(px(&f, 40, 20, 28), RED, "below the centre after turning");
+    assert_eq!(px(&f, 40, 12, 20)[3], 0, "the old left end is empty");
+    // origin at the left end, -90 degrees: the bar goes up from (10, 20)
+    let html = "<style>body{margin:0}#a{position:absolute;left:10px;top:18px;width:20px;height:4px;background:#00f;transform:rotate(-90deg);transform-origin:left center}</style><div id=a></div>";
+    let f = frame(40, 40, html);
+    assert_eq!(px(&f, 40, 10, 8), BLUE, "turned up about the left end");
+    assert_eq!(px(&f, 40, 25, 20)[3], 0, "nothing left on the old line");
+}
+
+#[test]
+fn rotate_parses_units_and_ignores_other_functions() {
+    assert!((style::parse_rotate("rotate(0.25turn)") - 90.0).abs() < 1e-3);
+    assert!((style::parse_rotate("translate(3px) rotate(-35deg)") + 35.0).abs() < 1e-3);
+    assert!((style::parse_rotate("rotate(1.5707964rad)") - 90.0).abs() < 1e-2);
+    assert_eq!(style::parse_rotate("none"), 0.0);
+    assert_eq!(style::parse_rotate("rotateX(30deg)"), 0.0);
+}
+
 // ─────────────── values ───────────────
 
 #[test]
