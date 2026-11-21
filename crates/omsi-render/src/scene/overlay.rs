@@ -120,7 +120,8 @@ pub(crate) struct ObjectRun {
     fresh: bool,
     origin: [u64; 3],
     next: u64,
-    flats: Vec<(Flat, u8)>,
+    /// (K-OMSI: with each one's depth cap, `f32::INFINITY` for none)
+    flats: Vec<(Flat, u8, f32)>,
     by_normal: HashMap<(i32, i32, i32), Vec<usize>>,
     model: Option<u64>,
     added: usize,
@@ -261,7 +262,7 @@ impl ObjectRun {
                     for dx in -1..=1 { for dy in -1..=1 { for dz in -1..=1 {
                         let Some(list) = self.by_normal.get(&(kx + dx, ky + dy, kz + dz)) else { continue };
                         for &i in list {
-                            let (g, gl) = &self.flats[i];
+                            let (g, gl, _) = &self.flats[i];
                             if lies_on(f, g) {
                                 level = level.max(gl.saturating_add(1).min(MAX_LEVEL));
                                 under.push(i);
@@ -300,10 +301,21 @@ impl ObjectRun {
             // Do not cap below surfaces already underneath this slot.
             let floor = under.iter().map(|&i| self.flats[i].1).max().unwrap_or(0);
             let level = level.max(floor);
+            // K-OMSI: nor let the cap sink it below one: the cap shortens the lift with the
+            // distance, so a surface under it at the same step with a larger cap (or none) is
+            // in front of it from a little way off - the gear letter on an instrument display,
+            // printed over the same letter's unlit copy, was lost behind it at night
+            if depth_caps[slot].is_finite() {
+                depth_caps[slot] = under
+                    .iter()
+                    .filter(|&&i| self.flats[i].1 >= level)
+                    .map(|&i| self.flats[i].2)
+                    .fold(depth_caps[slot], f32::max);
+            }
             levels[slot] = level;
             for f in mine {
                 self.by_normal.entry(normal_key(f.normal)).or_default().push(self.flats.len());
-                self.flats.push((*f, level));
+                self.flats.push((*f, level, depth_caps[slot]));
             }
         }
         if let Some(m) = self.model {
@@ -452,6 +464,25 @@ mod tests {
         // (a millimetre is past what the step's lift reaches: nothing is cut back)
         let past = quad(-0.001, 0.2, 0, false);
         assert_eq!(levels_of(&[past, base, glass]), vec![0, 0, 1]);
+    }
+
+    /// K-OMSI: a later print cut back to the step of an uncapped one it lies on takes no cap
+    /// either: capped, its lift shrinks with the distance and the earlier print is drawn over
+    /// it (the Eleccity's lit gear letter behind its unlit copy, 0.4.26).
+    #[test]
+    fn a_print_cut_back_onto_an_uncapped_one_is_not_capped_below_it() {
+        let mut run = ObjectRun::default();
+        run.begin(None);
+        let mut add = |k: u64, m: &MeshData| run.levels_with_caps([0; 3], k, 0, Mat4::IDENTITY, &mesh_flats(m), 1);
+        assert_eq!(add(0, &quad(0.0, 1.0, 0, false)).0, vec![0]);
+        assert_eq!(add(1, &quad(0.0, 0.5, 0, true)).0, vec![1]);
+        let (l, c) = add(2, &quad(0.0, 0.3, 0, false));
+        assert_eq!((l, c[0].is_infinite()), (vec![2], true), "a print with nothing beside it yet");
+        // (a surface a fifth of a millimetre off the plane comes in, then one more print)
+        let _ = add(3, &quad(0.0002, 0.2, 0, false));
+        let (l, c) = add(4, &quad(0.0, 0.3, 0, true));
+        assert_eq!(l, vec![2], "cut back to the step of the print under it");
+        assert!(c[0].is_infinite(), "and not capped below that print: {}", c[0]);
     }
 
     /// A print on a dial keeps its step when the instrument's glass lies a few millimetres
