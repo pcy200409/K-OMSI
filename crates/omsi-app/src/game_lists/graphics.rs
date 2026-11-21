@@ -103,6 +103,7 @@ fn restore_runtime_graphics(target: &mut crate::settings::Settings, source: &cra
     target.shadow_casters = source.shadow_casters.clone();
     target.detail_textures = source.detail_textures.clone();
     target.night_brightness = source.night_brightness.clone();
+    target.auto_exposure = source.auto_exposure.clone();
     target.led_glow = source.led_glow.clone();
     target.led_mips = source.led_mips.clone();
     target.shadow_blobs = source.shadow_blobs.clone();
