@@ -609,6 +609,81 @@ fn a_bus_queueing_for_its_own_stop_does_not_go_round_the_queue() {
     }
 }
 
+/// K-OMSI: the player's bus standing on a two-lane road (at its stop) pulls away just as the
+/// car behind has started round it on the oncoming half. Returns, for a departure `delay`
+/// seconds after the car pulled out, where the car's body first touched the bus (its y),
+/// or None.
+fn bus_pulls_away_during_pass(delay: f32, accel: f32) -> Option<(f32, f32)> {
+    let f = Fixture::new();
+    let mut t = traffic(&f, two_way(3.5, None));
+    let me = add_car(&mut t, &f, 0, 40.0, 0xa0a, Some(6.0));
+    let mut y = 106.0f64;
+    let mut v = 0.0f32;
+    let mut started: Option<f32> = None;
+    for _ in 0..(90.0 / DT) as usize {
+        let moving = started.is_some_and(|s| t.time >= s + delay);
+        if moving {
+            v = (v + accel * DT).min(11.0);
+            y += (v * DT) as f64;
+        }
+        let bus: PlayerBox = (DVec3::new(0.0, y, 0.0), 0.0, 6.0, 1.25, v);
+        t.tick(DT, Some(bus));
+        let Some(c) = car(&t, me) else { break };
+        if started.is_none() && c.passing.is_some() {
+            started = Some(t.time);
+        }
+        let b = Footprint::from_obb(usize::MAX, &Obb::vehicle(DVec2::new(0.0, y), 0.0, 6.0, 6.0, 1.25), 0.0);
+        if car_foot(c, 0.0).overlaps(&b, -0.05) {
+            return Some((c.vehicle.position.y as f32, c.state.lateral));
+        }
+        if c.vehicle.position.y > y + 40.0 || y > 380.0 {
+            break;
+        }
+    }
+    // (and it is back in its lane, not left out on the oncoming half)
+    let c = car(&t, me)?;
+    if c.passing.is_some() || c.state.lateral.abs() > 0.1 {
+        return Some((-1.0, c.state.lateral));
+    }
+    None
+}
+
+#[test]
+fn k_omsi_a_car_out_round_the_players_bus_does_not_hit_it_when_it_pulls_away() {
+    let mut hits = Vec::new();
+    for accel in [0.8, 1.2, 2.0] {
+        for k in 0..16 {
+            let delay = k as f32 * 0.4;
+            if let Some(h) = bus_pulls_away_during_pass(delay, accel) {
+                hits.push((accel, delay, h));
+            }
+        }
+    }
+    assert!(hits.is_empty(), "the car ran into the bus pulling away: {hits:?}");
+}
+
+#[test]
+fn k_omsi_no_pass_round_the_players_bus_indicating_out() {
+    let f = Fixture::new();
+    let mut t = traffic(&f, two_way(3.5, None));
+    let me = add_car(&mut t, &f, 0, 40.0, 0xa0a, Some(6.0));
+    let bus: PlayerBox = (DVec3::new(0.0, 106.0, 0.0), 0.0, 6.0, 1.25, 0.0);
+    t.player_blinker = if t.net.left_hand { 2 } else { 1 };
+    for _ in 0..(40.0 / DT) as usize {
+        t.tick(DT, Some(bus));
+        assert!(car(&t, me).unwrap().passing.is_none(), "it went round the bus indicating out");
+    }
+    // the indicator off again (still at its stop): it goes round
+    t.player_blinker = 0;
+    let mut went = false;
+    for _ in 0..(30.0 / DT) as usize {
+        t.tick(DT, Some(bus));
+        went |= car(&t, me).unwrap().passing.is_some();
+    }
+    assert!(went, "it never went round the standing bus");
+}
+
+
 fn player_before_red(f: &Fixture, short: f64) -> (TrafficSim, u64, PlayerBox) {
     let lanes = vec![street(0.0, 0.0, 0.0, 200.0), street(-3.5, 400.0, 180.0, 200.0), street(0.0, 200.0, 0.0, 200.0), street(-3.5, 200.0, 180.0, 200.0)];
     let mut net = net_of(lanes, &[]);
