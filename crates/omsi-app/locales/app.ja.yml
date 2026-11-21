@@ -3278,3 +3278,4 @@
 "Default for every bus": "すべてのバスの既定"
 "Use for {bus}": "{bus} で使う"
 "Profile {name} in use": "プロファイル {name} を使用中"
+"Off takes four to eight times the video memory: only for a driver that draws them wrong. A card of 4 GB or less keeps them compressed.": "オフにするとビデオメモリを4〜8倍使います。テクスチャを正しく描けないドライバーのときだけ。4GB以下のカードでは圧縮のままです。"
