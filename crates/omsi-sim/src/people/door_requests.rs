@@ -160,8 +160,13 @@ mod tests {
     use super::*;
 
     fn fixture() -> (PeopleSim, BusNow, VehicleInstance) {
-        let dir =
-            std::env::temp_dir().join(format!("omsi-human-door-request-{}", std::process::id()));
+        let dir = {
+            // (one folder per call: the tests run side by side in one process, and one
+            // removing a shared folder left the other's vehicle without its [model])
+            static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+            let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            std::env::temp_dir().join(format!("omsi-human-door-request-{}-{n}", std::process::id()))
+        };
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("test.bus"), "[model]\nmodel.cfg\n[script]\n1\nmain.osc\n[passengercabin]\ncabin.cfg\n[paths]\npaths.cfg\n").unwrap();
         std::fs::write(dir.join("model.cfg"), "").unwrap();
