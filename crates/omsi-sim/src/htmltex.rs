@@ -341,6 +341,19 @@ impl HtmlTexture {
         self
     }
 
+    /// K-OMSI: give the page these string variables (all of them, once: a paper ticket's
+    /// texts) and the clock, without a vehicle.
+    pub fn set_texts(&mut self, strs: &[(String, String)], env: &crate::vehicle_api::ApiValue) {
+        self.renderer.set_env(env);
+        self.renderer.set_vars(&[], strs);
+        self.started = true;
+    }
+
+    /// K-OMSI: the page's new picture (RGBA, `width` x `height`), when it drew one.
+    pub fn poll(&mut self) -> Option<Vec<u8>> {
+        self.renderer.poll_frame()
+    }
+
     /// The pointer at (`u`, `v`), both 0..1 across the texture (`v` down from the top).
     pub fn pointer(&mut self, u: f32, v: f32, kind: PointerKind) {
         self.renderer.pointer(u * self.width as f32, v * self.height as f32, kind);
