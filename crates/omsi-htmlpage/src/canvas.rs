@@ -469,7 +469,103 @@ impl Canvas {
     }
 }
 
+/// The area a box and everything in it may draw on: (x0, y0, x1, y1).
+fn ink_bounds(b: &LBox, out: &mut [f32; 4]) {
+    let r = b.rect;
+    let grow = b.st.shadow.as_ref().map_or(0.0, |s| s.blur + s.spread.max(0.0) + s.dx.abs().max(s.dy.abs()));
+    out[0] = out[0].min(r[0] - grow);
+    out[1] = out[1].min(r[1] - grow);
+    out[2] = out[2].max(r[0] + r[2] + grow);
+    out[3] = out[3].max(r[1] + r[3] + grow);
+    for it in &b.items {
+        match it {
+            Item::Block(c) => ink_bounds(c, out),
+            Item::Line(l) => {
+                for li in &l.items {
+                    out[0] = out[0].min(l.x + li.dx - li.px);
+                    out[1] = out[1].min(l.y - li.px * 0.5);
+                    out[2] = out[2].max(l.x + li.dx + li.w + li.px);
+                    out[3] = out[3].max(l.y + l.h + li.px * 0.5);
+                }
+            }
+        }
+    }
+}
+
+/// A box with `transform: rotate(..)`: drawn as usual on a scratch canvas, then turned about its
+/// `transform-origin` onto the page (bilinear). Hit testing still uses the unturned box.
 pub(crate) fn paint(cv: &mut Canvas, lay: &Layouter, b: &LBox) {
+    let deg = b.st.rotate % 360.0;
+    if !deg.is_finite() || deg.abs() < 0.01 {
+        return paint_box(cv, lay, b);
+    }
+    let mut bd = [f32::MAX, f32::MAX, f32::MIN, f32::MIN];
+    ink_bounds(b, &mut bd);
+    if !bd.iter().all(|v| v.is_finite()) {
+        return paint_box(cv, lay, b);
+    }
+    // the scratch canvas: page coordinates, as big as the page or the box's ink (at most 4096)
+    let tw = (bd[2].ceil().max(cv.w as f32) as u32).min(4096);
+    let th = (bd[3].ceil().max(cv.h as f32) as u32).min(4096);
+    let mut tmp = Canvas::new(tw, th);
+    paint_box(&mut tmp, lay, b);
+    let sx0 = bd[0].floor().max(0.0) as i32;
+    let sy0 = bd[1].floor().max(0.0) as i32;
+    let sx1 = (bd[2].ceil() as i32).min(tw as i32);
+    let sy1 = (bd[3].ceil() as i32).min(th as i32);
+    if sx0 >= sx1 || sy0 >= sy1 {
+        return;
+    }
+    let ox = b.rect[0] + b.st.t_origin[0].px(b.rect[2]);
+    let oy = b.rect[1] + b.st.t_origin[1].px(b.rect[3]);
+    let (s, c) = deg.to_radians().sin_cos();
+    // where the ink lands: the turned corners
+    let (mut dx0, mut dy0, mut dx1, mut dy1) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
+    for (x, y) in [(sx0, sy0), (sx1, sy0), (sx0, sy1), (sx1, sy1)] {
+        let (vx, vy) = (x as f32 - ox, y as f32 - oy);
+        let (px, py) = (ox + vx * c - vy * s, oy + vx * s + vy * c);
+        dx0 = dx0.min(px);
+        dy0 = dy0.min(py);
+        dx1 = dx1.max(px);
+        dy1 = dy1.max(py);
+    }
+    let x0 = (dx0.floor() as i32).max(cv.clip[0]).max(0);
+    let y0 = (dy0.floor() as i32).max(cv.clip[1]).max(0);
+    let x1 = (dx1.ceil() as i32).min(cv.clip[2]).min(cv.w as i32);
+    let y1 = (dy1.ceil() as i32).min(cv.clip[3]).min(cv.h as i32);
+    let at = |x: i32, y: i32| -> [f32; 4] {
+        if x < sx0 || y < sy0 || x >= sx1 || y >= sy1 {
+            return [0.0; 4];
+        }
+        let i = ((y as u32 * tw + x as u32) * 4) as usize;
+        let a = tmp.px[i + 3] as f32 / 255.0;
+        [tmp.px[i] as f32 * a, tmp.px[i + 1] as f32 * a, tmp.px[i + 2] as f32 * a, a]
+    };
+    for y in y0..y1 {
+        for x in x0..x1 {
+            // back to the unturned picture (pixel centres)
+            let (vx, vy) = (x as f32 + 0.5 - ox, y as f32 + 0.5 - oy);
+            let (fx, fy) = (ox + vx * c + vy * s - 0.5, oy - vx * s + vy * c - 0.5);
+            if fx < sx0 as f32 - 1.0 || fy < sy0 as f32 - 1.0 || fx >= sx1 as f32 || fy >= sy1 as f32 {
+                continue;
+            }
+            let (ix, iy) = (fx.floor() as i32, fy.floor() as i32);
+            let (tx, ty) = (fx - ix as f32, fy - iy as f32);
+            let (p00, p10, p01, p11) = (at(ix, iy), at(ix + 1, iy), at(ix, iy + 1), at(ix + 1, iy + 1));
+            let mut m = [0.0f32; 4];
+            for k in 0..4 {
+                m[k] = (p00[k] * (1.0 - tx) + p10[k] * tx) * (1.0 - ty) + (p01[k] * (1.0 - tx) + p11[k] * tx) * ty;
+            }
+            if m[3] <= 0.002 {
+                continue;
+            }
+            let col = [(m[0] / m[3]).round().clamp(0.0, 255.0) as u8, (m[1] / m[3]).round().clamp(0.0, 255.0) as u8, (m[2] / m[3]).round().clamp(0.0, 255.0) as u8, 255];
+            cv.blend(x, y, col, m[3]);
+        }
+    }
+}
+
+fn paint_box(cv: &mut Canvas, lay: &Layouter, b: &LBox) {
     let saved_alpha = cv.alpha;
     let saved_clip = cv.clip;
     cv.alpha *= b.st.opacity;
