@@ -191,6 +191,7 @@ impl World {
             edit_objects: Mutex::new(HashMap::new()),
             object_edits: Mutex::new(HashMap::new()),
             terrain_edits: Mutex::new(HashMap::new()),
+            tile_texts: Mutex::new(HashMap::new()),
             waiting_cabins: Mutex::new(HashMap::new()),
             tiles_generation: std::sync::atomic::AtomicU64::new(0),
             light_maps: Mutex::new(HashMap::new()),

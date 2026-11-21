@@ -13,6 +13,7 @@ impl App {
         // (a search belongs to its list; `chooser_pick` has taken the kind when it goes on)
         if self.menus.list_kind.as_ref().is_some_and(|k| *k != kind) {
             self.forget_search();
+            self.end_label_edit();
             if self.menus.menu_edit_number {
                 crate::platform::text_input(self.window.as_deref(),false);
                 self.menus.menu_edit_number=false; self.menus.menu_edit=None;
@@ -345,6 +346,7 @@ impl App {
         if self.menus.menu_edit_ident { crate::platform::text_input(self.window.as_deref(),false); }
         self.menus.menu_edit_ident=false;
         self.menus.menu_edit_search = false;
+        self.end_label_edit();
         self.menus.menu_search.clear();
         self.menus.menu_edit = None;
         self.menus.chooser = None;
@@ -455,6 +457,8 @@ impl App {
         if self.menus.menu_edit.is_some() {
             if self.menus.menu_edit_search {
                 self.search_edit_key(code);
+            } else if self.menus.menu_edit_label.is_some() {
+                self.label_edit_key(code);
             } else if self.menus.menu_edit_icao {
                 self.icao_edit_key(code);
             } else if self.menus.menu_edit_number {

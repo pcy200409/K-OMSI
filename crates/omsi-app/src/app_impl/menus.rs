@@ -51,6 +51,7 @@ impl App {
             crate::platform::text_input(self.window.as_deref(), false);
         }
         self.stop_search_typing();
+        self.end_label_edit();
         self.menus.menu_search.clear();
         if self.menus.menu_edit_number {
             crate::platform::text_input(self.window.as_deref(),false);

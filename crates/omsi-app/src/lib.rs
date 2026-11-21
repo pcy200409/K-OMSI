@@ -53,6 +53,9 @@ pub(crate) use omsi_scene::editor;
 mod duty_book;
 mod first_graphics;
 mod game_lists;
+mod editor_lists;
+mod editor_splines;
+mod editor_links;
 mod game_panels;
 mod game_controller_menu;
 mod rail_drive;
@@ -795,6 +798,8 @@ fn assemble_app(args: Args, settings: settings::Settings) -> App {
             menu_edit_number: false,
             menu_edit_ident: false,
             menu_edit_search: false,
+            menu_edit_label: None,
+            menu_label_preedit: 0,
             streets_seen: 0,
             menu_search: String::new(),
             swap_pending: false,

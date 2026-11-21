@@ -118,6 +118,9 @@ pub struct World {
     pub object_edits: Mutex<HashMap<i64, ObjectEdit>>,
     /// The ground as the editor's brush has left it, by tile (read instead of the file).
     pub terrain_edits: Mutex<HashMap<(i32, i32), Terrain>>,
+    /// A tile's text as the object editor has changed it (objects added, labels changed),
+    /// by tile: read instead of its file (see `World::stage_tile`) until the game ends.
+    pub tile_texts: Mutex<HashMap<(i32, i32), String>>,
     /// Passenger cabins of waiting objects by file, read once.
     pub(super) waiting_cabins: Mutex<HashMap<PathBuf, Option<Arc<omsi_vehicle::PassengerCabin>>>>,
     /// Counts the changes of the loaded tiles (see [`World::refresh_tile_lists`]): whoever
