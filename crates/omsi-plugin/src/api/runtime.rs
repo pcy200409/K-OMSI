@@ -10,11 +10,22 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::time::{Duration, Instant};
 
 /// Failed calls after which a plugin is switched off.
 pub const MAX_ERRORS: u32 = 10;
-/// Longest one call into a plugin may run: past it the plugin is stopped and switched off.
+/// What one call into a plugin should take at most: a callback past it `SLOW_STREAK` calls in
+/// a row is switched off (a slow call alone is only logged: a busy moment of the game or a
+/// big message should not cost the player the plugin).
 pub const CALL_BUDGET_MS: u64 = 50;
+/// Longest one call may run at all: past it the call is stopped and the plugin switched off.
+pub const HARD_BUDGET_MS: u64 = 1000;
+/// Calls of the same callback past `CALL_BUDGET_MS` in a row after which the plugin is
+/// switched off.
+pub const SLOW_STREAK: u32 = 5;
+/// Seconds after the plugin started in which slow calls are not counted (it reads its data,
+/// the game is still loading).
+pub const SLOW_GRACE_SECS: u64 = 10;
 /// The same for loading it (its top level and the `start` event).
 pub const LOAD_BUDGET_MS: u64 = 1000;
 /// Messages kept for a plugin between two of its frames (the oldest go).
@@ -38,6 +49,11 @@ pub trait Binding {
     /// Whether there is such a handler.
     fn has_global_handler(&self, _event: &str) -> bool {
         false
+    }
+    /// The milliseconds of the last outermost call when it ran past `CALL_BUDGET_MS` (taken:
+    /// asked once). None for a binding that stops its calls by itself (WASM's fuel).
+    fn took_long(&self) -> Option<u64> {
+        None
     }
 }
 
@@ -211,6 +227,11 @@ pub struct PluginState {
     pub focus_seen: bool,
     pub errors: u32,
     pub disabled: bool,
+    /// Calls past `CALL_BUDGET_MS` in a row, by callback (see [`PluginState::timed`]).
+    slow: HashMap<u64, u32>,
+    /// When it started (the grace of `SLOW_GRACE_SECS`) and last logged a slow call.
+    born: Instant,
+    slow_logged: Option<Instant>,
     /// The key/value storage, read on first use.
     pub storage: Option<super::fns::storage::Store>,
     /// `omsi.send`'s socket and rate.
@@ -254,6 +275,9 @@ impl PluginState {
             focus_seen: false,
             errors: 0,
             disabled: false,
+            slow: HashMap::new(),
+            born: Instant::now(),
+            slow_logged: None,
             storage: None,
             sender: Default::default(),
                     ws: Default::default(),
@@ -293,6 +317,31 @@ impl PluginState {
         }
     }
 
+    /// A call of callback `key` ended; `slow` its milliseconds when past `CALL_BUDGET_MS`
+    /// (from the binding). Err (fatal) once the same callback was slow `SLOW_STREAK` times in
+    /// a row, after the first `SLOW_GRACE_SECS`.
+    pub fn timed(&mut self, key: u64, slow: Option<u64>) -> Result<(), CallError> {
+        let Some(ms) = slow else {
+            self.slow.remove(&key);
+            return Ok(());
+        };
+        if self.born.elapsed() < Duration::from_secs(SLOW_GRACE_SECS) {
+            log::info!("{} a call took {ms} ms while starting", self.tag);
+            return Ok(());
+        }
+        let n = self.slow.entry(key).or_insert(0);
+        *n += 1;
+        let n = *n;
+        if n >= SLOW_STREAK {
+            return Err(CallError { msg: format!("ran longer than {CALL_BUDGET_MS} ms {SLOW_STREAK} times in a row (last {ms} ms)"), fatal: true });
+        }
+        if self.slow_logged.is_none_or(|t| t.elapsed() >= Duration::from_secs(10)) {
+            self.slow_logged = Some(Instant::now());
+            log::warn!("{} a call took {ms} ms (more than {CALL_BUDGET_MS}, {n} in a row; switched off at {SLOW_STREAK})", self.tag);
+        }
+        Ok(())
+    }
+
     /// A failed call: logged, shown, counted; switched off at `MAX_ERRORS` or when it ran
     /// past its budget.
     pub fn record_error(&mut self, io: &mut dyn PluginIo, e: &CallError) {
@@ -301,13 +350,13 @@ impl PluginState {
         let why = e.msg.lines().next().unwrap_or("");
         let text = match (self.label, e.fatal) {
             ("WASM plugin", true) => format!("WASM plugin {} ran longer than {CALL_BUDGET_MS} ms and was stopped", self.name),
-            (_, true) => format!("Lua plugin {} ran longer than {CALL_BUDGET_MS} ms and was stopped", self.name),
+            (_, true) => format!("Lua plugin {} was stopped: {why}", self.name),
             ("WASM plugin", false) => format!("WASM plugin {} failed: {why}", self.name),
             (_, false) => format!("Lua plugin {} failed: {why}", self.name),
         };
         io.message(&text, 8.0);
         if e.fatal {
-            log::warn!("{} ran longer than {CALL_BUDGET_MS} ms in one call: switched off until it changes or the game restarts", self.tag);
+            log::warn!("{} too slow: switched off until it changes, it is turned on again or the game restarts", self.tag);
             self.disabled = true;
         } else if self.errors >= MAX_ERRORS {
             log::warn!("{} {MAX_ERRORS} errors: switched off until it changes or the game restarts", self.tag);
@@ -676,4 +725,46 @@ pub fn finish(ctx: &mut Ctx<'_>) {
     ctx.state().hub.cables.borrow_mut().remove_owner(owner);
     let name = ctx_name(ctx);
     ctx.state().hub.names.borrow_mut().retain(|n| *n != name);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn state() -> PluginState {
+        PluginState::new("slow", "Lua plugin", "lua", 1, Rc::new(Hub::default()), None, PathBuf::new())
+    }
+
+    #[test]
+    fn a_callback_slow_five_times_in_a_row_is_fatal() {
+        let mut s = state();
+        s.born -= Duration::from_secs(SLOW_GRACE_SECS + 1);
+        for _ in 1..SLOW_STREAK {
+            assert!(s.timed(7, Some(80)).is_ok());
+        }
+        let e = s.timed(7, Some(80)).unwrap_err();
+        assert!(e.fatal && e.msg.contains("5 times in a row"), "{e:?}");
+    }
+
+    #[test]
+    fn a_quick_call_or_another_callback_does_not_add_to_the_streak() {
+        let mut s = state();
+        s.born -= Duration::from_secs(SLOW_GRACE_SECS + 1);
+        for _ in 0..10 {
+            for _ in 1..SLOW_STREAK {
+                assert!(s.timed(7, Some(80)).is_ok());
+                assert!(s.timed(8, Some(80)).is_ok());
+            }
+            assert!(s.timed(7, None).is_ok());
+            assert!(s.timed(8, None).is_ok());
+        }
+    }
+
+    #[test]
+    fn slow_calls_while_starting_are_not_counted() {
+        let mut s = state();
+        for _ in 0..20 {
+            assert!(s.timed(7, Some(300)).is_ok());
+        }
+    }
 }
