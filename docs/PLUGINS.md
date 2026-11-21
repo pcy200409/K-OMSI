@@ -805,7 +805,7 @@ On macOS, helpers extracted from ZIP files may need their executable bit restore
 | `omsi.map.lane(x, y)` | table or nil | The traffic lane nearest to a map point: `{index, distance, speed_limit, name, traffic_light}`. | 0.2.22 |
 | `omsi.map.name()` | string or nil | The map's name (its folder's). | 0.2.22 |
 | `omsi.map.object(id)` | x, y, z, heading | Where a map object is, by its id (a stop's id of the timetable, say); nothing when the game has not read its tile. | 0.2.22 |
-| `omsi.map.objects_near(x, y, [radius])` | list of tables | The map objects within `radius` m (default 50, at most 2000 of them, nearest first): `{id, x, y, z, heading, distance}`. | 0.2.22 |
+| `omsi.map.objects_near(x, y, [radius])` | list of tables | The map objects within `radius` m (default 50, at most 2000 of them, nearest first): `{id, x, y, z, heading, distance, type}`; K-OMSI: `type` is the object's file as the map names it (`Sceneryobjects\...\HiPass.sco`), where its tile is read. | 0.2.22 |
 | `omsi.map.place_on_road(x, y)` | boolean | Puts the player's bus on the street nearest to a map point (within 300 m), along it. *Permission: `world_write`.* | 0.2.22 |
 | `omsi.map.speed_limit()` | number or nil | The speed limit (km/h) of the lane the player's bus drives on (`nil` off the lanes). | 0.2.22 |
 | `omsi.map.stops()` | list of tables | The bus stops of the tiles loaded (around the camera): `{id, name, x, y, z, heading}`. | 0.2.22 |
