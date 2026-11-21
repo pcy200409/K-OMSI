@@ -106,6 +106,8 @@ impl PeopleSim {
             if new && request.exit {
                 match request.bus {
                     BusId::Player => self.stop_request = true,
+                    // K-OMSI: a rider of a timetable bus presses its stop button too (the
+                    // app presses `int_haltewunsch` on it, as for its simulated riders)
                     BusId::Ai(id) => {
                         if !self.ai_stop_requests.contains(&id) {
                             self.ai_stop_requests.push(id);
@@ -158,8 +160,13 @@ mod tests {
     use super::*;
 
     fn fixture() -> (PeopleSim, BusNow, VehicleInstance) {
-        let dir =
-            std::env::temp_dir().join(format!("omsi-human-door-request-{}", std::process::id()));
+        let dir = {
+            // (one folder per call: the tests run side by side in one process, and one
+            // removing a shared folder left the other's vehicle without its [model])
+            static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+            let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            std::env::temp_dir().join(format!("omsi-human-door-request-{}-{n}", std::process::id()))
+        };
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("test.bus"), "[model]\nmodel.cfg\n[script]\n1\nmain.osc\n[passengercabin]\ncabin.cfg\n[paths]\npaths.cfg\n").unwrap();
         std::fs::write(dir.join("model.cfg"), "").unwrap();
@@ -202,6 +209,24 @@ mod tests {
         people.last_buses = Arc::new(vec![bus.clone()]);
         std::fs::remove_dir_all(dir).ok();
         (people, bus, vehicle)
+    }
+
+    #[test]
+    fn a_seated_rider_rings_from_anywhere_in_the_saloon() {
+        let (mut people, bus, _vehicle) = fixture();
+        // a seat at the front, 7 m from the exit
+        let seat = bus.world(glam::Vec3::new(0.0, 4.0, 0.4));
+        let exit_req = DoorRequest { bus: BusId::Player, exit: true, index: 0 };
+        assert!(people.nearest_door_request(seat, Some(BusId::Player), 3.2).is_none());
+        assert_eq!(people.nearest_door_request(seat, Some(BusId::Player), 30.0), Some(exit_req));
+        assert!(people.door_request_near(exit_req, seat, Some(BusId::Player), 30.0));
+        people.set_manual_door_request(5, exit_req, 1.0);
+        assert!(people.stop_request);
+        // a timetable bus's rider presses its button
+        let ai = DoorRequest { bus: BusId::Ai(9), exit: true, index: 0 };
+        people.set_manual_door_request(6, ai, 1.0);
+        people.set_manual_door_request(6, ai, 1.0);
+        assert_eq!(people.ai_stop_requests, vec![9]);
     }
 
     #[test]
