@@ -122,6 +122,9 @@ pub fn next_calling_stop(stops: &[PlannedStop], next: usize) -> usize {
         })
 }
 
+mod rider_stop;
+pub use rider_stop::next_rider_stop;
+
 /// Which way a trip runs through one of its stops: the direction it arrives on and the one
 /// it leaves on, as unit vectors of the ground plane (x east, y north). None where a
 /// neighbour's place is unknown or too near to tell a direction - any heading will do then.
