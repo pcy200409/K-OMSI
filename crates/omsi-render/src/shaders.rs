@@ -152,7 +152,8 @@ mod tests {
     /// and the traced sample read once for FXC, the road glare in its own uniform lane,
     /// and the detail grain's octaves left out where faded, and the instance's parameters
     /// handed to the fragments flat (#1488), no lamp glint on a face seen from behind, no sun glint on a face seen from behind (#3359), and an unswitched night map's gain capped (#3362),
-    /// and the panes' condensation laid in the bus's tilted frame (#3958).
+    /// and the panes' condensation laid in the bus's tilted frame (#3958),
+    /// and a page's LED destination sign burning brighter by day.
     /// (with Unix line ends: a Windows checkout may turn the parts' into CRLF, as it did the
     /// single files', and the 0.2.31 release's Windows test failed on that alone)
     #[test]
@@ -164,7 +165,7 @@ mod tests {
         assert_eq!((scene.len(), fnv1a(&scene)), (141700, 3010610926547160211));
         assert_eq!(
             (enhanced.len(), fnv1a(&enhanced)),
-            (99901, 5146436175157644013)
+            (100358, 16873902692039047585)
         );
     }
 }
