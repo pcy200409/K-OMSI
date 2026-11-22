@@ -6,6 +6,8 @@ use super::*;
 pub(crate) struct SoundState {
     /// The player's bus radio as internet radio.
     pub(crate) radio: radio::Radio,
+    /// The sound of the videos on the bus's pages (`[htmltexture]` `<video>`).
+    pub(crate) page_sounds: omsi_soundscape::page_sound::PageSounds,
     /// The MileZero card on the navigator (settings `milezero`).
     pub(crate) milezero: crate::milezero::Milezero,
     pub(crate) switch_sound: omsi_audio::trolley::SwitchSound,
