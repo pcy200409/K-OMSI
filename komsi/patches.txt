@@ -50,3 +50,4 @@ patch/ai-lod-always
 patch/html-rotate
 patch/coplanar-cap
 patch/auto-exposure
+patch/upstream-build-fix
