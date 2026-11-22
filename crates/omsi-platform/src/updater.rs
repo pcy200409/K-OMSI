@@ -881,6 +881,9 @@ pub(crate) fn target_of(name: &str, place: &Place) -> PathBuf {
 /// `*.old-update`, with the version they belong to (`.openomsi-previous`), until the new
 /// version has started well once (`cleanup_after_update`): until then the start guard can
 /// go back to them (`recovery::rollback`).
+// K-OMSI: the player's plugins are kept through an update (updater/keep_plugins.rs)
+mod keep_plugins;
+
 pub fn install_archive(zip: &Path, place: &Place) -> anyhow::Result<()> {
     install_archive_with(zip, place, true)
 }
@@ -913,6 +916,7 @@ pub(crate) fn install_archive_with(zip: &Path, place: &Place, self_test: bool) -
             return Err(e.into());
         }
     }
+    keep_plugins::merge_into_staging(&staging, &place.dir);
     // what an earlier update put here and this one no longer brings
     let before: Vec<String> = std::fs::read_to_string(place.dir.join(MANIFEST)).map(|t| t.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty() && !l.contains(['/', '\\']) && l != ".." && l != ".").collect()).unwrap_or_default();
     let gone: Vec<String> = before.into_iter().filter(|n| !items.iter().any(|i| i.eq_ignore_ascii_case(n))).collect();
