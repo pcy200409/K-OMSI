@@ -86,7 +86,7 @@ K-OMSI = 이 빌드(K-OMSI)에 들어 있음, openOMSI 공식 = 공식 openOMSI�
 | 깨진 사운드 파일 로그 | 읽을 수 없는 사운드 파일의 경로·크기·첫 바이트를 로그에 남김 (#3956) | O | O |
 | Pixel XC 목록 줄 | MZKP SOR NBG 12의 Pixel XC 화면 목록 글자가 가운데에서 잘리던 문제 수정 | O | O |
 | 정류장 대기 승객 높이 | 맵이 보도 아래에 둔 대기 자리의 사람을 보도 위로 올림 | O | O |
-| Mac: mX 그래픽 (시험) | 설정 → 그래픽 → 화면에서 wgpu 대신 openOMSI 자체 그래픽 라이브러리 mX(Metal)로 그림 | O | O |
+| mX 그래픽 (시험) | wgpu 대신 openOMSI 자체 그래픽 라이브러리 mX로 그림 (공식은 Mac 설정, Windows는 `OMSI_MX=on`). K-OMSI는 이번 버전부터 mX 판 게임을 넣지 않아, 켜 두어도 wgpu로 그림 | X | O |
 | Mac: 프레임 생성 | MetalFX 업스케일링을 켠 Apple silicon·macOS 26 이상에서 프레임 사이에 생성 프레임을 넣음 | O | O |
 | Mac: MetalFX 선명도 | MetalFX 업스케일링 화면이 더 선명해짐 | O | O |
 | 조작 설정 프로필 | 런처 조작 페이지에 키·컨트롤러 설정 묶음(프로필)이 생김. 복제·전환·이름 바꾸기·지우기, 모든 버스의 기본 프로필과 버스별 프로필을 정하면 운행 전에 런처가 그 프로필로 바꿈 (#3921) | O | O |
