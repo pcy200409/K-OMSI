@@ -52,6 +52,33 @@ pub(crate) fn meter_tuning() -> [f32; 6] {
     })
 }
 
+/// The settings' auto exposure (0 off .. 1 full) as the share of the metering applied: a
+/// value out of range or not a number counts as the full one.
+pub(crate) fn auto_exposure_scale(setting: f32) -> f32 {
+    if setting.is_finite() { setting.clamp(0.0, 1.0) } else { 1.0 }
+}
+
+/// The metering (`meter_tuning`) with only `share` of it: its gain and how far it may
+/// darken and brighten are scaled; its target, bias and night vision stay.
+pub(crate) fn scale_metering(m: &mut [f32; 6], share: f32) {
+    m[0] *= share;
+    m[2] *= share;
+    m[3] *= share;
+}
+
+/// The night's light the exposure is set for: the lamps' and headlights' light in view
+/// (`view`, never below the lit district's), or with the settings' auto exposure turned
+/// down (`share` < 1) that much of the way towards the district's level alone - which
+/// changes only as the bus drives into or out of lamp-lit streets, so the picture does not
+/// pump as lamps, headlights and screens come and go in view. `rest` is the sky's light with
+/// a lit city's average `artificial` in it.
+pub(crate) fn night_adaptation_light(rest: f32, artificial: f32, view: f32, district: f32, share: f32) -> f32 {
+    let base = rest - artificial;
+    let viewed = (base + view.max(district)).max(1e-6);
+    let steady = (base + district).max(1e-6);
+    steady + (viewed - steady) * share
+}
+
 /// The street's scale of the ambient light: how far the sky's occlusion by the houses,
 /// trees and hills reaches (m), how much of the occluded sky it takes away, the bounced
 /// light's gain and the brightest radiance it is taken from (1 = 10 000 cd/m²: the sun on
@@ -844,7 +871,7 @@ impl Renderer {
         // a country road with no lamps round it has none, and the moonlight still decides.
         let district = atmosphere::ARTIFICIAL * st.input.city_glow.clamp(0.0, 1.0);
         let e_rest = match self.tone.view_lamps {
-            Some(v) => (st.e_rest - st.e_artificial + v.max(district)).max(1e-6),
+            Some(v) => night_adaptation_light(st.e_rest, st.e_artificial, v, district, auto_exposure_scale(lighting.auto_exposure)),
             None => st.e_rest,
         };
         let full = atmosphere::exposure_for(st.e_sun + e_rest).max(1e-6).ln();

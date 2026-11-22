@@ -727,6 +727,7 @@ pub(crate) fn dress_lighting(
     lighting.detail = settings.detail_textures;
     lighting.windy_trees = settings.windy_trees();
     lighting.night_brightness = settings.night_brightness;
+    lighting.auto_exposure = settings.auto_exposure;
     lighting.reflection_strength = settings.reflections;
     lighting.road_glare = settings.road_glare;
     lighting.puddles = match settings.puddles.as_str() {

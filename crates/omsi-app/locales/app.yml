@@ -8947,3 +8947,7 @@ _version: 2
   en: "Turn switched-off plugins on again"
 "No plugin is switched off":
   en: "No plugin is switched off"
+"Auto exposure":
+  en: "Auto exposure"
+"Enhanced graphics: how strongly the picture's brightness follows what is in view (lamps, headlights, screens); lower it if the night pumps brighter and darker. Off keeps the brightness the time of day gives":
+  en: "Enhanced graphics: how strongly the picture's brightness follows what is in view (lamps, headlights, screens); lower it if the night pumps brighter and darker. Off keeps the brightness the time of day gives"

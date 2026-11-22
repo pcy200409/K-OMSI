@@ -76,3 +76,44 @@ fn the_bounce_history_is_dropped_after_a_cut() {
     let d = (vp * view) * glam::Vec4::new(1.0, 2.0, -10.0, 1.0);
     assert!((c - d).length() < 1e-3);
 }
+
+#[test]
+fn the_auto_exposure_setting_scales_the_metering_and_off_holds_it() {
+    let full = meter_tuning();
+    // full: the metering as tuned
+    let mut m = full;
+    scale_metering(&mut m, auto_exposure_scale(1.0));
+    assert_eq!(m, full);
+    // off: no gain and no room to darken or brighten - the exposure is the light model's
+    let mut off = full;
+    scale_metering(&mut off, auto_exposure_scale(0.0));
+    assert_eq!((off[0], off[2], off[3]), (0.0, 0.0, 0.0));
+    // (the target, the bias and the night vision stay)
+    assert_eq!((off[1], off[4], off[5]), (full[1], full[4], full[5]));
+    // so a lamp-lit night picture far brighter than the target is not darkened at all
+    let gap: f32 = -6.0;
+    assert_eq!((gap * off[0]).clamp(-off[2], off[3]), 0.0);
+    // half: half the gain and half the reach
+    let mut half = full;
+    scale_metering(&mut half, auto_exposure_scale(0.5));
+    assert_eq!((half[0], half[2], half[3]), (full[0] * 0.5, full[2] * 0.5, full[3] * 0.5));
+    // out of range or not a number: clamped, or the full metering
+    assert_eq!((auto_exposure_scale(-1.0), auto_exposure_scale(2.0), auto_exposure_scale(f32::NAN)), (0.0, 1.0, 1.0));
+}
+
+#[test]
+fn turned_off_the_night_exposure_keeps_to_the_district_not_the_lamps_in_view() {
+    let near = |a: f32, b: f32| (a - b).abs() < 1e-5;
+    let (rest, artificial, district) = (0.5_f32, 0.3_f32, 0.2_f32);
+    let base = rest - artificial;
+    // full: the lamps and headlights in view decide (never below the district)
+    assert!(near(night_adaptation_light(rest, artificial, 2.0, district, 1.0), base + 2.0));
+    assert!(near(night_adaptation_light(rest, artificial, 0.05, district, 1.0), base + district));
+    // off: the district's level alone, whatever is in view - no pumping
+    for view in [0.05, 2.0, 50.0] {
+        assert!(near(night_adaptation_light(rest, artificial, view, district, 0.0), base + district), "{view}");
+    }
+    // half: half of the way
+    let half = night_adaptation_light(rest, artificial, 2.0, district, 0.5);
+    assert!(near(half, base + district + (2.0 - district) * 0.5), "{half}");
+}
