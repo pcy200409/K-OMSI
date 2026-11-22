@@ -105,6 +105,7 @@ pub mod ticket_hook;
 pub mod bodies;
 #[rustfmt::skip]
 pub mod pose_facts;
+pub mod tag_points;
 #[rustfmt::skip]
 pub mod money;
 #[rustfmt::skip]

@@ -26,6 +26,7 @@ impl Pose {
             seat_pelvis: None,
             reach: 0.0,
             reach_at: Vec3::new(0.3, 0.5, 1.1),
+            reach_upright: false,
             grip: 0.0,
             grip_at: [Vec3::new(-0.2, 0.4, 1.0), Vec3::new(0.2, 0.4, 1.0)],
             grip_frame: None,
@@ -469,6 +470,7 @@ impl Pose {
         // reaching for the cash desk
         match input.reach {
             Some(r) if !seated => {
+                self.reach_upright = input.reach_upright;
                 // the hand moves on to a new target, it does not jump there
                 if self.reach <= 0.0 {
                     self.reach_at = r;
