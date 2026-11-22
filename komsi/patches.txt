@@ -51,4 +51,6 @@ patch/html-rotate
 patch/coplanar-cap
 patch/auto-exposure
 patch/no-mx
+patch/pax-virtual-stop
+patch/updater-keep-plugins
 patch/upstream-build-fix
