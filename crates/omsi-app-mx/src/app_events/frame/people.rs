@@ -289,7 +289,7 @@ pub(super) fn humans(cx: HumansCx, dt: f32) {
         h.set_placed_buses(cx.player.placed.iter().map(|q| (q.uid, &q.vehicle)));
         h.set_player_next_stop(cx.duty.duty.as_ref().and_then(|d| {
             let stops = &d.trip().stops;
-            stops.get(omsi_sim::timetable_run::next_calling_stop(
+            stops.get(omsi_sim::timetable_run::next_rider_stop(
                 stops,
                 d.next_stop,
             ))
