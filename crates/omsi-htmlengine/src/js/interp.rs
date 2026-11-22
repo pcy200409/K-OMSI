@@ -18,6 +18,9 @@ pub(crate) struct Timer {
     pub(crate) due: f64,
     pub(crate) every: Option<f64>,
     pub(crate) f: Val,
+    /// Runs so far, and runs in a row that went over the step limit.
+    pub(crate) runs: u32,
+    pub(crate) overruns: u32,
 }
 
 pub(crate) struct Interp {
@@ -28,6 +31,8 @@ pub(crate) struct Interp {
     /// Triggers the page has pressed (`omsi.trigger(name)`).
     pub(crate) triggers: Vec<String>,
     pub(crate) steps: u32,
+    /// The steps the current call may take (`STEP_LIMIT`, more for a timer's first runs).
+    pub(crate) step_limit: u32,
     pub(crate) depth: u32,
     /// Listeners by (element, event name): `onclick = f` and `addEventListener("click", f)`.
     pub(crate) handlers: HashMap<(usize, String), Vec<Val>>,
@@ -106,6 +111,7 @@ impl Interp {
             events: Vec::new(),
             triggers: Vec::new(),
             steps: 0,
+            step_limit: STEP_LIMIT,
             depth: 0,
             handlers: HashMap::new(),
             timers: Vec::new(),
@@ -218,7 +224,7 @@ impl Interp {
 
     pub(crate) fn tick(&mut self) -> Result<(), String> {
         self.steps += 1;
-        if self.steps > STEP_LIMIT {
+        if self.steps > self.step_limit {
             Err("script ran too long".into())
         } else {
             Ok(())
@@ -952,7 +958,7 @@ impl Interp {
                 self.next_timer += 1;
                 let id = self.next_timer;
                 let every = (n == Nat::SetInterval).then(|| (ms / 1000.0).max(0.016));
-                self.timers.push(Timer { id, due: self.now + ms / 1000.0, every, f });
+                self.timers.push(Timer { id, due: self.now + ms / 1000.0, every, f, runs: 0, overruns: 0 });
                 Val::Num(id as f64)
             }
             Nat::ClearTimer => {
