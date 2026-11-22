@@ -50,20 +50,7 @@ members = [
     "crates/omsi-app",
     "crates/omsi-srcscan",
     "tools/omsi-check",
-    "crates/omsi-app-mx",
-    "crates/omsi-mapdraw-mx",
-    "crates/omsi-mt-mx",
-    "crates/omsi-multiplayer-ui-mx",
-    "crates/omsi-navigator-mx",
-    "crates/omsi-photo-mx",
-    "crates/omsi-plugin-ui-mx",
-    "crates/omsi-render-mx",
-    "crates/omsi-scene-mx",
-    "crates/omsi-settings-ui-mx",
-    "crates/omsi-ui-mx",
-    "crates/omsi-xr-mx",
-    # (above: the game on mX, a second copy of every crate that draws; the mX Graphics
-    # setting picks it or the wgpu one at start, see omsi-app's `run`)
+    # K-OMSI: the game on mX (the crates/*-mx copies) is not built; see patch/no-mx
 ]
 exclude = ["launcher/src-tauri"]
 
