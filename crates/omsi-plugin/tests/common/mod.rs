@@ -573,6 +573,9 @@ impl PluginIo for Game {
     fn map_objects_near(&self, _: f64, _: f64, _: f64) -> Vec<(i64, [f64; 4])> {
         vec![(11, [0.0, 0.0, 0.0, 90.0]), (12, [10.0, 0.0, 0.0, 0.0])]
     }
+    fn map_object_types(&self, ids: &[i64]) -> Vec<(i64, String)> {
+        ids.iter().filter(|id| **id == 11).map(|id| (*id, r"Sceneryobjects\KOR_Highway Object\Hipass\HiPass.sco".to_string())).collect()
+    }
     fn map_ground(&self, _: f64, _: f64) -> (Option<f64>, Option<f64>) {
         (Some(2.5), Some(2.0))
     }
