@@ -205,6 +205,8 @@ pub struct NavStop {
     /// Closed today (a diversion, roadworks: `duty.set_closed_stops`), with the way round it
     /// ("" when not said): struck through, and the bus does not call there.
     pub closed: Option<String>,
+    /// The trip's first stop (where it starts: the depot, the terminus).
+    pub start: bool,
 }
 
 /// Another player of the session as the maps show them (the session's, see `lan`).
