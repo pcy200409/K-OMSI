@@ -103,13 +103,7 @@ pub extern "system" fn Java_org_openomsi_game_LauncherBridge_call<'a>(
     cmd: JString<'a>,
     args: JString<'a>,
 ) -> jstring {
-    // mX Graphics: the mX game's copy of this bridge answers, so that its session and its
-    // bus preview are the ones the page talks to
-    if super::android::mx_selected() {
-        return openomsi_game_mx::android_launcher::Java_org_openomsi_game_LauncherBridge_call(
-            env, class, cmd, args,
-        );
-    }
+    // K-OMSI: no mX game to hand the bridge to (patch/no-mx)
     if BRIDGE.get().is_none() {
         if let Ok(g) = env.new_global_ref(&class) {
             let _ = BRIDGE.set(g);
@@ -138,13 +132,7 @@ pub extern "system" fn Java_org_openomsi_game_LauncherBridge_bytes<'a>(
     cmd: JString<'a>,
     args: JString<'a>,
 ) -> jbyteArray {
-    // mX Graphics: the mX game's copy of this bridge answers, so that its session and its
-    // bus preview are the ones the page talks to
-    if super::android::mx_selected() {
-        return openomsi_game_mx::android_launcher::Java_org_openomsi_game_LauncherBridge_bytes(
-            env, class, cmd, args,
-        );
-    }
+    // K-OMSI: no mX game to hand the bridge to (patch/no-mx)
     let cmd = take(&mut env, &cmd);
     let args: Value = serde_json::from_str(&take(&mut env, &args)).unwrap_or(Value::Null);
     let out = match omsi_launcher_api::call_bytes(&cmd, &args, &Phone) {

@@ -45,10 +45,10 @@ static MX: AtomicBool = AtomicBool::new(false);
 pub extern "C" fn openomsi_ios_main() {
     // HOME is the app's container on iOS: its root may not be written, its Library may
     let container = PathBuf::from(std::env::var_os("HOME").unwrap_or_default());
-    // mX Graphics on: the game is mX's, wgpu is not touched
+    // K-OMSI: built without the mX game (patch/no-mx); mX Graphics on runs on wgpu too
     if crate::startup::mx_graphics_in(&container.join("Library/Application Support/openOMSI")) {
         MX.store(true, Ordering::Relaxed);
-        return openomsi_game_mx::ios::openomsi_ios_main();
+        log::warn!("K-OMSI is built without mX Graphics; the game runs on wgpu");
     }
     unsafe { std::env::set_var("OPENOMSI_CONTAINER", &container) };
     let home = container.join("Library/Application Support/openOMSI");
@@ -115,9 +115,6 @@ pub extern "C" fn openomsi_ios_main() {
 /// The Swift app's scene is connected: windows can be shown on it.
 #[unsafe(no_mangle)]
 pub extern "C" fn openomsi_ios_scene_ready() {
-    if MX.load(Ordering::Relaxed) {
-        return openomsi_game_mx::ios::openomsi_ios_scene_ready();
-    }
     SCENE_READY.store(true, Ordering::Relaxed);
     wake();
 }

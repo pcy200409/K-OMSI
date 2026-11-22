@@ -60,12 +60,12 @@ fn files_dir() -> Option<PathBuf> {
 #[unsafe(no_mangle)]
 #[rustfmt::skip]
 fn android_main(app: AndroidApp) {
-    // mX Graphics on: the game is mX's, wgpu is not touched
+    // K-OMSI: built without the mX game (patch/no-mx); mX Graphics on runs on wgpu too
     if *MX.get_or_init(|| {
         app.internal_data_path()
             .is_some_and(|home| crate::startup::mx_graphics_in(&home))
     }) {
-        return openomsi_game_mx::android::android_main(app);
+        log::warn!("K-OMSI is built without mX Graphics; the game runs on wgpu");
     }
     crate::view_sync::install_sim_decoder();
     crate::startup::install_scene_settings();
