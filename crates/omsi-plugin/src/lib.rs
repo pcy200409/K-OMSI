@@ -249,6 +249,7 @@ impl TicketCall {
             tag: None,
             payment: None,
             paper: None,
+            print: None,
         }
     }
 }

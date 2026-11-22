@@ -23,7 +23,7 @@ pub enum BodyOp {
     Coins { coins: Vec<usize>, point: Vec3, var: [f32; 2], change: bool, parent: Option<String> },
     /// K-OMSI: a passenger's paper ticket laid on the cash desk's money point (`person`: whose).
     /// `paper`: the paper it is printed on (`Texture/K-OMSI/paper_ticket/<paper>.png`).
-    PaperTicket { person: u32, point: Vec3, var: [f32; 2], parent: Option<String>, paper: Option<String> },
+    PaperTicket { person: u32, point: Vec3, var: [f32; 2], parent: Option<String>, paper: Option<String>, print: Vec<(String, String)> },
     /// K-OMSI: the driver took that paper ticket: off the desk.
     PaperGone { person: u32 },
 }
