@@ -52,5 +52,3 @@ patch/auto-exposure
 patch/no-mx
 patch/pax-virtual-stop
 patch/updater-keep-plugins
-patch/upstream-build-fix
-patch/upstream-picks
