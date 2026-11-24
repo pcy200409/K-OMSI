@@ -32,8 +32,6 @@ omsi-o3d = { path = "../omsi-o3d" }
 omsi-texture = { path = "../omsi-texture" }
 omsi-geometry = { path = "../omsi-geometry" }
 omsi-render = { path = "../omsi-render" }
-# (the game on mX, with mX Graphics on: `startup::mx_graphics`)
-omsi-app-mx = { path = "../omsi-app-mx" }
 omsi-photo = { path = "../omsi-photo" }
 omsi-mt = { path = "../omsi-mt" }
 omsi-sim = { path = "../omsi-sim" }

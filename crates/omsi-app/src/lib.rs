@@ -304,9 +304,9 @@ use world_load::*;
 #[rustfmt::skip]
 pub fn run() -> Result<()> {
     omsi_cfg::migrate_legacy_data_dir();
-    // mX Graphics on: the game is mX's from here on, wgpu is not touched
+    // K-OMSI: built without the mX game (patch/no-mx); mX Graphics on runs on wgpu too
     if startup::mx_graphics() {
-        return openomsi_game_mx::run();
+        log::warn!("K-OMSI is built without mX Graphics; the game runs on wgpu");
     }
     view_sync::install_sim_decoder();
     startup::install_scene_settings();
