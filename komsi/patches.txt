@@ -48,7 +48,6 @@ patch/editor-place-any
 patch/paper-ticket-print
 patch/ai-lod-always
 patch/html-rotate
-patch/coplanar-cap
 patch/auto-exposure
 patch/no-mx
 patch/pax-virtual-stop
