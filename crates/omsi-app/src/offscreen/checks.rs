@@ -183,6 +183,17 @@ fn road_rules(traffic: Option<&traffic::Traffic>) {
                 .filter(|l| l.density > 0.001 && l.density < 0.9)
                 .count();
             log::info!("traffic rules: {} street lanes, {no_cars} closed to cars, {zero} with density 0, {quiet} quieter than normal", street.len());
+            // (K-OMSI) lanes driven backwards (`[rule] reverse` / `[path_reverse]`) and the
+            // cusps that join them to the forward lanes before and after them
+            let lanes = &t.net.lanes;
+            let backed: Vec<usize> = (0..lanes.len()).filter(|&i| lanes[i].reverse_drive).collect();
+            if !backed.is_empty() {
+                let into = |j: usize| lanes.iter().any(|l| !l.reverse_drive && l.next.contains(&j));
+                let cusp_in = backed.iter().filter(|&&j| into(j)).count();
+                let cusp_out = backed.iter().filter(|&&j| lanes[j].next.iter().any(|&n| !lanes[n].reverse_drive)).count();
+                let dead = backed.iter().filter(|&&j| lanes[j].next.is_empty()).count();
+                log::info!("reverse lanes: {} driven backwards, {cusp_in} entered at a cusp, {cusp_out} left at a cusp, {dead} with no way on", backed.len());
+            }
         }
     }
 }
