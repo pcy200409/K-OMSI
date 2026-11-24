@@ -655,6 +655,34 @@ fn a_car_goes_round_the_players_bus_standing_well_before_a_red_light() {
     assert!(went_round, "it does not go round the bus standing 60 m before the light");
 }
 
+#[test]
+fn the_cars_behind_a_queue_at_the_standing_player_bus_go_round_it() {
+    // two lanes north; the player's bus stands on the right lane (at its stop) and a car
+    // has stopped close behind it, too close to steer out round it (a timetable bus
+    // waiting for its own stop does not either). A car coming up behind that one passes
+    // the two of them in the lane beside: with the player's bus at the head of the queue
+    // nothing counted as standing for long, and the street behind the player's bus waited
+    // for as long as the player stood
+    let f = Fixture::new();
+    let lanes = vec![street(-3.5, 0.0, 0.0, 800.0), street(0.0, 0.0, 0.0, 800.0)];
+    let mut t = traffic(&f, net_of(lanes, &[(0, 1)]));
+    let bus: PlayerBox = (DVec3::new(0.0, 200.0, 0.0), 0.0, 6.0, 1.25, 0.0);
+    let close = add_car(&mut t, &f, 1, 190.5, 0x919, Some(0.0));
+    let me = add_car(&mut t, &f, 1, 20.0, 0xa1a, Some(8.0));
+    let mut past = false;
+    for _ in 0..(90.0 / DT) as usize {
+        t.tick(DT, Some(bus));
+        let c = car(&t, me).expect("on the road");
+        past |= c.vehicle.position.y > 215.0;
+        assert_eq!(any_overlap(&t, 0.1), None, "bodies overlap at t={:.2}", t.time);
+        if past {
+            break;
+        }
+    }
+    assert!(car(&t, close).is_some());
+    assert!(past, "it waited behind the queue at the player's bus");
+}
+
 /// #2048: over a solid centre line (`[rule] overtaking_prohib`) a car does not go round a
 /// vehicle that stands in its lane and will move on; it still goes round a parked car.
 #[test]
@@ -794,4 +822,33 @@ fn a_bus_whose_stop_lies_at_its_lane_end_neither_stands_nor_jumps() {
     let c = car(&t, me).unwrap();
     assert!(longest_still < 2.0, "stood {longest_still:.1} s after its stop");
     assert!(matches!(c.state.lane, 0 | 2), "ended on lane {}", c.state.lane);
+}
+
+#[test]
+fn a_car_does_not_overtake_the_queue_at_a_red_light() {
+    // two lanes north up to a light (red for good) at 120 m, a car standing at its line on
+    // the right lane: the car coming up behind it waits in the queue. Round it, it stopped
+    // for the red with its move three quarters done, across both lanes in front of the car
+    // it meant to pass (the Korean crossing sets: their junction paths need not cross)
+    let f = Fixture::new();
+    let mut lanes = vec![street(-3.5, 0.0, 0.0, 120.0), street(0.0, 0.0, 0.0, 120.0), street(-3.5, 120.0, 0.0, 600.0), street(0.0, 120.0, 0.0, 600.0)];
+    // (a light holds the start of its lane)
+    lanes[2].traffic_light = Some((0, 0));
+    lanes[3].traffic_light = Some((0, 0));
+    let mut net = net_of(lanes, &[(0, 1), (2, 3)]);
+    net.build_grid();
+    net.compute_reach();
+    let random = RandomTypes { types: Vec::new(), groups: Vec::new(), group_curves: false, group_uvg: Vec::new(), uvg_defaults: Vec::new() };
+    let red = crate::traffic::TrafficLightController::new(vec![vec![(0, 1000.0)]], 0.0);
+    let mut t = TrafficSim::assemble(&f.dir, net, random, vec![red], HashMap::new(), (Vec::new(), Vec::new()), Vec::new(), (1.0, 0), 0);
+    let waiting = add_car(&mut t, &f, 1, 112.0, 0x717, Some(0.0));
+    let me = add_car(&mut t, &f, 1, 10.0, 0x818, Some(12.0));
+    car_mut(&mut t, me).state.change_cooldown = 0.0;
+    for _ in 0..(30.0 / DT) as usize {
+        t.tick(DT, None);
+        let c = car(&t, me).expect("on the road");
+        assert!(c.state.change.is_none() && c.state.lane == 1, "it pulled out round the queue at t={:.2} (lane {}, change {:?})", t.time, c.state.lane, c.state.change.map(|c| c.to));
+        assert!(car(&t, waiting).is_some());
+    }
+    assert_eq!(any_overlap(&t, 0.1), None);
 }
