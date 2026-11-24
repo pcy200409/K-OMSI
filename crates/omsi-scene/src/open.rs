@@ -708,6 +708,9 @@ pub fn navigation_map_of(
                 places: HashMap::new(),
                 signs: Vec::new(),
                 names: Vec::new(),
+                cameras: Vec::new(),
+                speed_signs: Vec::new(),
+                signal_heads: Vec::new(),
             };
         }
     };
