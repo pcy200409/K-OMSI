@@ -1133,3 +1133,15 @@ fn the_note_kinds_go_round_the_file() {
         (false, true, false, true)
     );
 }
+
+/// K-OMSI: `view_distance=map` keeps the whole map loaded; the objects are still drawn only
+/// as far as the farthest of the menu's distances.
+#[test]
+fn view_distance_map_is_the_whole_map() {
+    use super::{parse_view_distance, WHOLE_MAP_DISTANCE};
+    assert_eq!(parse_view_distance("map"), Some(WHOLE_MAP_DISTANCE));
+    assert_eq!(parse_view_distance("ALL"), Some(WHOLE_MAP_DISTANCE));
+    assert_eq!(parse_view_distance("1500"), Some(1500.0));
+    assert_eq!(parse_view_distance("auto"), None);
+    assert_eq!(parse_view_distance("-5"), None);
+}

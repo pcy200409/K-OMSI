@@ -3327,3 +3327,4 @@
 "No saved situation of this map yet": "このマップの保存された状況はまだありません"
 "Saved as \"{}\"": "「{}」として保存しました"
 "Off takes four to eight times the video memory: only for a driver that draws them wrong. A card of 4 GB or less keeps them compressed.": "オフにするとビデオメモリを4〜8倍使います。テクスチャを正しく描けないドライバーのときだけ。4GB以下のカードでは圧縮のままです。"
+"Whole map (heavy)": "マップ全体(重い)"
