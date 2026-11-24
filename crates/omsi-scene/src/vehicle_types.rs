@@ -727,7 +727,7 @@ pub(super) fn vehicle_texture_names(
             out.push((name, d.clone()));
         }
     };
-    let lods = if crate::vehicles::lods::lods_misfit(vt).is_none() { vt.lod_meshes.as_slice() } else { &[] };
+    let lods = if crate::vehicles::lods::lods_used(vt) { vt.lod_meshes.as_slice() } else { &[] };
     for vm in vt.meshes.iter().chain(lods) {
         for m in &vm.materials {
             match vt.texchange(&m.texture) {
