@@ -290,6 +290,7 @@ impl TicketCall {
             voice: (!a.voice.trim().is_empty()).then(|| a.voice.clone()),
             tag: None,
             payment: None,
+            paper: None,
         }
     }
 }

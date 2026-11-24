@@ -795,6 +795,18 @@ impl App {
                     self.input.dragging = false;
                     return;
                 }
+                // K-OMSI: a paper ticket a passenger laid on the desk: taken by the driver.
+                let paper = self.session.humans.as_ref().and_then(|_| self.gfx.sim_view.people.paper.hit(o, d, &p.vehicle));
+                if let Some(person) = paper {
+                    if let Some(h) = self.session.humans.as_mut() {
+                        if h.sim.take_paper(person).is_ok() {
+                            log::info!("paper ticket of {person} taken by the driver");
+                            p.vehicle.host.fired_triggers.push("ev_ticketsale_taketicket".into());
+                        }
+                    }
+                    self.input.dragging = false;
+                    return;
+                }
                 // A piece of money on the desk/change tray: picked up by the driver.
                 if let Some((m, k)) = self
                     .session
