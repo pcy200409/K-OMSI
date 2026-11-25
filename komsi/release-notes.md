@@ -2,7 +2,7 @@
 
 <p align="center"><b>Thank you Developer</b><br>5879, Aviatree</p>
 
-**K-OMSI 0.4** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 0.3.57 이후 개발판(main `ba5ab098`, 2026-11-24)을 바탕으로 K-OMSI 수정을 얹은 빌드입니다. K-OMSI 버전은 0.4.x로 따로 매깁니다.
+**K-OMSI 0.4** - [openOMSI](https://github.com/openOMSI-org/openOMSI) 개발판(main `ba5ab098`, 2026-11-24)을 바탕으로 K-OMSI 수정을 얹은 빌드입니다. K-OMSI는 공식 버전 출시와 별개로 공식 개발판의 새 커밋을 받아 넣으며, 버전도 0.4.x로 따로 매깁니다.
 
 > **비공식 포크입니다.** K-OMSI는 공식 openOMSI(openOMSI.org)와 관계없는 독립 프로젝트이며, openOMSI의 이름·로고는 원작자의 것입니다([TRADEMARKS.md](https://github.com/pcy200409/K-OMSI/blob/release/TRADEMARKS.md)). 문제는 공식 저장소가 아니라 [K-OMSI 이슈](https://github.com/pcy200409/K-OMSI/issues)로 알려 주세요.
 >
@@ -12,7 +12,7 @@
 
 ## 이번 빌드에 들어 있는 것
 
-K-OMSI = 이 빌드(K-OMSI)에 들어 있음, openOMSI 공식 = 공식 openOMSI에도 들어 있음(0.3.54 정식판 이후 개발판에서 받은 변경, 이번에 0.3.56·0.3.57과 그 뒤 개발판까지). 공식이 X인 줄은 K-OMSI에서만 더한 기능입니다. = 이번 버전에서 처음 들어간 것.
+K-OMSI = 이 빌드(K-OMSI)에 들어 있음, openOMSI 공식 = 공식 openOMSI 개발판에도 들어 있음(공식 개발판 커밋에서 받은 변경). 공식이 X인 줄은 K-OMSI에서만 더한 기능입니다. **(새)** = 지난 K-OMSI 릴리스 뒤 처음 들어간 것.
 
 | 기능 | 내용 | K-OMSI | openOMSI 공식 |
 | --- | --- | :-: | :-: |
