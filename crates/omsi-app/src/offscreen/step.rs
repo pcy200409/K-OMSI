@@ -1279,6 +1279,7 @@ impl Offscreen<'_> {
                 world,
                 spray_wet,
                 world.settings.rain_quality(),
+                None,
             );
         }
         *wetness = crate::weather_setup::road_wetness(precip_of(weather).1, dt as f64, *wetness);

@@ -68,6 +68,8 @@ fn state(c: &mut Ctx<'_>) -> Value {
         ("headlights", io.bus_headlights().map(|h| h as i64).into()),
         ("dirt", io.bus_dirt().map(|d| d as f64).into()),
         ("passengers", io.bus_passengers().map(|p| p.0).into()),
+        ("water_depth", io.bus_flood().map(|f| f.0 as f64).into()),
+        ("flooded", io.bus_flood().map(|f| f.1).into()),
     ];
     if let Some((odo, session)) = io.bus_km() {
         r.push(("odometer", odo.into()));
@@ -334,6 +336,21 @@ pub static FNS: &[ApiFn] = &[
             rpm.map(|x| x as f64).into(),
             Value::Bool(e)
         ]))
+    ),
+    def!(
+        "bus.water",
+        "vehicle",
+        [],
+        "depth, flooded",
+        "K-OMSI: the flood water the bus stands in (m, 0 when dry or with flooding off) and whether it drowned the engine (it will not start again in this run).",
+        NEW,
+        None,
+        true,
+        |c, a| multi(
+            c.io()
+                .bus_flood()
+                .map(|(d, f)| [Value::Num(d as f64), Value::Bool(f)])
+        )
     ),
     def!(
         "bus.engine_running",
