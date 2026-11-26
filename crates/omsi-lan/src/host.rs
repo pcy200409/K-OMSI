@@ -38,6 +38,8 @@ pub trait LanHost {
         scheme: Option<usize>,
         clock: omsi_sim::SimClock,
         fonts: Option<crate::mods::vehicles::SharedFonts>,
+        number: &str,
+        ident: &str,
     ) -> (omsi_sim::VehicleInstance, Option<Arc<omsi_vehicle::Hof>>);
     /// Set a vehicle's line and destination displays as the timetable sets an AI bus's.
     fn set_destination(
