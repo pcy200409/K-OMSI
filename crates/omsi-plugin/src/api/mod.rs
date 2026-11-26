@@ -111,19 +111,7 @@ impl Perm {
         Self::ALL.into_iter().find(|p| p.as_str() == s)
     }
 
-    pub const ALL: [Perm; 11] = [
-        Perm::Ui,
-        Perm::Storage,
-        Perm::VehicleWrite,
-        Perm::TrafficWrite,
-        Perm::WorldWrite,
-        Perm::Camera,
-        Perm::Audio,
-        Perm::NetworkLocal,
-        Perm::NetworkRemote,
-        Perm::Lan,
-        Perm::Process,
-    ];
+    pub const ALL: [Perm; 11] = [Perm::Ui, Perm::Storage, Perm::VehicleWrite, Perm::TrafficWrite, Perm::WorldWrite, Perm::Camera, Perm::Audio, Perm::NetworkLocal, Perm::NetworkRemote, Perm::Lan, Perm::Process];
 }
 
 /// The handler of a function.
