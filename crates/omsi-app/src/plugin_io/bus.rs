@@ -490,6 +490,7 @@ pub(crate) fn set_ticket(
         tag: c.tag.clone(),
         payment: c.payment,
         paper: c.paper.clone(),
+        print: c.print.clone(),
     };
     h.set_ticket(id, &change, by).map_err(str::to_string)
 }
