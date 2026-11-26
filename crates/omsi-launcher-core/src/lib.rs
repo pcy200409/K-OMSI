@@ -3717,6 +3717,7 @@ pub fn settings_from_text_on(text: Option<&str>, phone: bool) -> Value {
         ("led_glow", json!(6)),
         ("led_mips", json!(1.3)),
         ("night_brightness", json!(0.0)),
+        ("auto_exposure", json!(1.0)),
         ("ui_scale", json!(1.0)),
         ("ui_scale_window", json!(true)),
         ("chat_size", json!(1.0)),
@@ -4291,6 +4292,16 @@ pub fn settings_from_text_on(text: Option<&str>, phone: bool) -> Value {
                         .filter(|x| x.is_finite())
                         .map(|x| x.clamp(0.0, 3.0))
                         .unwrap_or(0.0)
+                )
+            }
+            "auto_exposure" => {
+                v[&k] = json!(
+                    val.trim()
+                        .parse::<f64>()
+                        .ok()
+                        .filter(|x| x.is_finite())
+                        .map(|x| x.clamp(0.0, 1.0))
+                        .unwrap_or(1.0)
                 )
             }
             "reflections" => {
@@ -5412,6 +5423,11 @@ pub fn settings_to_text(v: &Value, old: Option<&str>) -> String {
         },
         f("fsr_sharpness", 0.8).clamp(0.0, 1.0),
         f("dlss_sharpness", DLSS_SHARPNESS).clamp(0.0, 1.0),
+    ));
+    // (the enhanced picture's auto exposure, 0 off .. 1 full)
+    text.push_str(&format!(
+        "auto_exposure={}\n",
+        f("auto_exposure", 1.0).clamp(0.0, 1.0)
     ));
     let written: Vec<String> = text
         .lines()
