@@ -27,15 +27,10 @@ pub fn duty_parts(
     let stops = trip
         .stops
         .iter()
+        .enumerate()
         .skip(d.next_stop)
-        .filter(|s| s.stops)
-        .map(|s| NavStop {
-            object_id: s.object_id,
-            position: s.position.unwrap_or(DVec3::ZERO),
-            name: s.name.clone(),
-            arrival: s.arr,
-            closed: s.closed.clone(),
-        })
+        .filter(|(_, s)| s.stops)
+        .map(|(i, s)| NavStop { object_id: s.object_id, position: s.position.unwrap_or(DVec3::ZERO), name: s.name.clone(), arrival: s.arr, closed: s.closed.clone(), start: i == 0 })
         .collect();
     (
         Some(line.to_string()),
@@ -59,13 +54,7 @@ impl Navigator {
             .iter()
             .enumerate()
             .filter(|(i, s)| s.stops && (*i < d.next_stop || self.trip_completed))
-            .map(|(_, s)| NavStop {
-                object_id: s.object_id,
-                position: s.position.unwrap_or(DVec3::ZERO),
-                name: s.name.clone(),
-                arrival: s.arr,
-                closed: s.closed.clone(),
-            })
+            .map(|(i, s)| NavStop { object_id: s.object_id, position: s.position.unwrap_or(DVec3::ZERO), name: s.name.clone(), arrival: s.arr, closed: s.closed.clone(), start: i == 0 })
             .collect();
     }
 }
