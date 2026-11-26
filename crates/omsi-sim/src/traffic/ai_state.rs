@@ -448,7 +448,6 @@ impl AiState {
             speed_cap: None,
             rail_power: None,
             bend: BendCache::default(),
-            amber_factor: 0.03,
             reversing: false,
         }
     }
