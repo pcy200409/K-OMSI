@@ -27,7 +27,8 @@ if errorlevel 1 goto :failed
 copy /y "target\i686-pc-windows-msvc\release\omsi-plugin-host.exe" "dist\windows\omsi-plugin-host32.exe" >nul || goto :failed
 rem the desktop launcher (launcher\, Tauri on WebView2): a plain start of openomsi.exe opens it,
 rem stamped with the release version (numbers only)
-if defined OPENOMSI_VERSION for /f "tokens=1 delims=-" %%v in ("%OPENOMSI_VERSION%") do set "TAURI_CONFIG={"version":"%%v"}"
+rem (K-OMSI 0.4.32.1: the launcher's Tauri version must be semver - its first three parts)
+if defined OPENOMSI_VERSION for /f "tokens=1-3 delims=.-" %%a in ("%OPENOMSI_VERSION%") do set "TAURI_CONFIG={"version":"%%a.%%b.%%c"}"
 cargo build --locked --release --target %TARGET% --manifest-path launcher\src-tauri\Cargo.toml
 if errorlevel 1 goto :failed
 copy /y "launcher\src-tauri\target\%TARGET%\release\openomsi-launcher-app.exe" "dist\windows\openomsi-launcher-app.exe" >nul || goto :failed
