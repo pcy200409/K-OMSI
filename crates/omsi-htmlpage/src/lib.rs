@@ -34,6 +34,7 @@ mod dom;
 mod images;
 mod layout;
 mod page;
+mod page_font;
 mod renderer;
 mod style;
 
@@ -134,6 +135,11 @@ pub(crate) fn face_for<R>(
     ch: char,
     f: impl FnOnce(&FontRef<'static>, ab_glyph::GlyphId, u8) -> R,
 ) -> R {
+    // K-OMSI: the page's own font first (patch/html-page-font)
+    let f = match page_font::with_face(bold, ch, f) {
+        Ok(r) => return r,
+        Err(f) => f,
+    };
     let id = font.glyph_id(ch);
     if id.0 != 0 || ch.is_ascii() {
         return f(font, id, 0);

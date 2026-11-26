@@ -137,8 +137,13 @@ generated content.
 
 - An absolute box is placed in its nearest positioned ancestor. `fixed` is relative to the texture.
 
-Not available: grid (laid out as a column), floats, animations and transitions, custom fonts,
+Not available: grid (laid out as a column), floats, animations and transitions, `font-family`,
 `@media`, `@font-face`, `@keyframes`, per-corner radii, outlines.
+
+K-OMSI: a page can name one font of its own with `<meta name="omsi-font" content="font/Page.ttf">`
+(and `omsi-font-bold`), as in the classic engine (`docs/HTMLTEXTURE.md`): the file is looked up
+like the page's pictures, every character it has is drawn with it, and `omsi.pageFont === true`
+tells the page that it was found. `font-size` is the font's ascent plus descent.
 
 ## JavaScript
 
