@@ -77,6 +77,7 @@ mod pane_uv;
 pub fn gpu_mesh_of(vt: &omsi_sim::VehicleType, i: usize) -> Option<omsi_geometry::MeshData> {
     pane_uv::gpu_mesh(vt, i).map(std::borrow::Cow::into_owned)
 }
+pub mod spline_edit;
 pub mod camera_util;
 pub mod check;
 pub mod editor;
