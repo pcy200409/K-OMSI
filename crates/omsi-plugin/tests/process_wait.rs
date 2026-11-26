@@ -175,7 +175,7 @@ fn resumed_lua_keeps_its_instruction_budget() {
     }
     assert!(p.lua[0].disabled, "resumed runaway escaped the budget");
     assert!(
-        g.messages.iter().any(|s| s.contains("longer than 50 ms")),
+        g.messages.iter().any(|s| s.contains("longer than 1000 ms")),
         "{:?}",
         g.messages
     );
@@ -328,7 +328,7 @@ fn nested_emit_budget_child() {
     let mut g = game();
     plugins.frame(&mut g);
     assert!(plugins.lua[0].disabled);
-    assert!(g.messages.iter().any(|m| m.contains("longer than 50 ms")));
+    assert!(g.messages.iter().any(|m| m.contains("longer than 1000 ms")));
     plugins.finalize();
 }
 
