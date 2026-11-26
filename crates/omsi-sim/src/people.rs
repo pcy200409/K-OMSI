@@ -109,6 +109,7 @@ pub mod bodies;
 pub mod entry_doors;
 #[rustfmt::skip]
 pub mod pose_facts;
+pub mod tag_points;
 #[rustfmt::skip]
 pub mod money;
 #[rustfmt::skip]
