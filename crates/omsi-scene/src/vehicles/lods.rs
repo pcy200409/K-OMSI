@@ -227,7 +227,7 @@ impl World {
                     f.mats.clone(),
                 );
                 renderer.set_omsi_caster(scene, i, f.casts);
-                renderer.set_roof(scene, i, vt.def.bounding_box.map(|b| b[5] + b[2] * 0.5));
+                renderer.set_roof(scene, i, vt.roof_height());
                 renderer.set_lod_range(scene, i, lo, hi);
                 far.push(gpu.instance(renderer, scene, i));
             }
