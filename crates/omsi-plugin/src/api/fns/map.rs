@@ -164,7 +164,7 @@ pub static FNS: &[ApiFn] = &[
         "map",
         [p("x", "number"), p("y", "number"), o("radius", "number")],
         "list of tables",
-        "The map objects within `radius` m (default 50, at most 2000 of them, nearest first): `{id, x, y, z, heading, distance, type}`; K-OMSI: `type` is the object's file as the map names it (`Sceneryobjects\...\HiPass.sco`), where its tile is read.",
+        "The map objects within `radius` m (default 50, at most 2000 of them, nearest first): `{id, x, y, z, heading, distance, type}`; K-OMSI: `type` is the object's file as the map names it (`Sceneryobjects\\...\\HiPass.sco`), where its tile is read.",
         NEW,
         None,
         false,
