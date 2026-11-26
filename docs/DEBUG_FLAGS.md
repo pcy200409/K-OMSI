@@ -595,6 +595,28 @@ comparing the two.
 | `OMSI_TERRAIN_ALIGN` | flag | Align the terrain to the splines again at load (A/B; Omsi.exe does not). |
 | `OMSI_TYRE_SUSPENSION` | flag | The old suspension with wheel mass, tyre and bump stops (A/B). |
 
+## K-OMSI
+
+The switches of K-OMSI's own changes (OBIS and TACO, the weather and the flooding, the LED signs, the AI's levels of detail).
+
+| Variable | Values / default | What it does |
+| --- | --- | --- |
+| `OMSI_BLACK_ICE` | flag | K-OMSI: the "Black ice" setting on for this run (wet roads freeze in the frost, bridges first). |
+| `OMSI_FLOOD` | text | K-OMSI: the "Low ground floods" setting on for this run (the basins and their water also written to the log). scale[,drain]: the water's time scale (10) and the drains' capacity in mm/h (30). |
+| `OMSI_LED_SIGN_DAY` | number | How bright a page's LED destination sign burns by day (the screen's white = 1; default 4). |
+| `OMSI_OBIS_CLIENT_DIR` | text | K-OMSI: the OBIS client's folder (the one with OBIS-client.exe), instead of looking for it under the OMSI folders. |
+| `OMSI_OBIS_FETCHED_DIR` | text | K-OMSI: where the routes fetched from OBIS for a line the OBIS client lacks are kept, instead of ~/.openomsi/obis_routes (tests). |
+| `OMSI_OBIS_INGEST_URL` | text | K-OMSI: another address the player's bus is sent to instead of OBIS (tests, a local stand-in). |
+| `OMSI_OBIS_PACK_DIR` | text | K-OMSI: where OBIS's route pack is kept, instead of ~/.openomsi/obis_pack (tests). |
+| `OMSI_OBIS_PACK_URL` | text | K-OMSI: another address of OBIS's route pack (https://obis.kr/api/client/routes) (tests, a local stand-in). |
+| `OMSI_OBIS_PREFS_URL` | text | K-OMSI: another address of the OBIS vehicle settings (tests, a local stand-in). |
+| `OMSI_OBIS_ROUTES_URL` | text | K-OMSI: another address of the OBIS routes (https://obis.kr/api/routes) a missing line is fetched from (tests, a local stand-in). |
+| `OMSI_OBIS_TOKEN` | text | K-OMSI: the device token sent to OBIS instead of the OBIS client's own (tests). |
+| `OMSI_ORIGINALS` | text | K-OMSI: obis,taco - the originals taken as installed (or not, when left out) instead of looking for them. |
+| `OMSI_POTHOLES` | flag | K-OMSI: the "Potholes" setting on for this run. |
+| `OMSI_STORM_CUTS` | flag | K-OMSI: the "Storm power cuts" setting on for this run (a lightning strike nearby may put the traffic lights and street lamps out). |
+| `OMSI_STRICT_LOD` | flag | K-OMSI: AI vehicles with interior lamps, displays, switched textures or a conditional lower level keep their full model at any size (the old rule) instead of drawing their lower levels of detail. |
+
 ## Apple and launcher variables
 
 These are read outside the game's Rust code, so the list in `flags.rs` does not hold them.

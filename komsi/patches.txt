@@ -52,4 +52,3 @@ patch/auto-exposure
 patch/no-mx
 patch/pax-virtual-stop
 patch/updater-keep-plugins
-patch/upstream-locale-fix

@@ -3526,6 +3526,227 @@ local x, y, _, heading = omsi.position()
 local right, ahead = omsi.vec.to_local(px, py, x, y, heading)
 ```
 
+## K-OMSI
+
+The functions K-OMSI's own changes add: OBIS and the original programs (`komsi.original`, `obis.*`, `ws.*`), the flood water (`bus.water`) and the passengers (`people.*`).
+
+### omsi.bus.water
+
+`omsi.bus.water()` → depth, flooded
+
+K-OMSI: the flood water the bus stands in (m, 0 when dry or with flooding off) and whether it drowned the engine (it will not start again in this run).
+
+*Since 0.2.22.*
+
+### omsi.komsi.original
+
+`omsi.komsi.original(name)` → boolean
+
+Whether the player has the original program a part of K-OMSI's OBIS edition stands in for: `"obis"` (the OBIS client, `OBIS-client\OBIS-client.exe` in the OMSI folder: without it `omsi.ws` and `omsi.obis` do nothing) or `"taco"` (Light-TACO's `OMSI2_Scheduler.exe` or the tachograph's `OmsiDTG_Personal.exe`, in or under `OMSI Addon Patch`: the tachograph plugin works only with one of them).
+
+Parameters: `name` string.
+
+*Since 0.2.22.*
+
+### omsi.obis.fetch_routes
+
+`omsi.obis.fetch_routes(line)` → number or nil
+
+Fetches from OBIS (`https://obis.kr/api/routes`) the routes of a line number the OBIS client's `data\routes` lacks (an old or empty one), in the background, keeps them in `~/.openomsi/obis_routes` (fetched again after a week) and has `obis.routes` read again with them. `nil` while fetching, then how many routes were added (0: none to add, or OBIS did not answer). Once a session per line number; a request at most every 0.6 s.
+
+Parameters: `line` string.
+
+*Since 0.2.22. Permission: `network_remote`.*
+
+### omsi.obis.map_names
+
+`omsi.obis.map_names(map)` → table or nil
+
+A map's stop names as OBIS shows them: the map's name of a stop -> the Korean one (the names its routes carry, `nameDisplay`; else an older OBIS client's `maps\<map>\map.json`). `map` is a route's `map` of `obis.routes`. `nil` without the OBIS client or the map; up to date with `obis.routes_rev`.
+
+Parameters: `map` string.
+
+*Since 0.2.22. Permission: `network_remote`.*
+
+### omsi.obis.prefs
+
+`omsi.obis.prefs()` → table or nil
+
+The vehicle settings OBIS has for this device, as the OBIS client's "차량 설정" shows them: `nickname`, `crowdType` (`"seat"`, `"stand"`), `seatCapacity` (1 to 80), `showStandCrowd`, `lowFloor`, `vehicleBody` (`"normal"`, `"night"`: the last bus). `nil` before they are read (after `obis.start`).
+
+*Since 0.2.22. Permission: `network_remote`.*
+
+### omsi.obis.route_text
+
+`omsi.obis.route_text(file)` → string or nil
+
+One route (a `file` of `obis.routes`) as its JSON text: OBIS's pack, else the OBIS client's, else one fetched.
+
+Parameters: `file` string.
+
+*Since 0.2.22. Permission: `network_remote`.*
+
+### omsi.obis.routes
+
+`omsi.obis.routes()` → table or nil
+
+The OBIS client's routes, to match the player's trip to one: `{default_map, routes = {[key] = {file, line, map, stops}}, trips = {[trip file] = {keys}}}` (`stops` the stop object ids in order; a trip file lower case, without `.ttp`). Read on a worker the first time - OBIS's route pack first (fetched then with the OBIS client's token, only when OBIS has a newer one; kept in `~/.openomsi/obis_pack`), then the client's `data\routes`: `nil` until then, and without the OBIS client. Read again when `obis.fetch_routes` added routes (`obis.routes_rev` goes up).
+
+*Since 0.2.22. Permission: `network_remote`.*
+
+### omsi.obis.routes_rev
+
+`omsi.obis.routes_rev()` → number
+
+Which reading of `obis.routes` is there: 0 none yet, one more each time the routes were read again (routes fetched). Cheap: ask it often and `obis.routes`/`obis.map_names` again when it changed.
+
+*Since 0.2.22. Permission: `network_remote`.*
+
+### omsi.obis.send
+
+`omsi.obis.send(snapshot)` → true, or false and the reason
+
+Hands OBIS the state of the player's bus: the OBIS client's snapshot as JSON text, at most 256 kB. Only the newest is sent, at most twice a second; one not sent yet is replaced. With none new for a second (the game paused or in photo mode: the plugins stand still) the last goes again every second with its `posTs` made now, for at most 30 minutes, so OBIS keeps the bus.
+
+Parameters: `snapshot` string.
+
+*Since 0.2.22. Permission: `network_remote`.*
+
+### omsi.obis.set_prefs
+
+`omsi.obis.set_prefs(prefs)` → true, or false and the reason
+
+Saves vehicle settings on OBIS (the keys of `obis.prefs`, any of them), in the background; `obis.prefs` has them once OBIS took them.
+
+Parameters: `prefs` table.
+
+*Since 0.2.22. Permission: `network_remote`.*
+
+### omsi.obis.start
+
+`omsi.obis.start()` → true, or false and the reason
+
+Starts sending the player's bus to OBIS (`wss://obis.kr/api/ingest`) in the background, as the OBIS client does. The device's token is the OBIS client's (its `config.local.json` next to the game; K-OMSI never registers a device of its own); the plugin never sees it. Give the snapshots with `omsi.obis.send`.
+
+*Since 0.2.22. Permission: `network_remote`.*
+
+### omsi.obis.state
+
+`omsi.obis.state()` → state, sent, token
+
+The sending: `"connecting"`, `"open"`, `"waiting"` (broken, opened again soon), `"no_token"` (the OBIS client has no token yet, as before it is first run: looked for again soon) or `"closed"`; how many snapshots went; where the token came from (`"obis_client"`; empty before it is known).
+
+*Since 0.2.22. Permission: `network_remote`.*
+
+### omsi.obis.stop
+
+`omsi.obis.stop()` → nil
+
+Stops sending (OBIS shows the bus as gone after a while).
+
+*Since 0.2.22. Permission: `network_remote`.*
+
+### omsi.people.cancel
+
+`omsi.people.cancel(id)` → true, or false and the reason
+
+K-OMSI: somebody on their way into the player's bus (`passenger_ticket` names them; in the doorway, say, having asked where it goes) does not get on after all: back to the stop, and they do not board that bus again while it stands there.
+
+Parameters: `id` integer.
+
+*Since 0.2.22. Permission: `traffic_write`.*
+
+### omsi.people.hold
+
+`omsi.people.hold(id, seconds)` → true, or false and the reason
+
+K-OMSI: a passenger of the player's bus stops where they are - in the doorway, at the validator or the cash desk, in the aisle, in the doorway getting off - for `seconds` (120 at most; 0 lets them go on). The people behind them wait.
+
+Parameters: `id` integer; `seconds` number.
+
+*Since 0.2.22. Permission: `traffic_write`.*
+
+### omsi.people.leave
+
+`omsi.people.leave(id, [anywhere])` → true, or false and the reason
+
+K-OMSI: a rider of the player's bus gets up, asks to stop and walks to the nearest exit: off at the next stop, or - `anywhere` - as soon as the driver opens that door, stop or no stop.
+
+Parameters: `id` integer; `anywhere` bool, optional.
+
+*Since 0.2.22. Permission: `traffic_write`.*
+
+### omsi.people.move
+
+`omsi.people.move(id, to)` → true, or false and the reason
+
+K-OMSI: a rider of the player's bus, at their place, walks to another free place while the bus runs: `"seat"`, `"stand"` (a standing place) or `"door"` (the standing place nearest an exit, without asking to stop). False and the reason when there is no free place of that kind.
+
+Parameters: `id` integer; `to` string.
+
+*Since 0.2.22. Permission: `traffic_write`.*
+
+### omsi.people.runner
+
+`omsi.people.runner()` → true, or false and the reason
+
+K-OMSI: somebody late runs for the player's bus standing at a stop - out of sight behind it, or a pedestrian walking near - and boards if the doors open for them; left behind, they stand a moment and walk back. `people.list` marks them `late`. False and the reason when the bus stands at no stop.
+
+*Since 0.2.22. Permission: `traffic_write`.*
+
+### omsi.people.stay
+
+`omsi.people.stay(id, [stay])` → true, or false and the reason
+
+K-OMSI: a rider of the player's bus stays in - not off at their stop, not at the terminus - until `people.stay(id, false)` or `people.leave`.
+
+Parameters: `id` integer; `stay` bool, optional.
+
+*Since 0.2.22. Permission: `traffic_write`.*
+
+### omsi.people.take_ticket
+
+`omsi.people.take_ticket(id)` → true, or false and the reason
+
+K-OMSI: the driver takes the paper ticket a passenger of the player's bus laid on the cash desk (`kind = "hand"`, the `ticket_handed` event names them), as a click on it does: they go on to their place. False and the reason when no ticket of theirs lies there.
+
+Parameters: `id` integer.
+
+*Since 0.2.22. Permission: `traffic_write`.*
+
+### omsi.ws.close
+
+`omsi.ws.close()` → nil
+
+Ends the connection.
+
+*Since 0.2.22. Permission: `network_remote`.*
+
+### omsi.ws.open
+
+`omsi.ws.open(url)` → true, or false and the reason
+
+Starts listening to a public live feed over a WebSocket, read-only: the plugin never sends. Only `wss://obis.kr/...` (OBIS, the buses of the other players) is allowed, no port and no other host. The connection runs in the background and is opened again every 5 seconds after a break; opening again replaces the old one. Read what came in with `omsi.ws.poll`.
+
+Parameters: `url` string.
+
+*Since 0.2.22. Permission: `network_remote`.*
+
+### omsi.ws.poll
+
+`omsi.ws.poll()` → list of strings
+
+The text messages that came in since the last call, oldest first (at most the last 4: a feed sends whole snapshots). Empty without a connection.
+
+*Since 0.2.22. Permission: `network_remote`.*
+
+### omsi.ws.state
+
+`omsi.ws.state()` → string
+
+`"connecting"`, `"open"`, `"waiting"` (broken, opened again soon) or `"closed"` (never opened, or `omsi.ws.close`).
+
+*Since 0.2.22. Permission: `network_remote`.*
 ## Events
 
 Register a handler with `omsi.on(name, fn)` or define a global function `on_<name>`. The handler gets the arguments listed after the name. Events that compare two frames (doors, gears, stops, the light ahead) are only worked out while some plugin listens.
@@ -3629,3 +3850,9 @@ end)
 - **`object_frame`**`(id, dt)`: A frame of an object this script drives, while it is in range; `dt` is the game seconds since the last frame of that object (at the rate of the `.sco`'s `[lua_rate]`, else every game frame). *Since 0.2.22.*
 - **`object_gone`**`(id)`: An object this script drives left its range or was unloaded with its tile; its state in the script can go. *Since 0.2.22.*
 - **`object_click`**`(id, event)`: The player clicked the `[mouseevent]` of a mesh of an object this script drives. *Since 0.2.22.*
+
+### K-OMSI
+
+- **`ticket_handed`**`(id, ticket, price)`: K-OMSI: a passenger of the player's bus laid their paper ticket on the cash desk (`kind = "hand"`) and waits for the driver to take it (a click on it, `people.take_ticket`): their id, the ticket's name and price. *Since 0.2.22.*
+- **`ticket_taken`**`(id)`: K-OMSI: the driver took a passenger's paper ticket off the desk; they go on to their place. *Since 0.2.22.*
+- **`ticket_stamped`**`(id)`: K-OMSI: a passenger of the player's bus stamped (scanned) a ticket at a validator of the bus: a card, or a paper ticket at a reader. *Since 0.2.22.*
