@@ -23,7 +23,9 @@ cp "target/$target/release/openomsi-launcher" "$app/Contents/MacOS/openomsi-laun
 cp "assets/steam_redist/libsteam_api.dylib" "$app/Contents/MacOS/"
 # the desktop launcher (launcher/, Tauri on WebKit), stamped with the release version (its
 # About window and the Info.plist inside it said tauri.conf.json's)
-TAURI_CONFIG="{\"version\":\"${version%%-*}\"}" cargo build --locked --release --target "$target" --manifest-path launcher/src-tauri/Cargo.toml
+# (K-OMSI 0.4.32.1: the launcher's Tauri version must be semver - its first three parts)
+tauri_version=$(printf %s "${version%%-*}" | cut -d. -f1-3)
+TAURI_CONFIG="{\"version\":\"$tauri_version\"}" cargo build --locked --release --target "$target" --manifest-path launcher/src-tauri/Cargo.toml
 cp "launcher/src-tauri/target/$target/release/openomsi-launcher-app" "$app/Contents/MacOS/openomsi-launcher-app"
 cp assets/icons/app/openomsi.icns "$app/Contents/Resources/openomsi.icns"
 # (the bundle's version is numbers only: a test build's -pr<number> is left out there)
