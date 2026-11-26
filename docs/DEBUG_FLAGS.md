@@ -173,6 +173,7 @@ LAN play and the services the game talks to. See [Playing together](MULTIPLAYER.
 | `OMSI_NO_TUNNEL` | flag | LAN: no tunnel. |
 | `OMSI_CLOUDFLARED` | path | The `cloudflared` program for the LAN tunnel. Searched after the game's folder and before the `PATH`. |
 | `OMSI_NO_LAN_MODS` | flag | LAN: do not exchange mods. |
+| `OMSI_CLEAR_LAN_STORE` | flag | LAN: a joining game deletes the sealed store of the mods it fetched (`~/.openomsi/lan-store`) when it ends and before the next join; the next join fetches them again. |
 | `OMSI_NO_LAN_UPLOADS` | flag | LAN: a game hosting a session takes no buses from the players who join. |
 | `OMSI_NO_VAR_SYNC` | flag | LAN: no variable sync. |
 | `OMSI_NO_HARDWARE_ID` | flag | LAN: the game sends no hardware identifier (a host can then turn the player away, and cannot ban the machine). |
