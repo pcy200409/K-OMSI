@@ -1000,10 +1000,13 @@ impl World {
                 // nothing better to be had (an upgrade that stays RGBA)
                 continue;
             }
-            let card = renderer.gpu_memory(scene);
+            // (K-OMSI: weighed without the holes; nothing grows while the card pages)
+            let card_all = renderer.gpu_memory(scene);
+            let card = firm_card(card_all, renderer.gpu_holes());
             let before = scene.texture_bytes_of(id);
-            let allowed =
-                if near {
+            let allowed = if card_paging(card_all) {
+                before
+            } else if near {
                     let room = card_near_room(video_limit, card);
                     if squeezed {
                         room.min(
@@ -1193,7 +1196,10 @@ impl World {
         // driver's budget: the textures counted against their budget alone, the game took
         // gigabytes more than it was set to, and an 8 GB card paged to the system's memory
         // past its budget. What is over goes from the textures, the only part that can give.
-        let card = renderer.gpu_memory(scene);
+        // (K-OMSI: the free room in the allocator's blocks left out, see `firm_card`)
+        let card_all = renderer.gpu_memory(scene);
+        let card = firm_card(card_all, renderer.gpu_holes());
+        let paging = card_paging(card_all);
         let card_cap = card.cap(video_limit);
         // (in steps of 32 MiB: the driver's count wanders by a few MB from second to second,
         // and every step up failed the idle look's check - the whole scan and its sort every
@@ -1332,10 +1338,7 @@ impl World {
         } else {
             reserved_restore_bytes(&gpu, &pending)
         };
-        let rooms = (
-            card_near_room(video_limit, card).saturating_sub(reserved),
-            texture_room(limit, texture_usage).saturating_sub(reserved),
-        );
+        let rooms = if paging { (0, 0) } else { (card_near_room(video_limit, card).saturating_sub(reserved), texture_room(limit, texture_usage).saturating_sub(reserved)) };
         restoring += queue_near_restores(&mut gpu, &pending, &entries, NEAR, rooms, t0);
         if usage > limit {
             entries.sort_by(|a, b| b.0.total_cmp(&a.0));
@@ -1457,8 +1460,7 @@ impl World {
             // before the textures have grown by that much (with a tenth, textures at
             // 150-400 m went back and forth as the tiles around came and went).
             entries.sort_by(|a, b| a.0.total_cmp(&b.0));
-            let mut room =
-                texture_restore_room(limit, usage, video_limit, card).saturating_sub(reserved);
+            let mut room = if paging { 0 } else { texture_restore_room(limit, usage, video_limit, card).saturating_sub(reserved) };
             for (d, p) in &entries {
                 if *d > RESTORE || restoring >= 16 {
                     break;
@@ -1502,6 +1504,7 @@ impl World {
         drop(memo);
         let rebound = renderer.rebind_textures(scene, &shrunk);
         if omsi_cfg::flags::OMSI_PROFILE.is_set() {
+            log::info!("texture budget (K-OMSI): {:.0} MB free room in the allocator's blocks left out{}", (card_all.total() - card.total()) as f64 / 1e6, if paging { ", the card is past its budget: nothing comes back" } else { "" });
             log::info!(
                 "texture budget: {:.0} of {:.0} MB in use; on the card {:.0} of {:.0} MB (textures {:.0}, meshes {:.0}, the rest {:.0}{}); {} textures lost a level ({} materials rebound), {} coming back{}, in {:.1} ms",
                 usage as f64 / 1e6,
