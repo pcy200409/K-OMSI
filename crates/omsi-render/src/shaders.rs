@@ -237,6 +237,7 @@ mod tests {
     /// And the environment map's reflections through that sampler too (OpenGL: one a texture).
     /// And the experimental traced global illumination (`rt_gi`: `gi_at`, `t_gi`).
     /// And the road dirt for 64 bodies, each in the first box that holds it on its outside.
+    /// And a page's LED destination sign burning brighter by day.
     /// (with Unix line ends: a Windows checkout may turn the parts' into CRLF, as it did the
     /// single files', and the 0.2.31 release's Windows test failed on that alone)
     #[test]
@@ -248,7 +249,7 @@ mod tests {
         assert_eq!((scene.len(), fnv1a(&scene)), (162269, 10796996471753114125));
         assert_eq!(
             (enhanced.len(), fnv1a(&enhanced)),
-            (144758, 16335329699940922124)
+            (145215, 16105910947328331464)
         );
     }
 }
