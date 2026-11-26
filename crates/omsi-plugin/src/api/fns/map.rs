@@ -164,7 +164,7 @@ pub static FNS: &[ApiFn] = &[
         "map",
         [p("x", "number"), p("y", "number"), o("radius", "number")],
         "list of tables",
-        "The map objects within `radius` m (default 50, at most 2000 of them, nearest first): `{id, x, y, z, heading, distance}`.",
+        "The map objects within `radius` m (default 50, at most 2000 of them, nearest first): `{id, x, y, z, heading, distance, type}`; K-OMSI: `type` is the object's file as the map names it (`Sceneryobjects\...\HiPass.sco`), where its tile is read.",
         NEW,
         None,
         false,
@@ -182,12 +182,16 @@ pub static FNS: &[ApiFn] = &[
                 .collect();
             list.sort_by(|a, b| a.0.total_cmp(&b.0));
             list.truncate(MAX_OBJECTS);
+            let ids: Vec<i64> = list.iter().map(|x| x.1).collect();
+            let types: std::collections::HashMap<i64, String> =
+                c.io().map_object_types(&ids).into_iter().collect();
             Ok::<_, ApiError>(Value::List(
                 list.into_iter()
                     .map(|(d, id, p)| {
                         let mut r = vec![("id", Value::Int(id))];
                         r.extend(place(p));
                         r.push(("distance", d.into()));
+                        r.push(("type", types.get(&id).cloned().into()));
                         rec(r)
                     })
                     .collect(),

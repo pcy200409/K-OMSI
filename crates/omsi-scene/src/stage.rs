@@ -631,6 +631,7 @@ impl World {
             .unwrap_or_else(|| Terrain::load(&terrain_path).unwrap_or_else(|_| Terrain::flat()));
         let counts = Mutex::new(LoadStats::default());
         let mut out = StagedTile {
+            object_files: Vec::new(),
             tx,
             ty,
             origin,
@@ -1039,6 +1040,16 @@ impl World {
         // [object]
         let debug_outside = omsi_cfg::flags::OMSI_DEBUG_OBJECTS.is_set();
         let mut outside = 0usize;
+        out.object_files = tile
+            .objects
+            .iter()
+            .map(|o| {
+                (
+                    o.id,
+                    Arc::<str>::from(o.file.trim().replace('/', "\\").as_str()),
+                )
+            })
+            .collect();
         for o in &tile.objects {
             if !wanted(&o.file) {
                 continue;
