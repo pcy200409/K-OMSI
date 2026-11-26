@@ -197,7 +197,7 @@ pub(super) fn lights(mut cx: LightsCx, dt: f32, daylight: omsi_sim::Daylight, be
                 let hook = puddles::road_water_hook(w, wetness);
                 omsi_sim::particles::set_road_water(Some(match flood.clone() {
                     // (and through the flood water, in full)
-                    Some(f) => std::sync::Arc::new(move |x, y| hook(x, y).max(crate::flood::spray_of(f.depth(x, y)))),
+                    Some(f) => std::sync::Arc::new(move |x, y, z| hook(x, y, z).max(crate::flood::spray_of(f.depth(x, y)))),
                     None => hook,
                 }));
             }
