@@ -49,7 +49,8 @@ jobs:
       - id: v
         env:
           PR: ${{ github.event.pull_request.number }}
-        run: echo "version=$(sh scripts/version.sh)${PR:+-pr$PR}" >> "$GITHUB_OUTPUT"
+        # (K-OMSI 0.4.32.1: an update of 0.4.32 for those who stay on it, built from release-0.4.32)
+        run: echo "version=0.4.32.1${PR:+-pr$PR}" >> "$GITHUB_OUTPUT"
       - env:
           VERSION: ${{ steps.v.outputs.version }}
         run: echo "### openOMSI $VERSION" >> "$GITHUB_STEP_SUMMARY"
@@ -453,7 +454,7 @@ jobs:
 
   release:
     # (the platforms not built again are skipped, not failed)
-    if: ${{ !cancelled() && !failure() && github.event_name != 'pull_request' && github.ref == 'refs/heads/release' }}
+    if: ${{ !cancelled() && !failure() && github.event_name != 'pull_request' && (github.ref == 'refs/heads/release' || github.ref == 'refs/heads/release-0.4.32') }}
     needs: [version, windows, windows-tests, macos, linux, android]
     runs-on: ubuntu-latest
     permissions:
