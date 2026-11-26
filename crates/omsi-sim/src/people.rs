@@ -102,6 +102,7 @@ pub mod pax_driver;
 pub mod runners;
 #[rustfmt::skip]
 pub mod ticket_hook;
+pub mod paper_ticket;
 pub mod pax_orders;
 // What the renderer has to follow, the money on the desk and what the people need of the map.
 #[rustfmt::skip]
@@ -132,6 +133,8 @@ mod bad_driving_tests;
 #[cfg(test)]
 #[rustfmt::skip]
 mod desk_ticket_tests;
+#[cfg(test)]
+mod paper_ticket_tests;
 #[cfg(test)]
 #[rustfmt::skip]
 mod destination_tests;
@@ -170,6 +173,7 @@ pub use door_requests::DoorRequest;
 pub use mirror::{LanPerson, MirrorPose, placed_bus_id, remote_bus_id, remote_bus_player};
 pub use model::{BusId, DoorWants, Eye, Footfall, PeopleSim, Person, Place, State, VoiceLine};
 pub use money::Money;
+pub use paper_ticket::{PaperDesk, TicketEvent};
 pub use pax::DutyTrip;
 pub use pax_orders::PaxOrder;
 pub use pose_facts::PoseFacts;
