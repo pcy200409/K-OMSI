@@ -203,9 +203,15 @@ impl HtmlRenderer for EngineRenderer {
         self.call_raw(move |c| {
             let mut st = c.st.borrow_mut();
             st.imgs = Arc::new(ImageStore::new(dirs.clone()));
+            // K-OMSI: the page's own font (patch/html-page-font)
+            let page_font = page_font::load(&st.dom, &dirs);
             st.dirs = dirs;
             st.cache = None;
+            drop(st);
             c.dirty = true;
+            if page_font {
+                c.omsi_set("pageFont", &omsi_sim::vehicle_api::ApiValue::Bool(true));
+            }
         });
     }
 

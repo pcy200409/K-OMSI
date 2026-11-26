@@ -425,8 +425,13 @@ video, svg.
   `text-overflow: ellipsis` (with `overflow: hidden`), `vertical-align: middle` for inline
   blocks.
 
-Not available: grid (it lays out as a column), floats, animations and transitions, custom
-fonts, `@media`, `@font-face`, `@keyframes`, per-corner radii, outlines.
+Not available: grid (it lays out as a column), floats, animations and transitions,
+`font-family`, `@media`, `@font-face`, `@keyframes`, per-corner radii, outlines.
+
+K-OMSI: a page can name one font of its own with `<meta name="omsi-font" content="font/Page.ttf">`
+(and `omsi-font-bold`), as in the classic engine (`docs/HTMLTEXTURE.md`): the file is looked up
+like the page's pictures, every character it has is drawn with it, and `omsi.pageFont === true`
+tells the page that it was found. `font-size` is the font's ascent plus descent.
 
 ### JavaScript
 
